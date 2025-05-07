@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/calendar.dart';
@@ -19,6 +21,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:app_links/app_links.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'screens/home_screen.dart';
 
 
@@ -194,21 +197,77 @@ class _AppState extends State<App> {
   }
   
   Future<void> _processJwtToken(String token) async {
-    // Validate the token if necessary
-    bool isTokenValid = true;  // Replace with actual validation if needed
+    // First store the JWT token
+    await AuthService.storeJwt(token);
     
-    if (isTokenValid) {
-      // Store JWT token and update login state
-      await AuthService.storeJwt(token);
+    try {
+      // Validate the token by making a request to the server
+      final response = await http.get(
+        Uri.parse('${AuthService.serverUrl}/v1/user'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
+      );
+      
+      debugPrint('Token validation status code: ${response.statusCode}');
+      
+      if (response.statusCode == 200) {
+        // Token is valid, proceed to home screen
+        final userData = jsonDecode(response.body);
+        
+        // Store user email if available
+        if (userData != null && userData['email'] != null) {
+          await AuthService.storeEmail(userData['email']);
+        }
+        
+        setState(() {
+          _isLoggedIn = true;
+          _isLoading = false;
+        });
+        
+        // If we're already showing the login screen, navigate to home
+        if (!_isLoggedIn && mounted) {
+          Navigator.of(context).pushReplacementNamed('/home');
+        }
+      } else if (response.statusCode == 402) {
+        // Payment required, open subscription page
+        final Uri subscriptionUrl = Uri.parse('${AuthService.appUri}/user');
+        if (await canLaunchUrl(subscriptionUrl)) {
+          await launchUrl(subscriptionUrl, mode: LaunchMode.externalApplication);
+        }
+        
+        // User is considered logged in, but needs to handle subscription
+        setState(() {
+          _isLoggedIn = true;
+          _isLoading = false;
+        });
+      } else {
+        // Invalid login - clear the stored token
+        debugPrint('Invalid token, logging out');
+        await AuthService.logout();
+        
+        setState(() {
+          _isLoggedIn = false;
+          _isLoading = false;
+        });
+        
+        // Show an error message if we're on the login screen
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Invalid login. Please try again.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Error validating token: $e');
+      // Keep the token stored but don't navigate yet
       setState(() {
-        _isLoggedIn = true;
         _isLoading = false;
       });
-      
-      // If we're already showing the login screen, navigate to home
-      if (!_isLoggedIn && mounted) {
-        Navigator.of(context).pushReplacementNamed('/home');
-      }
     }
   }
 
