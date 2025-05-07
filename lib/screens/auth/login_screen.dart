@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
-import 'package:agixt/models/agixt/auth/oauth.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:agixt/services/cookie_manager.dart';
+import 'package:flutter/foundation.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,111 +12,108 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _mfaController = TextEditingController();
-  final _formKey = GlobalKey<FormState>();
-  
-  bool _isLoading = false;
+  late final WebViewController _webViewController;
+  bool _isLoading = true;
   String? _errorMessage;
-  List<OAuthProvider> _oauthProviders = [];
-  bool _loadingProviders = true;
+  final CookieManager _cookieManager = CookieManager();
 
   @override
   void initState() {
     super.initState();
-    _loadOAuthProviders();
+    _initWebView();
   }
 
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _mfaController.dispose();
-    super.dispose();
+  Future<void> _initWebView() async {
+    // Create the WebView controller
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (String url) {
+            setState(() {
+              _isLoading = true;
+            });
+            debugPrint('Page started loading: $url');
+          },
+          onPageFinished: (String url) {
+            setState(() {
+              _isLoading = false;
+            });
+            debugPrint('Page finished loading: $url');
+            // Check for JWT cookie when page loads
+            _checkForJwtCookie();
+          },
+          onWebResourceError: (WebResourceError error) {
+            debugPrint('WebView error: ${error.description}');
+            setState(() {
+              _errorMessage = 'Error loading login page. Please try again.';
+            });
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse('${AuthService.appUri}/user'));
+
+    // Set up a timer to periodically check for the JWT cookie
+    _setupCookieCheckTimer();
   }
 
-  Future<void> _loadOAuthProviders() async {
-    try {
-      setState(() {
-        _loadingProviders = true;
-      });
-      
-      final providers = await OAuthService.getProviders();
-      
-      setState(() {
-        _oauthProviders = providers;
-        _loadingProviders = false;
-      });
-    } catch (e) {
-      setState(() {
-        _loadingProviders = false;
-      });
-    }
-  }
-
-  Future<void> _login() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+  void _setupCookieCheckTimer() {
+    // Check for the JWT cookie every 2 seconds
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        _checkForJwtCookie();
+        _setupCookieCheckTimer(); // Schedule the next check
+      }
     });
+  }
 
+  Future<void> _checkForJwtCookie() async {
+    if (!mounted) return;
+    
     try {
-      final jwt = await AuthService.login(
-        _emailController.text,
-        _mfaController.text,
-      );
+      // JavaScript to check for the jwt cookie
+      final jwtCookieScript = '''
+      (function() {
+        try {
+          var cookies = document.cookie.split(';');
+          for (var i = 0; i < cookies.length; i++) {
+            var cookie = cookies[i].trim();
+            if (cookie.startsWith('jwt=')) {
+              var value = cookie.substring('jwt='.length);
+              console.log('Found JWT cookie:', value);
+              return value;
+            }
+          }
+          return '';
+        } catch (e) {
+          console.error('Error in cookie extraction:', e);
+          return '';
+        }
+      })()
+      ''';
 
-      if (jwt != null) {
-        // Login successful, navigate to home
+      final jwtCookieValue = await _webViewController
+          .runJavaScriptReturningResult(jwtCookieScript) as String?;
+
+      debugPrint('Checking for JWT cookie: ${jwtCookieValue != null && jwtCookieValue.isNotEmpty ? "Found" : "Not found"}');
+
+      if (jwtCookieValue != null && 
+          jwtCookieValue.isNotEmpty && 
+          jwtCookieValue != 'null' && 
+          jwtCookieValue != '""') {
+        // Store the JWT cookie
+        await _cookieManager.saveJwtCookie(jwtCookieValue);
+        
+        // Also store the JWT in AuthService for compatibility with existing code
+        await AuthService.storeJwt(jwtCookieValue);
+        
+        // Navigate to home screen
         if (mounted) {
           Navigator.of(context).pushReplacementNamed('/home');
         }
-      } else {
-        setState(() {
-          _errorMessage = 'Login failed. Please check your credentials.';
-          _isLoading = false;
-        });
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'An error occurred. Please try again.';
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _loginWithOAuth(OAuthProvider provider) async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final success = await OAuthService.authenticate(provider);
-      
-      if (success && mounted) {
-        Navigator.of(context).pushReplacementNamed('/home');
-      } else {
-        setState(() {
-          _errorMessage = 'OAuth login failed. Please try again.';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'An error occurred. Please try again.';
-        _isLoading = false;
-      });
-    }
-  }
-
-  void _openRegistrationPage() async {
-    final Uri url = Uri.parse(AuthService.appUri);
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+      debugPrint('Error checking for JWT cookie: $e');
     }
   }
 
@@ -128,146 +125,31 @@ class _LoginScreenState extends State<LoginScreen> {
       appBar: AppBar(
         title: Text('Login to $appName'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const SizedBox(height: 20),
-            // Logo or app name
-            Center(
+      body: Column(
+        children: [
+          if (_errorMessage != null)
+            Container(
+              padding: const EdgeInsets.all(8),
+              color: Colors.red.shade100,
+              width: double.infinity,
               child: Text(
-                appName,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                ),
+                _errorMessage!,
+                style: TextStyle(color: Colors.red.shade900),
               ),
             ),
-            const SizedBox(height: 30),
-            
-            // Error message if login fails
-            if (_errorMessage != null)
-              Container(
-                padding: const EdgeInsets.all(8),
-                color: Colors.red.shade100,
-                child: Text(
-                  _errorMessage!,
-                  style: TextStyle(color: Colors.red.shade900),
-                ),
-              ),
-              
-            const SizedBox(height: 20),
-            
-            // Email & MFA login form
-            Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  TextFormField(
-                    controller: _emailController,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your email';
-                      }
-                      return null;
-                    },
+          
+          Expanded(
+            child: Stack(
+              children: [
+                WebViewWidget(controller: _webViewController),
+                if (_isLoading)
+                  const Center(
+                    child: CircularProgressIndicator(),
                   ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _mfaController,
-                    decoration: const InputDecoration(
-                      labelText: '6-Digit MFA Code',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                    maxLength: 6,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter your MFA code';
-                      }
-                      if (value.length != 6 || int.tryParse(value) == null) {
-                        return 'Please enter a valid 6-digit code';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: _isLoading ? null : _login,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: _isLoading
-                        ? const CircularProgressIndicator()
-                        : const Text('Login'),
-                  ),
-                ],
-              ),
+              ],
             ),
-            
-            const SizedBox(height: 30),
-            const Divider(),
-            
-            // OAuth providers section
-            Text(
-              'Or continue with',
-              style: Theme.of(context).textTheme.titleMedium,
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 16),
-            
-            if (_loadingProviders)
-              const Center(child: CircularProgressIndicator())
-            else if (_oauthProviders.isEmpty)
-              const Center(child: Text('No OAuth providers available'))
-            else
-              ...List.generate(_oauthProviders.length, (index) {
-                final provider = _oauthProviders[index];
-                return Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: OutlinedButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () => _loginWithOAuth(provider),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: Text('Continue with ${provider.name.toUpperCase()}'),
-                  ),
-                );
-              }),
-              
-            const SizedBox(height: 30),
-            
-            // Registration link
-            Center(
-              child: RichText(
-                text: TextSpan(
-                  text: 'Don\'t have an account? ',
-                  style: TextStyle(color: Colors.grey[700]),
-                  children: [
-                    TextSpan(
-                      text: 'Register',
-                      style: TextStyle(
-                        color: Theme.of(context).primaryColor,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = _openRegistrationPage,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

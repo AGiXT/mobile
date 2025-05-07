@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
+import 'package:agixt/services/cookie_manager.dart';
 
 class UserModel {
   final String id;
@@ -169,12 +170,40 @@ class AuthService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(JWT_KEY);
     await prefs.remove(EMAIL_KEY);
+    
+    // Also clear the JWT cookie from CookieManager
+    try {
+      final cookieManager = CookieManager();
+      await cookieManager.clearJwtCookie();
+    } catch (e) {
+      debugPrint('Error clearing JWT cookie: $e');
+    }
   }
 
   // Check if user is logged in
   static Future<bool> isLoggedIn() async {
     final jwt = await getJwt();
-    return jwt != null && jwt.isNotEmpty;
+    
+    // First check if we have a JWT in SharedPreferences
+    if (jwt != null && jwt.isNotEmpty) {
+      return true;
+    }
+    
+    // If not, check if we have a JWT cookie in CookieManager
+    try {
+      final cookieManager = CookieManager();
+      final jwtCookie = await cookieManager.getJwtCookie();
+      
+      if (jwtCookie != null && jwtCookie.isNotEmpty) {
+        // If we have a JWT cookie but not in SharedPreferences, store it there for compatibility
+        await storeJwt(jwtCookie);
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Error checking JWT cookie: $e');
+    }
+    
+    return false;
   }
 
   // Login with email and MFA token
