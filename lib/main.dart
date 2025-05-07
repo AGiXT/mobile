@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/calendar.dart';
@@ -21,17 +19,20 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:app_links/app_links.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'screens/home_screen.dart';
-
+import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 // Environment variables with defaults
-const String APP_NAME = String.fromEnvironment('APP_NAME', defaultValue: 'AGiXT');
-const String AGIXT_SERVER = String.fromEnvironment('AGIXT_SERVER', defaultValue: 'https://api.agixt.dev');
-const String APP_URI = String.fromEnvironment('APP_URI', defaultValue: 'https://agixt.dev');
+const String APP_NAME =
+    String.fromEnvironment('APP_NAME', defaultValue: 'AGiXT');
+const String AGIXT_SERVER = String.fromEnvironment('AGIXT_SERVER',
+    defaultValue: 'https://api.agixt.dev');
+const String APP_URI =
+    String.fromEnvironment('APP_URI', defaultValue: 'https://agixt.dev');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,7 +66,6 @@ void main() async {
 
   await BluetoothManager.singleton.initialize();
   BluetoothManager.singleton.attemptReconnectFromStorage();
-  
 
   var channel = const MethodChannel('dev.agixt.agixt/background_service');
   var callbackHandle = PluginUtilities.getCallbackHandle(backgroundMain);
@@ -79,7 +79,7 @@ void backgroundMain() {
 }
 
 class AppRetainWidget extends StatelessWidget {
-  AppRetainWidget({super.key, required this.child});
+  const AppRetainWidget({super.key, required this.child});
 
   final Widget child;
 
@@ -148,14 +148,14 @@ class _AppState extends State<App> {
     }, onError: (error) {
       debugPrint('Error handling deep link: $error');
     });
-    
+
     // Set up the method channel for OAuth callback from native code
     const platform = MethodChannel('dev.agixt.agixt/oauth_callback');
     platform.setMethodCallHandler((call) async {
       if (call.method == 'handleOAuthCallback') {
         final args = call.arguments as Map;
         final token = args['token'] as String?;
-        
+
         if (token != null && token.isNotEmpty) {
           debugPrint('Received JWT token via method channel from native code');
           await _processJwtToken(token);
@@ -167,7 +167,7 @@ class _AppState extends State<App> {
       }
       return null;
     });
-    
+
     // Check if we have any pending tokens from native code that arrived before Flutter was initialized
     try {
       final result = await platform.invokeMethod('checkPendingToken');
@@ -183,91 +183,87 @@ class _AppState extends State<App> {
 
   void _handleDeepLink(String link) {
     debugPrint('Received deep link: $link');
-    
+
     // Handle the agixt://callback URL format with token
     if (link.startsWith('agixt://callback')) {
       Uri uri = Uri.parse(link);
       String? token = uri.queryParameters['token'];
-      
+
       if (token != null && token.isNotEmpty) {
         debugPrint('Received JWT token from deep link');
         _processJwtToken(token);
       }
     }
   }
-  
+
   Future<void> _processJwtToken(String token) async {
-    // First store the JWT token
-    await AuthService.storeJwt(token);
-    
+    setState(() {
+      _isLoading = true;
+    });
+
+    debugPrint('Validating JWT token with server');
     try {
-      // Validate the token by making a request to the server
+      // Make a request to validate the token with the server
       final response = await http.get(
         Uri.parse('${AuthService.serverUrl}/v1/user'),
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token'
+          'Authorization': 'Bearer $token',
         },
       );
-      
-      debugPrint('Token validation status code: ${response.statusCode}');
-      
+
       if (response.statusCode == 200) {
-        // Token is valid, proceed to home screen
-        final userData = jsonDecode(response.body);
-        
-        // Store user email if available
-        if (userData != null && userData['email'] != null) {
-          await AuthService.storeEmail(userData['email']);
-        }
-        
+        // Token is valid, store it and proceed to home screen
+        debugPrint('Token validated successfully');
+        await AuthService.storeJwt(token);
+
         setState(() {
           _isLoggedIn = true;
           _isLoading = false;
         });
-        
+
         // If we're already showing the login screen, navigate to home
         if (!_isLoggedIn && mounted) {
           Navigator.of(context).pushReplacementNamed('/home');
         }
       } else if (response.statusCode == 402) {
-        // Payment required, open subscription page
-        final Uri subscriptionUrl = Uri.parse('${AuthService.appUri}/user');
+        // Payment required, direct to subscription page
+        debugPrint('Payment required for user, opening subscription page');
+        final subscriptionUrl = Uri.parse('${AuthService.appUri}/user');
         if (await canLaunchUrl(subscriptionUrl)) {
-          await launchUrl(subscriptionUrl, mode: LaunchMode.externalApplication);
+          await launchUrl(subscriptionUrl,
+              mode: LaunchMode.externalApplication);
         }
-        
-        // User is considered logged in, but needs to handle subscription
+
         setState(() {
-          _isLoggedIn = true;
           _isLoading = false;
         });
       } else {
-        // Invalid login - clear the stored token
-        debugPrint('Invalid token, logging out');
-        await AuthService.logout();
-        
+        // Invalid token or other error
+        debugPrint('Invalid token or server error: ${response.statusCode}');
+
         setState(() {
-          _isLoggedIn = false;
           _isLoading = false;
         });
-        
-        // Show an error message if we're on the login screen
-        if (mounted) {
+
+        // Show error message if we're on the login screen
+        if (mounted && context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Invalid login. Please try again.'),
-              duration: Duration(seconds: 3),
-            ),
+            SnackBar(content: Text('Login failed. Please try again.')),
           );
         }
       }
     } catch (e) {
       debugPrint('Error validating token: $e');
-      // Keep the token stored but don't navigate yet
       setState(() {
         _isLoading = false;
       });
+
+      if (mounted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Login error. Please try again.')),
+        );
+      }
     }
   }
 
@@ -339,8 +335,7 @@ Future<void> initializeService() async {
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     notificationChannelId, // id
     'AGiXT', // title
-    description:
-        'This channel is used for AGiXT notifications.', // description
+    description: 'This channel is used for AGiXT notifications.', // description
     importance: Importance.low, // importance must be at low or higher level
   );
 
