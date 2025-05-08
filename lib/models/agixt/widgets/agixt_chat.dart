@@ -116,7 +116,7 @@ class AGiXTChatWidget implements AGiXTWidget {
             
             // Notify any listeners that we need to navigate to the chat page
             // This will be picked up by the AppEvents system
-            AppEvents.fireDataChanged(payload: {'navigateTo': '/chat/$responseId'});
+            AppEvents.fireDataChanged(data: {'navigateTo': '/chat/$responseId'});
             
             // Prepare the navigation URL for the WebView
             final appUri = AuthService.serverUrl;
