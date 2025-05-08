@@ -146,14 +146,16 @@ class AGiXTChatWidget implements AGiXTWidget {
   }
   
   // Method to navigate the WebView to the chat page with the given ID
-  void _navigateWebViewToChat(String conversationId) {
+  void _navigateWebViewToChat(String conversationId, {Map<String, dynamic>? additionalParams}) {
     // This method doesn't directly manipulate the WebView
     // Instead, it triggers an event that will be picked up by the HomePage
     // which manages the WebView
-    AppEvents.fireDataChanged(data: {
+    final eventData = {
       'type': 'navigate_to_chat',
-      'conversation_id': conversationId
-    });
+      'conversation_id': conversationId,
+      ...?additionalParams, // Merge additional parameters if provided
+    };
+    AppEvents.fireDataChanged(data: eventData);
   }
 
   // Build context data containing today's daily items, active checklists, and calendar items
