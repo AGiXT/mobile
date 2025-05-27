@@ -154,6 +154,11 @@ class BluetoothManager {
       await rightGlass!.connect();
       _setReconnect(rightGlass!);
     }
+
+    // Sync settings if both glasses are connected
+    if (leftGlass?.isConnected == true && rightGlass?.isConnected == true) {
+      await _sync();
+    }
   }
 
   Future<void> startScanAndConnect({
@@ -645,6 +650,10 @@ class BluetoothManager {
         await sendCommandToGlasses(command);
       }
     }
+
+    // Sync silent mode setting with glasses
+    bool isDisplayEnabled = await _isGlassesDisplayEnabled();
+    await setSilentMode(!isDisplayEnabled);
   }
 
   Future<void> setMicrophone(bool open) async {
@@ -744,28 +753,49 @@ class BluetoothManager {
 
   // Clear any content from the glasses display
   Future<void> clearGlassesDisplay() async {
-    debugPrint('Clearing display on glasses because silent mode was enabled');
+    debugPrint('Clearing display on glasses');
 
-    // Send a special command to clear the display
-    // We can do this by sending an empty text with minimum delay
-    // This effectively clears any existing text/content
-
-    // First, we'll bypass the display check since we explicitly want to clear the display
-    // regardless of the current display preference setting
-
-    final textMsg = TextMessage(' '); // Using a space to ensure it's processed
+    // Send empty text to clear the display
+    final textMsg = TextMessage(' ');
     List<List<int>> packets = textMsg.constructSendText();
 
     for (int i = 0; i < packets.length; i++) {
       await sendCommandToGlasses(packets[i]);
       if (i < 2) {
-        // init packet
         await Future.delayed(Duration(milliseconds: 300));
       } else {
-        await Future.delayed(Duration(milliseconds: 100)); // Minimal delay
+        await Future.delayed(Duration(milliseconds: 100));
       }
     }
 
     debugPrint('Glasses display has been cleared');
+  }
+
+  // Set silent mode on the glasses
+  Future<void> setSilentMode(bool enabled) async {
+    if (!isConnected) {
+      debugPrint('Cannot set silent mode: glasses not connected');
+      return;
+    }
+
+    // 0x0C = Silent Mode On, 0x0A = Silent Mode Off
+    List<int> command = [Commands.SILENT_MODE, enabled ? 0x0C : 0x0A];
+    debugPrint('Setting silent mode to: ${enabled ? "enabled" : "disabled"}');
+    await sendCommandToGlasses(command);
+  }
+
+  // Get silent mode status from the glasses
+  Future<bool?> getSilentModeStatus() async {
+    if (!isConnected) {
+      debugPrint('Cannot get silent mode status: glasses not connected');
+      return null;
+    }
+
+    // Send command 0x2B to get silent mode settings
+    List<int> command = [0x2B];
+    debugPrint('Getting silent mode status from glasses');
+    await sendCommandToGlasses(command);
+
+    return null; // Return null
   }
 }

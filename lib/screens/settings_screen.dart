@@ -40,7 +40,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadGlassesDisplayPreference() async {
-    // Replace with actual implementation to load preference
     final preference = await AuthService.getGlassesDisplayPreference();
     setState(() {
       _isGlassesDisplayEnabled = preference;
@@ -51,11 +50,15 @@ class _SettingsPageState extends State<SettingsPage> {
     // Save the preference
     await AuthService.setGlassesDisplayPreference(value);
 
-    // If silent mode is enabled (value is false for display), clear the glasses display immediately
-    if (value == false) {
-      // Get instance of BluetoothManager and clear display if glasses are connected
-      final bluetoothManager = BluetoothManager();
-      if (bluetoothManager.isConnected) {
+    // Update glasses state if connected
+    final bluetoothManager = BluetoothManager();
+
+    if (bluetoothManager.isConnected) {
+      // Set silent mode (inverse of display enabled)
+      await bluetoothManager.setSilentMode(!value);
+
+      // Clear the display when silent mode is enabled
+      if (!value) {
         await bluetoothManager.clearGlassesDisplay();
       }
     }
@@ -177,20 +180,19 @@ class _SettingsPageState extends State<SettingsPage> {
           ListTile(
             title: Row(
               children: [
-                Icon(Icons.visibility),
+                Icon(Icons.visibility_off),
                 SizedBox(width: 10),
-                Text('Silent Mode'),
+                Text('Glasses Silent Mode'),
               ],
             ),
+            subtitle: Text('No content will be shown on glasses when enabled'),
             trailing: Switch(
-              value:
-                  !_isGlassesDisplayEnabled, // Invert the value for Silent Mode
+              value: !_isGlassesDisplayEnabled,
               onChanged: (bool value) {
                 setState(() {
-                  _isGlassesDisplayEnabled =
-                      !value; // Invert the value since true means "silent mode on"
+                  _isGlassesDisplayEnabled = !value;
                 });
-                _saveGlassesDisplayPreference(!value); // Invert when saving
+                _saveGlassesDisplayPreference(!value);
               },
             ),
           ),
