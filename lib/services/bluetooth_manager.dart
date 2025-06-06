@@ -14,6 +14,7 @@ import 'package:agixt/models/g1/text.dart';
 import 'package:agixt/services/notifications_listener.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/utils/utils.dart';
+import 'package:agixt/utils/ui_perfs.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'; // Add this import for MethodChannel
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -305,7 +306,7 @@ class BluetoothManager {
             stopScanning();
             await Future.delayed(
                 const Duration(seconds: 2)); // Increased delay for stability
-            await _sync();
+            await _sync(); // This includes time sync
           }
         }
       } catch (e) {
@@ -615,10 +616,55 @@ class BluetoothManager {
     await _sync();
   }
 
+  Future<void> syncTimeToGlasses() async {
+    if (!isConnected) {
+      debugPrint('Cannot sync time: glasses not connected');
+      return;
+    }
+
+    try {
+      // Get current time and timezone
+      final now = DateTime.now();
+      final timezone = UiPerfs.singleton.timezone;
+      
+      debugPrint('Syncing time to glasses: ${now.toString()} (Timezone: $timezone)');
+      
+      // Create time sync command with current timestamp
+      // Format: [TIME_SYNC, year(2 bytes), month, day, hour, minute, second, timezone_length, ...timezone_bytes]
+      List<int> timeCommand = [Commands.TIME_SYNC];
+      
+      // Add year (2 bytes, little endian)
+      timeCommand.add(now.year & 0xFF);
+      timeCommand.add((now.year >> 8) & 0xFF);
+      
+      // Add month, day, hour, minute, second
+      timeCommand.add(now.month);
+      timeCommand.add(now.day);
+      timeCommand.add(now.hour);
+      timeCommand.add(now.minute);
+      timeCommand.add(now.second);
+      
+      // Add timezone information
+      final timezoneBytes = timezone.codeUnits;
+      timeCommand.add(timezoneBytes.length); // timezone length
+      timeCommand.addAll(timezoneBytes); // timezone string bytes
+      
+      // Send the time sync command to both glasses
+      await sendCommandToGlasses(timeCommand);
+      
+      debugPrint('Time sync command sent successfully');
+    } catch (e) {
+      debugPrint('Error syncing time to glasses: $e');
+    }
+  }
+
   Future<void> _sync() async {
     if (!isConnected) {
       return;
     }
+
+    // Sync time immediately when connection is established
+    await syncTimeToGlasses();
 
     final notes = await agixtDashboard.generateDashboardItems();
     for (var note in notes) {

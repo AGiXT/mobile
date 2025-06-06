@@ -1,6 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
 // Removed import for time_weather.dart
-import 'package:flutter/material.dart'; // Added missing import
 
 enum TimeFormat { TWELVE_HOUR, TWENTY_FOUR_HOUR } // Corrected enum values
 enum TemperatureUnit { CELSIUS, FAHRENHEIT } // Moved enum here
@@ -28,6 +27,11 @@ class UiPerfs {
   TimeFormat get timeFormat => _timeFormat;
   set timeFormat(TimeFormat value) => _setTimeFormat(value);
 
+  // Default timezone
+  String _timezone = 'America/New_York';
+  String get timezone => _timezone;
+  set timezone(String value) => _setTimezone(value);
+
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -40,6 +44,9 @@ class UiPerfs {
     // Load time format preference (0 for 12-hour, 1 for 24-hour)
     final timeFormatIdx = prefs.getInt('timeFormat') ?? 0;
     _timeFormat = TimeFormat.values[timeFormatIdx];
+    
+    // Load timezone preference
+    _timezone = prefs.getString('timezone') ?? 'America/New_York';
 
     // Removed loading weather provider preference
   }
@@ -60,6 +67,12 @@ class UiPerfs {
     final prefs = await SharedPreferences.getInstance();
     _timeFormat = value;
     prefs.setInt('timeFormat', value.index);
+  }
+
+  void _setTimezone(String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    _timezone = value;
+    prefs.setString('timezone', value);
   }
 
   // Removed _setWeatherProviderPackageName
