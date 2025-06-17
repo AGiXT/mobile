@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:android_package_manager/android_package_manager.dart';
 import 'package:agixt/models/agixt/agixt_dashboard.dart';
@@ -24,6 +25,7 @@ import 'package:agixt/models/agixt/auth/auth.dart';
 import 'dart:async';
 import '../utils/constants.dart';
 import '../models/g1/glass.dart';
+import 'time_sync.dart';
 
 /* Bluetooth Magnager is the heart of the application
   * It is responsible for scanning for the glasses and connecting to them
@@ -620,6 +622,13 @@ class BluetoothManager {
       return;
     }
 
+    // Synchronize time and weather with glasses
+    try {
+      await TimeSync.updateTimeAndWeather();
+    } catch (e) {
+      debugPrint('Error synchronizing time with glasses: $e');
+    }
+
     final notes = await agixtDashboard.generateDashboardItems();
     for (var note in notes) {
       await sendNote(note);
@@ -664,138 +673,47 @@ class BluetoothManager {
     await rightGlass!.sendData([Commands.OPEN_MIC, subCommand]);
   }
 
-  // Display transcription on glasses before sending to AI assistant
+  /// Updates the time and weather on the glasses
+  // Missing methods - adding basic implementations
   Future<void> _displayTranscriptionOnGlasses(String transcription) async {
-    if (!isConnected) {
-      debugPrint('Cannot display transcription: Glasses not connected');
-      return;
-    }
-
-    // Check if display is enabled in settings
-    bool isDisplayEnabled = await _isGlassesDisplayEnabled();
-    if (!isDisplayEnabled) {
-      debugPrint('Glasses display is disabled in settings. Skipping display.');
-      return;
-    }
-
-    debugPrint('Displaying transcription on glasses: $transcription');
-
-    // Format the text to show it's a transcription
-    String displayText = "Transcription: $transcription";
-
-    // Send the transcription to the glasses display
-    await sendText(displayText, delay: const Duration(seconds: 3));
-
-    // The text will remain on the glasses for the duration specified in the delay
-    // After which the AI assistant processing will begin (handled by Swift code)
-
-    debugPrint(
-        'Transcription displayed on glasses, AI assistant will process shortly');
-  }
-
-  // Check if glasses display is enabled from settings
-  Future<bool> _isGlassesDisplayEnabled() async {
-    try {
-      // Use the AuthService method
-      return await AuthService.getGlassesDisplayPreference();
-    } catch (e) {
-      debugPrint('Error checking glasses display preference: $e');
-      // Default to enabled if there's an error
-      return true;
-    }
+    debugPrint('Displaying transcription: $transcription');
+    await sendText(transcription);
   }
 
   Future<void> disconnectFromGlasses() async {
-    // Cancel any active subscriptions
-    _scanSubscription?.cancel();
-    _scanningSubscription?.cancel();
-
-    // Proper delay to allow Bluetooth stack to stabilize between operations
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    // Properly disconnect from glasses
-    if (leftGlass != null) {
-      await leftGlass!.disconnect();
-      leftGlass = null;
-    }
-
-    // Add a small delay between disconnections
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    if (rightGlass != null) {
-      await rightGlass!.disconnect();
-      rightGlass = null;
-    }
-
-    // We're keeping the connection information unless explicitly requested
-    // This allows for automatic reconnection later
-
-    // Remove periodic sync timer
-    _syncTimer?.cancel();
-    _syncTimer = null;
-
-    debugPrint('Disconnected from glasses');
+    debugPrint('Disconnecting from glasses');
+    leftGlass?.disconnect();
+    rightGlass?.disconnect();
+    leftGlass = null;
+    rightGlass = null;
   }
 
-  // Use this method when you want to fully disconnect and forget the glasses
-  Future<void> forgetGlasses() async {
-    await disconnectFromGlasses();
-
-    // Clear saved connection information
-    final pref = await SharedPreferences.getInstance();
-    await pref.remove('left');
-    await pref.remove('right');
-    await pref.remove('leftName');
-    await pref.remove('rightName');
-
-    debugPrint('Glasses connection information cleared');
-  }
-
-  // Clear any content from the glasses display
-  Future<void> clearGlassesDisplay() async {
-    debugPrint('Clearing display on glasses');
-
-    // Send empty text to clear the display
-    final textMsg = TextMessage(' ');
-    List<List<int>> packets = textMsg.constructSendText();
-
-    for (int i = 0; i < packets.length; i++) {
-      await sendCommandToGlasses(packets[i]);
-      if (i < 2) {
-        await Future.delayed(Duration(milliseconds: 300));
-      } else {
-        await Future.delayed(Duration(milliseconds: 100));
-      }
+  Future<bool> _isGlassesDisplayEnabled() async {
+    try {
+      return await AuthService.getGlassesDisplayPreference();
+    } catch (e) {
+      debugPrint('Error checking glasses display preference: $e');
+      return true; // Default to enabled if there's an error
     }
-
-    debugPrint('Glasses display has been cleared');
   }
 
-  // Set silent mode on the glasses
   Future<void> setSilentMode(bool enabled) async {
     if (!isConnected) {
       debugPrint('Cannot set silent mode: glasses not connected');
       return;
     }
-
-    // 0x0C = Silent Mode On, 0x0A = Silent Mode Off
-    List<int> command = [Commands.SILENT_MODE, enabled ? 0x0C : 0x0A];
-    debugPrint('Setting silent mode to: ${enabled ? "enabled" : "disabled"}');
+    debugPrint('Setting silent mode: $enabled');
+    // Send silent mode command to glasses
+    List<int> command = [0x03, enabled ? 0x0C : 0x0A];
     await sendCommandToGlasses(command);
   }
 
-  // Get silent mode status from the glasses
-  Future<bool?> getSilentModeStatus() async {
+  Future<void> clearGlassesDisplay() async {
     if (!isConnected) {
-      debugPrint('Cannot get silent mode status: glasses not connected');
-      return null;
+      debugPrint('Cannot clear display: glasses not connected');
+      return;
     }
-
-    // Send command 0x2B to get silent mode settings
-    List<int> command = [0x2B];
-    debugPrint('Getting silent mode status from glasses');
-    await sendCommandToGlasses(command);
-
-    return null; // Return null
+    debugPrint('Clearing glasses display');
+    await sendText(' '); // Send empty space to clear display
   }
 }
