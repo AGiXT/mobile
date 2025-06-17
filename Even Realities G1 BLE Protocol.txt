@@ -1,0 +1,837 @@
+﻿Even Realities G1 BLE Protocol
+This doc aims to outline the BLE protocol for the Even Realities G1. The G1 operates with two BLE radios, one for the left arm and one for the right. Some commands need to be sent individually to both arms and some are only sent to one arm. Each radio operates as a stream of packets using the Nordic BLE UART.
+Firmware Links
+
+
+v1.5.6: https://cdn.evenreal.co/firmware/3adb8ebbd35c2343409d6d0c9fe6cbb9.zip 
+Serial Number Decoder Ring
+The serial number can be fetched from the BLE Scan Result object. For example:S110LAAL103842
+Frame
+	Code
+	Description
+	S100
+	A
+	Round
+	S110
+	B
+	Square
+	
+
+Color
+	Code
+	Description
+	AA
+	Grey1
+	Grey
+	BB
+	Brown1
+	Brown
+	CC
+	Green1
+	Green
+	Generic Command Response
+Many commands will simply respond with a generic success/failure message. The header will repeat the command id back, and one additional byte which will be either success or failure. This is recorded here and referenced by all commands that operate this way to avoid duplicating the same response for all such messages.
+Response
+Command
+	Subcommand
+	Description
+	XX
+	C9
+	Success
+	XX
+	CA
+	Failure
+	XX
+	CB
+	Continue data
+	Commands
+Commands are messages the App can send to the glasses. The glasses may optionally respond.
+Control
+Commands that change send one off information to the glasses for them to act on.
+Microphone Control (0x0E)
+        enable:
+            0: Disable the MIC (turn off sound pickup).
+            1: Enable the MIC (turn on sound pickup).
+
+
+Response
+
+
+        Command: 0x0E
+        rsp_status (Response Status):
+            0xC9: Success
+            0xCA: Failure
+        enable:
+            0: MIC disabled.
+            1: MIC enabled.
+Send Quick Note (0x1E)
+TODO
+sent status 1e  L 0 , sent size: 16  sent: 1e 10 00 29 03 01 00 01 00 03 00 01 00 01 00 00
+received L len: 10,--1e 10 00 29 03 01 00 01 00 00
+Send Bitmap (0x15)
+TODO
+Send Hard Reset (0x23 72)
+Restarts the glasses. No response.
+Command
+	Subcommand
+	23
+	72
+	Send Heartbeat (0x25)
+Needs to be sent periodically to keep the device connected. Disconnection happens after 32 seconds, so send it every 28-30 seconds. The heartbeat sequence is unique to heartbeats and is different from the global sequence number. 
+Command
+	HB Sequence
+	25
+	00~FF
+	Send Notification (0x4B)
+Forward a notification to the glasses. Send to left arm. Response is generic.
+
+
+Command
+	Chunk Count
+	Sequence
+	Payload (JSON) (Max size 180 bytes)
+	4B
+	01~FF?
+	00~FF
+	
+
+	Clear Notification (0x4C)
+Init?? (0x4D)
+Not sure what this does, sent to the left only. Response is generic.
+Command
+	Payload?
+	4D
+	FB
+	            byte[] textBytes = text.getBytes();
+            ByteBuffer buffer = ByteBuffer.allocate(9 + textBytes.length);
+            buffer.put((byte) 0x4E);
+            buffer.put((byte) (currentSeq++ & 0xFF));
+            buffer.put((byte) 1);
+            buffer.put((byte) 0);
+            buffer.put((byte) screenStatus);
+            buffer.put((byte) 0);
+            buffer.put((byte) 0);
+            buffer.put((byte) currentPage);
+            buffer.put((byte) totalPages);
+            buffer.put(textBytes);
+Send Text (0x4E)
+??
+Send Dashboard Lock (0x50)
+??
+Send Clear Screen (0x18)
+Clears the screen of bitmaps. Also clears text?
+Getters
+Commands that request information from the glasses
+Get Firmware Information(0x23 74)
+Send and the device should respond with fw build information
+Command
+	Subcommand
+	23
+	74
+	Response
+This response kind of sucks because it has no header and is just raw ASCII data. Currently it always starts with “net”
+Hex Payload (203 bytes)
+	ASCII Payload
+	020320cf00cb0004001b12006e6574206275696c642074696d653a20323032342d31322d32382032303a32313a35372c20617070206275696c642074696d6520323032342d31322d32382032303a32303a34352c2076657220312e342e352c204a424420446576696365494420343031300a0d00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+	net build time: 2024-12-28 20:21:57, app build time 2024-12-28 20:20:45, ver 1.4.5, JBD DeviceID 4010
+	Get Brightness Settings  (0x29)
+Fetches the current screen brightness. Send to the right arm.
+
+
+Command
+	29
+	Response
+Header
+	??
+	Brightness Value
+	Auto brightness Enabled
+	29
+	65
+	00 - 2A
+	00 /01
+	Get Anti Shake Settings (0x2A)
+TODO
+Get Silent Mode Settings (0x2B)
+There seems to be additional info in this, I’m not sure what it is though.  Send to the Both arms.
+Command
+	2B
+	Response
+Header
+	??
+	Silent Enabled
+	??
+	2B
+	69
+	0C (true) / 0A (false)
+	06 / 08
+	Get Battery State (0x2C 01)
+Send and the device should respond with a battery info packet
+Command
+	Subcommand
+	2C
+	01
+	Response
+Header
+	?
+	Battery Percentage
+	?
+	2C
+	66 ?
+	00~64
+	In case, arms closed, charging, voltage
+L 00 e6 5d 24 00 00 00 01 04 05 00000000000000
+R 64 ef(f0) 80 19(18) 01 04 05 01 04 05 00000000000000
+	Get Firmware/Software Information (0x2C 02)
+TODO
+Get MAC Address Information (0x2D)
+TODO
+Get App Whitelist Settings (0x2E)
+TODO
+Get Headup Activation Angle Settings (0x32)
+Command
+	32
+	Response
+Header
+	Success
+	Silent Enabled
+	32
+	C9
+	00 / 01
+	Send to the right arm.
+
+
+2025-05-18 18:42:10.237 10946-12243 ble_R                       com.even.g1                              E  sent status 32  R 0 , sent size: 1  sent: 32
+2025-05-18 18:42:10.293 10946-12530 ble_R                       com.even.g1                              E  received R len: 20,--32 6d 0f 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+
+Get Glasses Serial Number Information (0x33)
+TODO
+Get Device Serial Number Information (0x34)
+What is the difference between this vs 0x33? Is it glasses vs lens serial number?
+TODO
+Get ESB Channel Information (0x35)
+TODO
+Get ESB Channel Notification Count Information (0x36)
+TODO
+Get Time Since Boot (0x37)
+Fetches the time since boot from the device in seconds.
+Command
+	37
+	Response
+Header
+	Payload
+	???
+	37
+	49 1a 00 00
+	00 / 01
+	Get Wear Detection Settings (0x3A)
+Command
+	3A
+	Response
+Header
+	Success
+	Silent Enabled
+	3A
+	C9
+	00 / 01
+	Get Display Settings (0x3B)
+Fetches the current screen height and depth values. Send to the right arm.
+
+
+Command
+	3B
+	Response
+Header
+	Success
+	Height
+	Depth
+	3B
+	C9
+	00 - 08
+	01 - 09
+	Get Buried Point Data (0x3E)
+Fetch buried point data, which is essentially user usage tracking: https://www.php.cn/faq/446290.html 
+Command
+	3E
+	Response
+Header
+	Success
+	Payload (197 bytes ?)
+	3E
+	C9
+	Example censored as it may contain private data.
+	Get Audio Recording (0xF1)
+* Command: 0xF1
+* seq (Sequence Number): 0~255
+* data (Audio Data): Actual MIC audio data being transmitted.
+Field Descriptions
+* seq (Sequence Number):
+   * Range: 0~255
+   * Description: This is the sequence number of the current data packet. It helps to ensure the order of the audio data being received.
+* data (Audio Data):
+   * Description: The actual audio data captured by the MIC, transmitted in chunks according to the sequence.
+Example
+* Command: 0xF1, with seq = 10 and data = [Audio Data]
+* Description: This command transmits a chunk of audio data from the glasses' MIC, with a sequence number of 10 to maintain packet order.
+Setters
+Commands that set persistent information or configuration on the glasses.
+Set Brightness Settings (0x01)
+Adjust the brightness level or enable/disable auto brightness. Send to right arm. Response is generic.
+Command
+	Brightness
+	Auto
+	01
+	00 - 2A
+	00 / 01
+	Set Silent Mode Settings (0x03)
+This will activate or deactivate the silent mode of the glasses. Send to both arms. Response is generic.
+Command
+	Subcommand
+	Description
+	03
+	0C
+	Silent Mode On
+	03
+	0A
+	Silent Mode Off
+	Set Notification Settings (0x04)
+Send over the config for notifications. This has JSON with some booleans and an allowlist for which apps to display notifications for. Send to left arm. Response is generic.
+Command
+	Chunk Count
+	Sequence
+	Payload (JSON) (Max size 180 bytes)
+	04
+	01~FF?
+	00~FF
+	{"calendar_enable":true,
+"Call_enable":true,
+"Msg_enable":true,
+"Ios_mail_enable":true,
+"app":{
+  "List":[
+    {"id":"com.app",
+     "name":"App Name"}, ...],
+  “enable”:true
+}
+	Set Dashboard Settings (0x06)
+Send settings to control the dashboard. The length includes full packet length, including the command, length, pad and sequence in addition to the payload. Subcommands are listed below with their payloads.
+Command
+	Length
+	Pad
+	Sequence
+	Payload
+	06
+	XX
+	00
+	00 FF 
+	XX XX XX XX ...
+	Set Time and Weather
+Subcommand
+	Epoch Time 32bit (s)
+	Epoch Time 64bit (ms)
+	Weather Icon ID
+	Temp C
+	C/F
+	24H/12H
+	01
+	XX XX XX XX
+	XX XX XX XX XX XX XX XX
+	01-10
+	XX
+	00/01
+	00/01
+	Weather Icon IDs
+Icon ID
+	Description
+	00
+	None
+	01
+	Night
+	02
+	Clouds
+	03
+	Drizzle
+	04
+	Heavy Drizzle
+	05
+	Rain
+	06
+	Heavy Rain
+	07
+	Thunder
+	08
+	Thunder Storm
+	09
+	Snow
+	0A
+	Mist
+	0B
+	Fog
+	0C
+	Sand
+	0D
+	Squalls
+	0E
+	Tornado
+	0F
+	Freezing
+	10
+	Sunny
+	Set Dashboard Mode
+Set the dashboard mode, currently has three modes: minimal, dual, full
+Subcommand
+	Mode ID
+	Secondary Pane ID
+	06
+	00 - 02
+	00 - 05
+	Dashboard Mode IDs
+Mode ID
+	Description
+	00
+	Full
+	01
+	Dual
+	02
+	Minimal
+	Secondary Pane IDs
+Only respected on Full or Dual Mode
+Secondary Pane ID
+	Description
+	00
+	Notes
+	01
+	Stock (graph)
+	02
+	News
+	03
+	Calendar
+	04
+	Navigation
+	05 +
+	Empty
+	Response
+The response repeats back the sequence 
+Command
+	Request Length
+	Pad
+	Sequence
+	Subcommand
+	Payload
+	06
+	07
+	00
+	00-FF 
+	XX
+	XX XX
+	Set Teleprompter Text (0x09)
+??
+Set Navigation Info (0x0A)
+??
+Set Head Up Angle Settings (0x0B)
+Sets the angle at which the display turns on when the wearer looks up. Send to the right arm. Response is generic
+Header
+	Angle
+	Level?
+	0B
+	00 - 3C
+	01 ?
+	Response
+Header
+	Success
+	0B
+	C9/CA
+	Send Sequence Synchronization Number (0x22 05)
+Sets the global sequence. Sent periodically to the right lens.
+
+
+Header
+	Pad
+	Sequence
+	??
+	22 05
+	00
+	00-FF
+	01
+	Response
+Header
+	Pad
+	Sequence
+	??
+	??
+	??
+	22 05
+	00
+	00-FF
+	01
+	00
+	01
+	Set Display Settings (0x26)
+Control the display’s height and depth. Must be called twice, first with the preview bit set to 1, and then a few seconds later with the bit set 0. The glasses will stay on permanently until the preview=0 command is sent, or if the preview=1 is not sent, the glasses will reject the setting.
+Header
+	Sub command?
+	Pad
+	Seq
+	??
+	Preview
+	height
+	Depth
+	26
+	08 ??
+	00
+	00-FF
+	02
+	00/ 01
+	00-08
+	01-09
+	Response
+Header
+	??
+	Pad
+	Seq
+	??
+	Success
+	26
+	06
+	00
+	00-FF
+	02
+	C9/CA
+	Set Wear Detection Settings (0x27)
+Enable or disable Wear Detection. When enabled, additional 0xF5 messages are sent when worn or not. Response is generic.
+Command
+	Enable/Disable
+	27
+	00 - 01
+	Set Debug Mode ?? (0xF4)
+Command
+	Enable/Disable
+	F4
+	00 - 01
+	Unknown
+Get/Set Message Mode Setting?? (0x3C)
+TODO
+Get/Set Language Settings ?? (0x3D)
+2025-05-13 20:23:23.408 23498-23555 ble_L                       com.even.g1                              E  sent status 3d  L 0 , sent size: 6  sent: 3d 06 00 14 01 02
+2025-05-13 20:23:23.456 23498-30097 ble_L                       com.even.g1                              E  received L len: 6,--3d 06 00 14 01 02
+Get/Set Apple Notification Center Service Settings ??(0x38)
+TODO
+Set Calendar Event(0x58)
+??
+Messages
+These are messages the glasses will send to the app unprompted.
+State Change (0xF5)
+Touchpad events on FW v1.4.5 and below will also initiate events on the glasses. In FW v1.X.X, these events were made remappable, so the on glasses functionality is not mentioned here since it can be changed by the user.
+
+
+Header
+	Sub
+	Payload
+	Description
+	F5
+	00
+	??
+	TouchPad Double Tap
+	F5
+	02
+	
+
+	Head Up
+	F5
+	01
+	
+
+	TouchPad Single Tap
+	F5
+	03
+	
+
+	Head Down
+	F5
+	04
+	
+
+	TouchPad Triple Tap
+	F5
+	05
+	
+
+	TouchPad Triple Tap
+	F5
+	06
+	N/A
+	Glasses are worn
+	F5
+	07
+	
+
+	Glasses taken off, not in box
+	F5
+	08
+	N/A
+	Put in case, lid open
+	F5
+	09
+	00 / 01
+	charging?
+	F5
+	0A
+	
+
+	
+
+	F5
+	0B
+	
+
+	Put in case, lid closed
+	F5
+	0E
+	00 / 01
+	Case Charging
+	F5
+	0F
+	00~64 (00 x 21)
+	Case Battery percent
+	F5
+	11
+	
+
+	BLE Paired Success?
+	F5
+	12
+	
+
+	
+
+	F5
+	17
+	
+
+	TouchPad pressed and held
+	F5
+	18
+	
+
+	TouchPad pressed and released
+	F5
+	
+
+	
+
+	
+
+	F5
+	
+
+	
+
+	
+
+	F5
+	
+
+	
+
+	
+
+	F5
+	1e
+	
+
+	Open Dashboard (double tap)
+	F5
+	1f
+	
+
+	Close Dashboard (double tap)
+	F5
+	20
+	
+
+	Double tap either side when set to translate or transcribe
+	
+
+To be formatted nicely
+Button Configs
+-- set head up to none
+2025-05-11 20:07:45.128 19015-19028 ble_L                       com.even.g1                              E  sent status 08  L 0 , sent size: 6  sent: 08 06 00 00 03 02
+2025-05-11 20:07:45.134 19015-19028 ble_R                       com.even.g1                              E  sent status 08  R 0 , sent size: 6  sent: 08 06 00 00 03 02
+-- set head up to dashboard
+2025-05-11 20:07:49.554 19015-21327 ble_L                       com.even.g1                              E  sent status 08  L 0 , sent size: 6  sent: 08 06 00 00 03 00
+2025-05-11 20:07:49.560 19015-21327 ble_R                       com.even.g1                              E  sent status 08  R 0 , sent size: 6  sent: 08 06 00 00 03 00
+
+
+--double tap none
+2025-05-11 20:11:02.681 19015-20995 ble_L                       com.even.g1                              E  sent status 26  L 0 , sent size: 6  sent: 26 06 00 0a 05 00
+2025-05-11 20:11:02.687 19015-20995 ble_R                       com.even.g1                              E  sent status 26  R 0 , sent size: 6  sent: 26 06 00 0a 05 00
+
+
+--double tap transcribe
+2025-05-11 20:11:36.444 19015-21327 ble_L                       com.even.g1                              E  sent status 26  L 0 , sent size: 6  sent: 26 06 00 0b 05 05
+2025-05-11 20:11:36.467 19015-19362 ble_R                       com.even.g1                              E  sent status 26  R 0 , sent size: 6  sent: 26 06 00 0b 05 05
+
+
+-- double tap teleprompt
+2025-05-11 20:12:06.822 19015-19362 ble_L                       com.even.g1                              E  sent status 26  L 0 , sent size: 6  sent: 26 06 00 0c 05 03
+2025-05-11 20:12:06.829 19015-19362 ble_R                       com.even.g1                              E  sent status 26  R 0 , sent size: 6  sent: 26 06 00 0c 05 03
+
+
+-- double tap translate
+2025-05-11 20:12:42.302 19015-21704 ble_L                       com.even.g1                              E  sent status 26  L 0 , sent size: 6  sent: 26 06 00 0d 05 02
+2025-05-11 20:12:42.309 19015-21704 ble_R                       com.even.g1                              E  sent status 26  R 0 , sent size: 6  sent: 26 06 00 0d 05 02
+
+
+-- double tap dashboard
+2025-05-11 20:13:13.033 19015-21704 ble_L                       com.even.g1                              E  sent status 26  L 0 , sent size: 6  sent: 26 06 00 11 05 04
+2025-05-11 20:13:13.039 19015-21704 ble_R                       com.even.g1                              E  sent status 26  R 0 , sent size: 6  sent: 26 06 00 11 05 04
+
+
+
+
+
+
+???
+2025-05-13 20:18:49.390 23498-30268 ble_L                       com.even.g1                              E  sent status 39  L 0 , sent size: 5  sent: 39 05 00 1c 01
+2025-05-13 20:18:49.436 23498-30097 ble_L                       com.even.g1                              E  received L len: 6,--39 05 00 1c 01 00
+2025-05-13 20:18:49.436 23498-30438 ble_L                       com.even.g1                              E  received L len: 6,--39 05 00 1c 01 00
+2025-05-13 20:18:49.436 23498-30612 ble_L                       com.even.g1                              E  received L len: 6,--39 05 00 1c 01 00
+2025-05-13 20:18:49.436 23498-30097 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@18d9d41
+2025-05-13 20:18:49.436 23498-30612 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@cacb027
+2025-05-13 20:18:49.436 23498-30438 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@7bf2e6
+2025-05-13 20:18:49.444 23498-30022 ble_R                       com.even.g1                              E  sent status 39  R 0 , sent size: 5  sent: 39 05 00 1c 01
+2025-05-13 20:18:49.488 23498-30613 ble_R                       com.even.g1                              E  received R len: 6,--39 05 00 1c 01 00
+2025-05-13 20:18:49.489 23498-30613 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@85d12d4
+2025-05-13 20:18:49.489 23498-30439 ble_R                       com.even.g1                              E  received R len: 6,--39 05 00 1c 01 00
+2025-05-13 20:18:49.489 23498-30439 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@f55cc7d
+2025-05-13 20:18:49.490 23498-30095 ble_R                       com.even.g1                              E  received R len: 6,--39 05 00 1c 01 00
+2025-05-13 20:18:49.490 23498-30095 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@1845772
+2025-05-13 20:18:49.496 23498-30022 ble_R                       com.even.g1                              E  sent status 50  R 0 , sent size: 6  sent: 50 06 00 00 01 01
+2025-05-13 20:18:49.518 23498-30613 ble_R                       com.even.g1                              E  received R len: 6,--50 06 00 00 01 01
+2025-05-13 20:18:49.519 23498-30095 ble_R                       com.even.g1                              E  received R len: 6,--50 06 00 00 01 01
+2025-05-13 20:18:49.519 23498-30095 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@9e28840
+2025-05-13 20:18:49.519 23498-30613 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@c2a27c3
+2025-05-13 20:18:49.519 23498-30439 ble_R                       com.even.g1                              E  received R len: 6,--50 06 00 00 01 01
+2025-05-13 20:18:49.520 23498-30439 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@c77b379
+
+
+
+
+
+
+
+
+Turn the display on?
+sent status 39  L 0 , sent size: 5  sent: 39 05 00 69 01
+sent status 39  R 0 , sent size: 5  sent: 39 05 00 69 01
+sent status 50  R 0 , sent size: 6  sent: 50 06 00 00 01 01
+sent status 26  L 0 , sent size: 8  sent: 26 08 00 08 02 01 07 04
+sent status 26  R 0 , sent size: 8  sent: 26 08 00 08 02 01 07 04
+
+
+
+
+Reset 0degree position
+2025-05-18 18:45:07.339 10946-10996 ble_L                       com.even.g1                              E  sent status 10  L 0 , sent size: 5  sent: 10 05 00 04 01
+2025-05-18 18:45:07.343 10946-10996 ble_R                       com.even.g1                              E  sent status 10  R 0 , sent size: 5  sent: 10 05 00 04 01
+2025-05-18 18:45:07.375 10946-12531 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 04 01 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+
+
+
+Calibration
+2025-05-18 18:47:39.362 10946-10993 ble_L                       com.even.g1                              E  sent status 39  L 0 , sent size: 5  sent: 39 05 00 5f 01
+2025-05-18 18:47:39.447 10946-12531 ble_L                       com.even.g1                              E  received L len: 6,--39 05 00 5f 01 00
+2025-05-18 18:47:39.447 10946-12531 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@70545f6
+2025-05-18 18:47:39.448 12038-12732 nodomain.f....BtLEQueue nod...n.freeyourgadget.gadgetbridge  D  characteristic changed: 6e400003-b5a3-f393-e0a9-e50e24dcca9e value: 0x39 0x05 0x00 0x5f 0x01 0x00
+2025-05-18 18:47:39.449 12038-12732 nodomain.f...ideManager nod...n.freeyourgadget.gadgetbridge  D  Unhandled payload on side 0: 0x39 0x05 0x00 0x5f 0x01 0x00
+2025-05-18 18:47:39.456 10946-10993 ble_R                       com.even.g1                              E  sent status 39  R 0 , sent size: 5  sent: 39 05 00 5f 01
+2025-05-18 18:47:39.501 10946-12530 ble_R                       com.even.g1                              E  received R len: 6,--39 05 00 5f 01 00
+2025-05-18 18:47:39.501 10946-12530 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@ad3edf7
+2025-05-18 18:47:39.503 12038-12732 nodomain.f....BtLEQueue nod...n.freeyourgadget.gadgetbridge  D  characteristic changed: 6e400003-b5a3-f393-e0a9-e50e24dcca9e value: 0x39 0x05 0x00 0x5f 0x01 0x00
+2025-05-18 18:47:39.506 12038-12732 nodomain.f...ideManager nod...n.freeyourgadget.gadgetbridge  D  Unhandled payload on side 1: 0x39 0x05 0x00 0x5f 0x01 0x00
+2025-05-18 18:47:39.512 10946-10993 ble_R                       com.even.g1                              E  sent status 50  R 0 , sent size: 6  sent: 50 06 00 00 01 01
+2025-05-18 18:47:39.801 10946-12530 ble_R                       com.even.g1                              E  received R len: 6,--50 06 00 00 01 01
+2025-05-18 18:47:39.801 10946-12530 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@2c7c464
+2025-05-18 18:47:39.803 12038-12732 nodomain.f....BtLEQueue nod...n.freeyourgadget.gadgetbridge  D  characteristic changed: 6e400003-b5a3-f393-e0a9-e50e24dcca9e value: 0x50 0x06 0x00 0x00 0x01 0x01
+2025-05-18 18:47:39.807 12038-12732 nodomain.f...ideManager nod...n.freeyourgadget.gadgetbridge  D  Unhandled payload on side 1: 0x50 0x06 0x00 0x00 0x01 0x01
+2025-05-18 18:47:39.814 10946-10993 ble_L                       com.even.g1                              E  sent status 10  L 0 , sent size: 7  sent: 10 07 00 0c 02 01 00
+2025-05-18 18:47:39.822 10946-10993 ble_R                       com.even.g1                              E  sent status 10  R 0 , sent size: 7  sent: 10 07 00 0c 02 01 00
+2025-05-18 18:47:39.850 10946-12531 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 0c 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:47:39.850 10946-12531 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@63d46cd
+2025-05-18 18:47:39.856 12038-12732 nodomain.f....BtLEQueue nod...n.freeyourgadget.gadgetbridge  D  characteristic changed: 6e400003-b5a3-f393-e0a9-e50e24dcca9e value: 0x10 0x06 0x00 0x0c 0x02 0xc9 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+2025-05-18 18:47:39.862 12038-12732 nodomain.f...ideManager nod...n.freeyourgadget.gadgetbridge  D  Unhandled payload on side 0: 0x10 0x06 0x00 0x0c 0x02 0xc9 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00 0x00
+2025-05-18 18:47:39.889 10946-12530 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 0c 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+
+Ack on glasses
+2025-05-18 18:48:41.449 10946-12530 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 0d 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+
+Done in app
+ E  sent status 10  L 0 , sent size: 7  sent: 10 07 00 05 02 00 00
+2025-05-18 18:53:19.222 13285-13467 ble_R                       com.even.g1                              E  sent status 10  R 0 , sent size: 7  sent: 10 07 00 05 02 00 00
+2025-05-18 18:53:19.269 13285-13632 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 05 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.269 13285-13632 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@f8f1fff
+2025-05-18 18:53:19.270 13285-13552 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 05 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.270 13285-13732 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 05 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.270 13285-13732 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@c2d9c15
+2025-05-18 18:53:19.270 13285-13552 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@9ea81cc
+2025-05-18 18:53:19.276 13285-13586 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 05 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.276 13285-13733 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 05 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.276 13285-13586 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@2380b2a
+2025-05-18 18:53:19.276 13285-13733 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@1bfbd1b
+2025-05-18 18:53:19.276 13285-13631 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 05 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.276 13285-13631 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@823eeb8
+2025-05-18 18:53:19.338 13285-13737 ble_L                       com.even.g1                              E  Failed to write characteristic 201
+2025-05-18 18:53:19.343 13285-13293 ble_L                       com.even.g1                              E  sent status 10  L 0 , sent size: 7  sent: 10 07 00 03 02 01 01
+2025-05-18 18:53:19.349 13285-13293 ble_R                       com.even.g1                              E  sent status 10  R 0 , sent size: 7  sent: 10 07 00 03 02 01 01
+2025-05-18 18:53:19.352 13285-13293 ble_L                       com.even.g1                              E  sent status 10  L 0 , sent size: 7  sent: 10 07 00 03 02 01 01
+2025-05-18 18:53:19.525 13285-13738 ble_L                       com.even.g1                              E  Failed to write characteristic 201
+2025-05-18 18:53:19.530 13285-13450 ble_L                       com.even.g1                              E  sent status 10  L 0 , sent size: 7  sent: 10 07 00 03 02 01 01
+2025-05-18 18:53:19.535 13285-13450 ble_R                       com.even.g1                              E  sent status 10  R 0 , sent size: 7  sent: 10 07 00 03 02 01 01
+2025-05-18 18:53:19.538 13285-13450 ble_L                       com.even.g1                              E  sent status 10  L 0 , sent size: 7  sent: 10 07 00 03 02 01 01
+2025-05-18 18:53:19.806 13285-13586 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 02 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.806 13285-13733 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 02 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.806 13285-13586 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@b930ff7
+2025-05-18 18:53:19.806 13285-13631 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 02 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.806 13285-13733 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@c853e64
+2025-05-18 18:53:19.806 13285-13631 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@31638cd
+2025-05-18 18:53:19.817 13285-13586 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.817 13285-13631 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.817 13285-13586 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@152d582
+2025-05-18 18:53:19.817 13285-13631 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@1deb493
+2025-05-18 18:53:19.818 13285-13733 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.818 13285-13733 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@389dcd0
+2025-05-18 18:53:19.833 13285-13586 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 06 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.833 13285-13586 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@bda94c9
+2025-05-18 18:53:19.833 13285-13631 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 06 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.833 13285-13631 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@1dcc7ce
+2025-05-18 18:53:19.833 13285-13733 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 06 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.833 13285-13733 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@73606ef
+2025-05-18 18:53:19.840 13285-13632 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.841 13285-13732 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.841 13285-13632 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@3f7f5fc
+2025-05-18 18:53:19.841 13285-13552 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.841 13285-13552 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@192da
+2025-05-18 18:53:19.841 13285-13732 ble_R                       com.even.g1                              W  callback type: Receive, data: [B@a6eb485
+2025-05-18 18:53:19.847 13285-13586 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.847 13285-13586 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@a06230b
+2025-05-18 18:53:19.847 13285-13733 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.847 13285-13733 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@8cc75e8
+2025-05-18 18:53:19.847 13285-13631 ble_L                       com.even.g1                              E  received L len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.847 13285-13631 ble_L                       com.even.g1                              W  callback type: Receive, data: [B@46b1401
+2025-05-18 18:53:19.855 13285-13552 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.855 13285-13732 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+2025-05-18 18:53:19.855 13285-13632 ble_R                       com.even.g1                              E  received R len: 20,--10 06 00 03 02 c9 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+
+
+
+
+Turn the screen on?
+sent status 39  L 0 , sent size: 5  sent: 39 05 00 87 01
+received L len: 6,--39 05 00 87 01 00
+
+
+sent status 39  R 0 , sent size: 5  sent: 39 05 00 87 01
+received R len: 6,--39 05 00 87 01 00
