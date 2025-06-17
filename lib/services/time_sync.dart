@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'bluetooth_manager.dart';
 
@@ -9,7 +8,7 @@ class TimeSync {
   /// This function synchronizes the current system time with the glasses
   /// and sets placeholder weather information.
   static Future<void> updateTimeAndWeather() async {
-    final bluetoothManager = BluetoothManager();
+    final bluetoothManager = BluetoothManager.singleton;
     
     if (!bluetoothManager.isConnected) {
       debugPrint('Cannot update time and weather: Glasses not connected');
