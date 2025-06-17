@@ -1,4 +1,3 @@
-// Removed import for time_weather.dart
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/time_sync.dart';
 import 'package:agixt/utils/ui_perfs.dart';
@@ -12,14 +11,10 @@ class DashboardSettingsPage extends StatefulWidget {
 }
 
 class DashboardSettingsPageState extends State<DashboardSettingsPage> {
-  bool _is24HourFormat = UiPerfs.singleton.timeFormat ==
-      TimeFormat.TWENTY_FOUR_HOUR; // Corrected enum value
-  final BluetoothManager _bluetoothManager =
-      BluetoothManager.singleton; // Use singleton instance
-  bool _isUpdatingTime =
-      false; // Track if we're currently updating time on glasses
-
-  // Removed Weather Provider State variables
+  bool _is24HourFormat =
+      UiPerfs.singleton.timeFormat == TimeFormat.TWENTY_FOUR_HOUR;
+  final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
+  bool _isUpdatingTime = false;
 
   @override
   void initState() {
@@ -27,27 +22,20 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
     _loadSettings();
   }
 
-  // Load settings from UiPerfs
   void _loadSettings() {
     setState(() {
-      _is24HourFormat = UiPerfs.singleton.timeFormat ==
-          TimeFormat.TWENTY_FOUR_HOUR; // Corrected enum value
-      // Removed weather provider package name loading and validation
-      // Removed _isCelsius update
+      _is24HourFormat =
+          UiPerfs.singleton.timeFormat == TimeFormat.TWENTY_FOUR_HOUR;
     });
   }
 
-  // Removed _fetchWeatherProviders method
-
-  // Save settings to UiPerfs and trigger update
   Future<void> _saveSettingsAndTriggerUpdate() async {
     setState(() {
       _isUpdatingTime = true;
     });
 
-    UiPerfs.singleton.timeFormat = _is24HourFormat
-        ? TimeFormat.TWENTY_FOUR_HOUR // Corrected enum value
-        : TimeFormat.TWELVE_HOUR; // Corrected enum value
+    UiPerfs.singleton.timeFormat =
+        _is24HourFormat ? TimeFormat.TWENTY_FOUR_HOUR : TimeFormat.TWELVE_HOUR;
 
     // Immediately update time format on glasses if connected
     if (_bluetoothManager.isConnected) {
@@ -137,16 +125,12 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
                       setState(() {
                         _is24HourFormat = value;
                       });
-                      _saveSettingsAndTriggerUpdate(); // Call updated save function
+                      _saveSettingsAndTriggerUpdate();
                     },
             ),
-            // Removed Weather Format (Celsius/Fahrenheit) SwitchListTile
-            // Removed Weather Provider section and selector UI
           ],
         ),
       ),
     );
   }
-
-  // Removed _buildWeatherProviderSelector method
 }
