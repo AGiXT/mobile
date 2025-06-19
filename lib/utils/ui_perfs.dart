@@ -1,6 +1,4 @@
 import 'package:shared_preferences/shared_preferences.dart';
-// Removed import for time_weather.dart
-import 'package:flutter/material.dart'; // Added missing import
 
 enum TimeFormat { TWELVE_HOUR, TWENTY_FOUR_HOUR } // Corrected enum values
 enum TemperatureUnit { CELSIUS, FAHRENHEIT } // Moved enum here

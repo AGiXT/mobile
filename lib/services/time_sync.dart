@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'bluetooth_manager.dart';
+import 'weather_service.dart';
 import '../utils/ui_perfs.dart';
 
 /// Utility class for synchronizing time with the Even Realities G1 glasses
@@ -7,9 +8,10 @@ class TimeSync {
   static int _sequenceNumber = 0;
 
   /// This function synchronizes the current system time with the glasses
-  /// and sets placeholder weather information.
+  /// and sets current weather information.
   static Future<void> updateTimeAndWeather() async {
     final bluetoothManager = BluetoothManager.singleton;
+    final weatherService = WeatherService();
 
     if (!bluetoothManager.isConnected) {
       debugPrint('Cannot update time and weather: Glasses not connected');
@@ -40,6 +42,35 @@ class TimeSync {
     debugPrint(
         'Expected display time: ${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}');
 
+    // Get current weather data
+    int weatherIconId = 0x10; // Default to sunny
+    int temperature = 21; // Default temperature (always in Celsius for BLE)
+    int temperatureUnit = 0; // 0 = Celsius, 1 = Fahrenheit
+    
+    try {
+      final weatherData = await weatherService.getCurrentWeather();
+      if (weatherData != null) {
+        weatherIconId = weatherService.getG1WeatherIconId(weatherData.main, weatherData.isDay);
+        
+        // Always send temperature in Celsius to glasses (as per protocol)
+        // The C/F flag tells glasses how to display it
+        temperature = weatherData.temperature.round();
+        
+        // Set display unit preference
+        if (UiPerfs.singleton.temperatureUnit == TemperatureUnit.FAHRENHEIT) {
+          temperatureUnit = 1; // Fahrenheit display
+        } else {
+          temperatureUnit = 0; // Celsius display
+        }
+        
+        debugPrint('Weather data: ${weatherData.summary}, Icon ID: 0x${weatherIconId.toRadixString(16)}, Temp: ${temperature}°C (display as ${temperatureUnit == 0 ? 'C' : 'F'})');
+      } else {
+        debugPrint('No weather data available, using defaults');
+      }
+    } catch (e) {
+      debugPrint('Error fetching weather data, using defaults: $e');
+    }
+
     // Increment and manage sequence number
     _sequenceNumber = (_sequenceNumber + 1) % 256;
 
@@ -61,10 +92,10 @@ class TimeSync {
     // Epoch Time (64-bit milliseconds) - little-endian
     buffer.setUint64(9, epochMilliseconds, Endian.little);
 
-    // Weather settings (placeholders)
-    buffer.setUint8(17, 0x10); // Weather Icon ID: Sunny (0x10)
-    buffer.setUint8(18, 21); // Temperature: 21°C
-    buffer.setUint8(19, 0x00); // C/F: Celsius (0x00)
+    // Weather settings (using real weather data)
+    buffer.setUint8(17, weatherIconId); // Weather Icon ID from weather service
+    buffer.setUint8(18, temperature); // Temperature in Celsius (protocol requirement)
+    buffer.setUint8(19, temperatureUnit); // C/F display flag: 0=Celsius, 1=Fahrenheit
 
     // Use user's time format preference
     final is24HourFormat =
