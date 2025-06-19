@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_openai/dart_openai.dart';
-import 'package:agixt/models/agixt/whispermodel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,8 +10,6 @@ import 'package:uuid/uuid.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:web_socket_client/web_socket_client.dart';
-import 'package:http/http.dart' as http;
-import 'package:agixt/models/agixt/auth/auth.dart';
 
 abstract class WhisperService {
   static Future<WhisperService> service() async {
@@ -128,7 +125,6 @@ class WhisperLocalService implements WhisperService {
       // For devices that can't directly process the binary data through native APIs,
       // we'll try to use the speech recognition on audio we can record
       
-      final Completer<String> completer = Completer<String>();
       String result = '';
       
       // Try to get a transcription using native speech recognition

@@ -10,7 +10,7 @@ class WeatherScreen extends StatefulWidget {
 
 class _WeatherScreenState extends State<WeatherScreen> {
   final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
-  
+
   String _currentWeatherInfo = 'Loading...';
   bool _isLoading = false;
 
@@ -97,7 +97,8 @@ class _WeatherScreenState extends State<WeatherScreen> {
                             ? const SizedBox(
                                 width: 16,
                                 height: 16,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
                               )
                             : const Icon(Icons.refresh),
                         label: const Text('Refresh Weather'),
@@ -129,19 +130,19 @@ class _WeatherScreenState extends State<WeatherScreen> {
                     Text(
                       'Connection Status: ${_bluetoothManager.isConnected ? "Connected" : "Disconnected"}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: _bluetoothManager.isConnected 
-                            ? Colors.green 
-                            : Colors.red,
-                        fontWeight: FontWeight.bold,
-                      ),
+                            color: _bluetoothManager.isConnected
+                                ? Colors.green
+                                : Colors.red,
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       'Weather Source: Device System',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Colors.blue,
-                        fontWeight: FontWeight.bold,
-                      ),
+                            color: Colors.blue,
+                            fontWeight: FontWeight.bold,
+                          ),
                     ),
                   ],
                 ),

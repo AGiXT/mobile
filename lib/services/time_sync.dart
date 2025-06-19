@@ -46,24 +46,26 @@ class TimeSync {
     int weatherIconId = 0x10; // Default to sunny
     int temperature = 21; // Default temperature (always in Celsius for BLE)
     int temperatureUnit = 0; // 0 = Celsius, 1 = Fahrenheit
-    
+
     try {
       final weatherData = await weatherService.getCurrentWeather();
       if (weatherData != null) {
-        weatherIconId = weatherService.getG1WeatherIconId(weatherData.main, weatherData.isDay);
-        
+        weatherIconId = weatherService.getG1WeatherIconId(
+            weatherData.main, weatherData.isDay);
+
         // Always send temperature in Celsius to glasses (as per protocol)
         // The C/F flag tells glasses how to display it
         temperature = weatherData.temperature.round();
-        
+
         // Set display unit preference
         if (UiPerfs.singleton.temperatureUnit == TemperatureUnit.FAHRENHEIT) {
           temperatureUnit = 1; // Fahrenheit display
         } else {
           temperatureUnit = 0; // Celsius display
         }
-        
-        debugPrint('Weather data: ${weatherData.summary}, Icon ID: 0x${weatherIconId.toRadixString(16)}, Temp: ${temperature}°C (display as ${temperatureUnit == 0 ? 'C' : 'F'})');
+
+        debugPrint(
+            'Weather data: ${weatherData.summary}, Icon ID: 0x${weatherIconId.toRadixString(16)}, Temp: $temperature°C (display as ${temperatureUnit == 0 ? 'C' : 'F'})');
       } else {
         debugPrint('No weather data available, using defaults');
       }
@@ -94,8 +96,10 @@ class TimeSync {
 
     // Weather settings (using real weather data)
     buffer.setUint8(17, weatherIconId); // Weather Icon ID from weather service
-    buffer.setUint8(18, temperature); // Temperature in Celsius (protocol requirement)
-    buffer.setUint8(19, temperatureUnit); // C/F display flag: 0=Celsius, 1=Fahrenheit
+    buffer.setUint8(
+        18, temperature); // Temperature in Celsius (protocol requirement)
+    buffer.setUint8(
+        19, temperatureUnit); // C/F display flag: 0=Celsius, 1=Fahrenheit
 
     // Use user's time format preference
     final is24HourFormat =

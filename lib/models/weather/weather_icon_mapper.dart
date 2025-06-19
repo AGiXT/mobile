@@ -27,43 +27,43 @@ class WeatherIconMapper {
     switch (condition) {
       case 'clear':
         return isDay ? iconSunny : iconNight;
-      
+
       case 'clouds':
       case 'overcast':
         return iconClouds;
-      
+
       case 'drizzle':
         return iconDrizzle;
-      
+
       case 'rain':
         return iconRain;
-      
+
       case 'thunderstorm':
         return iconThunderStorm;
-      
+
       case 'snow':
         return iconSnow;
-      
+
       case 'mist':
         return iconMist;
-      
+
       case 'fog':
       case 'haze':
         return iconFog;
-      
+
       case 'sand':
       case 'dust':
         return iconSand;
-      
+
       case 'squall':
         return iconSqualls;
-      
+
       case 'tornado':
         return iconTornado;
-      
+
       case 'extreme':
         return iconFreezing;
-      
+
       default:
         // Default to sunny for day, night for night if condition is unknown
         return isDay ? iconSunny : iconNight;
@@ -71,7 +71,8 @@ class WeatherIconMapper {
   }
 
   /// Maps detailed OpenWeatherMap weather condition to G1 icon ID
-  static int getG1IconIdDetailed(String weatherMain, String description, bool isDay) {
+  static int getG1IconIdDetailed(
+      String weatherMain, String description, bool isDay) {
     final condition = weatherMain.toLowerCase();
     final desc = description.toLowerCase();
 
@@ -84,25 +85,25 @@ class WeatherIconMapper {
           return iconRain;
         }
         return iconRain;
-      
+
       case 'drizzle':
         if (desc.contains('heavy') || desc.contains('dense')) {
           return iconHeavyDrizzle;
         }
         return iconDrizzle;
-      
+
       case 'thunderstorm':
         if (desc.contains('heavy') || desc.contains('extreme')) {
           return iconThunderStorm;
         }
         return iconThunder;
-      
+
       case 'snow':
         if (desc.contains('freezing') || desc.contains('ice')) {
           return iconFreezing;
         }
         return iconSnow;
-      
+
       case 'atmosphere':
         if (desc.contains('fog')) {
           return iconFog;
@@ -112,7 +113,7 @@ class WeatherIconMapper {
           return iconSand;
         }
         return iconMist;
-      
+
       default:
         // Fall back to simple mapping
         return getG1IconId(weatherMain, isDay);

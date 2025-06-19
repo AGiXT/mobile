@@ -11,14 +11,23 @@ void main() {
       expect(WeatherIconMapper.getG1IconId('rain', true), equals(0x05));
       expect(WeatherIconMapper.getG1IconId('thunderstorm', true), equals(0x08));
       expect(WeatherIconMapper.getG1IconId('snow', true), equals(0x09));
-      expect(WeatherIconMapper.getG1IconId('unknown', true), equals(0x10)); // Default to sunny
+      expect(WeatherIconMapper.getG1IconId('unknown', true),
+          equals(0x10)); // Default to sunny
     });
 
     test('should provide detailed weather mapping', () {
-      expect(WeatherIconMapper.getG1IconIdDetailed('rain', 'heavy rain', true), equals(0x06));
-      expect(WeatherIconMapper.getG1IconIdDetailed('rain', 'light rain', true), equals(0x05));
-      expect(WeatherIconMapper.getG1IconIdDetailed('drizzle', 'heavy drizzle', true), equals(0x04));
-      expect(WeatherIconMapper.getG1IconIdDetailed('thunderstorm', 'heavy thunderstorm', true), equals(0x08));
+      expect(WeatherIconMapper.getG1IconIdDetailed('rain', 'heavy rain', true),
+          equals(0x06));
+      expect(WeatherIconMapper.getG1IconIdDetailed('rain', 'light rain', true),
+          equals(0x05));
+      expect(
+          WeatherIconMapper.getG1IconIdDetailed(
+              'drizzle', 'heavy drizzle', true),
+          equals(0x04));
+      expect(
+          WeatherIconMapper.getG1IconIdDetailed(
+              'thunderstorm', 'heavy thunderstorm', true),
+          equals(0x08));
     });
 
     test('should provide icon descriptions', () {
@@ -41,24 +50,12 @@ void main() {
     test('should create weather data from OpenWeatherMap JSON', () {
       final mockJson = {
         'weather': [
-          {
-            'main': 'Clear',
-            'description': 'clear sky',
-            'icon': '01d'
-          }
+          {'main': 'Clear', 'description': 'clear sky', 'icon': '01d'}
         ],
-        'main': {
-          'temp': 22.5,
-          'feels_like': 24.0,
-          'humidity': 65
-        },
-        'wind': {
-          'speed': 3.5
-        },
+        'main': {'temp': 22.5, 'feels_like': 24.0, 'humidity': 65},
+        'wind': {'speed': 3.5},
         'name': 'London',
-        'sys': {
-          'country': 'GB'
-        }
+        'sys': {'country': 'GB'}
       };
 
       final weatherData = WeatherData.fromJson(mockJson);

@@ -14,7 +14,7 @@ class WeatherService {
   // Cache keys
   static const String _lastWeatherDataKey = 'last_weather_data';
   static const String _lastWeatherUpdateKey = 'last_weather_update';
-  
+
   // Cache duration - 5 minutes (device weather updates frequently)
   static const Duration _cacheDuration = Duration(minutes: 5);
 
@@ -29,17 +29,18 @@ class WeatherService {
       }
 
       debugPrint('Fetching weather from device...');
-      
+
       // Try to get weather from device using platform channel
       final Map<String, dynamic>? weatherMap = await _getDeviceWeather();
-      
+
       if (weatherMap != null) {
         final weatherData = WeatherData.fromDeviceData(weatherMap);
-        
+
         // Cache the weather data
         await _cacheWeatherData(weatherData);
-        
-        debugPrint('Device weather data fetched successfully: ${weatherData.description}');
+
+        debugPrint(
+            'Device weather data fetched successfully: ${weatherData.description}');
         return weatherData;
       } else {
         debugPrint('No device weather data available, using mock data');
@@ -47,14 +48,14 @@ class WeatherService {
       }
     } catch (e) {
       debugPrint('Error fetching device weather data: $e');
-      
+
       // Try to return cached data even if expired as fallback
       final cachedData = await _getCachedWeatherData();
       if (cachedData != null) {
         debugPrint('Using expired cached weather data as fallback');
         return cachedData;
       }
-      
+
       // Final fallback to mock data
       return _getMockWeatherData();
     }
@@ -66,19 +67,19 @@ class WeatherService {
       // For Android, we can try to get weather from system services
       // For iOS, we can use Core Location weather services
       // For now, we'll simulate device weather data based on time and basic patterns
-      
+
       debugPrint('Getting weather from device system...');
-      
+
       final now = DateTime.now();
       final hour = now.hour;
       final isDay = hour >= 6 && hour < 20;
-      
+
       // Simple weather simulation based on time patterns
       // In a real implementation, this would call native platform code
       String condition;
       String description;
       double temperature;
-      
+
       // Simulate different weather based on hour of day
       if (hour >= 6 && hour < 12) {
         // Morning - often clear
@@ -107,7 +108,7 @@ class WeatherService {
         description = 'clear sky';
         temperature = 15.0;
       }
-      
+
       return {
         'temperature': temperature,
         'condition': condition,
@@ -154,10 +155,10 @@ class WeatherService {
       final prefs = await SharedPreferences.getInstance();
       final weatherJson = json.encode(weatherData.toJson());
       final currentTime = DateTime.now().millisecondsSinceEpoch;
-      
+
       await prefs.setString(_lastWeatherDataKey, weatherJson);
       await prefs.setInt(_lastWeatherUpdateKey, currentTime);
-      
+
       debugPrint('Weather data cached successfully');
     } catch (e) {
       debugPrint('Error caching weather data: $e');
@@ -169,7 +170,7 @@ class WeatherService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final weatherJson = prefs.getString(_lastWeatherDataKey);
-      
+
       if (weatherJson != null) {
         final Map<String, dynamic> data = json.decode(weatherJson);
         return WeatherData.fromCachedJson(data);
@@ -177,7 +178,7 @@ class WeatherService {
     } catch (e) {
       debugPrint('Error retrieving cached weather data: $e');
     }
-    
+
     return null;
   }
 
@@ -187,10 +188,10 @@ class WeatherService {
       final prefs = await SharedPreferences.getInstance();
       final lastUpdate = prefs.getInt(_lastWeatherUpdateKey);
       if (lastUpdate == null) return false;
-      
+
       final now = DateTime.now().millisecondsSinceEpoch;
       final timeDifference = now - lastUpdate;
-      
+
       return timeDifference < _cacheDuration.inMilliseconds;
     } catch (e) {
       debugPrint('Error checking cache validity: $e');
@@ -214,7 +215,7 @@ class WeatherService {
   WeatherData _getMockWeatherData([String? cityName]) {
     final now = DateTime.now();
     final isDay = now.hour >= 6 && now.hour < 20;
-    
+
     return WeatherData(
       main: 'Clear',
       description: 'clear sky',

@@ -13,7 +13,7 @@ class DashboardSettingsPage extends StatefulWidget {
 class DashboardSettingsPageState extends State<DashboardSettingsPage> {
   bool _is24HourFormat =
       UiPerfs.singleton.timeFormat == TimeFormat.TWENTY_FOUR_HOUR;
-  bool _isFahrenheit = 
+  bool _isFahrenheit =
       UiPerfs.singleton.temperatureUnit == TemperatureUnit.FAHRENHEIT;
   final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
   bool _isUpdatingTime = false;
@@ -29,7 +29,7 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
     setState(() {
       _is24HourFormat =
           UiPerfs.singleton.timeFormat == TimeFormat.TWENTY_FOUR_HOUR;
-      _isFahrenheit = 
+      _isFahrenheit =
           UiPerfs.singleton.temperatureUnit == TemperatureUnit.FAHRENHEIT;
     });
   }
@@ -169,6 +169,35 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16.0),
+              margin: const EdgeInsets.only(bottom: 24.0),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.blue.shade700,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'These settings apply to your Even Realities G1 glasses dashboard.',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             SwitchListTile(
               title: Text(_is24HourFormat
                   ? '12-Hour Time Format'

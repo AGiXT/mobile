@@ -146,7 +146,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 Icon(Icons.dashboard),
                 SizedBox(width: 10),
-                Text('Time Settings'),
+                Text('Dashboard Settings'),
               ],
             ),
             trailing: Icon(Icons.chevron_right),

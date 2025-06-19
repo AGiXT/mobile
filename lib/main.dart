@@ -9,7 +9,6 @@ import 'package:agixt/models/agixt/daily.dart';
 import 'package:agixt/models/agixt/stop.dart';
 import 'package:agixt/screens/auth/login_screen.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
-import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/utils/ui_perfs.dart';

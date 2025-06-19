@@ -1,6 +1,5 @@
 // Models for AGiXT OAuth authentication
 import 'dart:convert';
-import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';

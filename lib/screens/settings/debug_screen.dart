@@ -20,8 +20,6 @@ class _DebugPageSate extends State<DebugPage> {
   final TextEditingController _textController = TextEditingController();
   final BluetoothManager bluetoothManager = BluetoothManager();
 
-  int _seqId = 0;
-
   void _sendText() async {
     String text = _textController.text;
     if (text.isEmpty) {

@@ -716,13 +716,15 @@ class BluetoothManager {
     }
     debugPrint('Clearing glasses display');
     await sendText(' '); // Send empty space to clear display
-  }  /// Updates weather data on the glasses
+  }
+
+  /// Updates weather data on the glasses
   Future<void> updateWeather() async {
     if (!isConnected) {
       debugPrint('Cannot update weather: glasses not connected');
       return;
     }
-    
+
     try {
       await TimeSync.updateTimeAndWeather();
       debugPrint('Weather updated successfully');

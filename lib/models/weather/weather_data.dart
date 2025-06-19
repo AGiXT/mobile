@@ -1,15 +1,15 @@
 /// Weather data model for handling weather information from OpenWeatherMap API
 class WeatherData {
-  final String main;           // e.g., "Clear", "Rain", "Snow"
-  final String description;    // e.g., "clear sky", "light rain"
-  final String icon;          // OpenWeatherMap icon code
-  final double temperature;    // Temperature in Celsius
-  final double feelsLike;     // Feels like temperature in Celsius
-  final int humidity;         // Humidity percentage
-  final double windSpeed;     // Wind speed in m/s
-  final String locationName;  // City name
-  final String country;       // Country code
-  final DateTime timestamp;   // When the data was fetched
+  final String main; // e.g., "Clear", "Rain", "Snow"
+  final String description; // e.g., "clear sky", "light rain"
+  final String icon; // OpenWeatherMap icon code
+  final double temperature; // Temperature in Celsius
+  final double feelsLike; // Feels like temperature in Celsius
+  final int humidity; // Humidity percentage
+  final double windSpeed; // Wind speed in m/s
+  final String locationName; // City name
+  final String country; // Country code
+  final DateTime timestamp; // When the data was fetched
 
   WeatherData({
     required this.main,
@@ -84,12 +84,13 @@ class WeatherData {
       description: data['description'] as String,
       icon: data['isDay'] == true ? '01d' : '01n', // Simple day/night icon
       temperature: (data['temperature'] as num).toDouble(),
-      feelsLike: (data['temperature'] as num).toDouble() + 2, // Estimate feels like
+      feelsLike:
+          (data['temperature'] as num).toDouble() + 2, // Estimate feels like
       humidity: data['humidity'] as int? ?? 65,
       windSpeed: (data['windSpeed'] as num?)?.toDouble() ?? 0.0,
       locationName: data['location'] as String? ?? 'Unknown',
       country: '', // Device data might not have country
-      timestamp: data['timestamp'] != null 
+      timestamp: data['timestamp'] != null
           ? DateTime.fromMillisecondsSinceEpoch(data['timestamp'] as int)
           : DateTime.now(),
     );

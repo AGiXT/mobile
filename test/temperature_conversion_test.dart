@@ -25,7 +25,7 @@ void main() {
 
     test('temperature conversions should be reversible', () {
       const testTemps = [0.0, 25.0, -10.0, 100.0, 37.5];
-      
+
       for (final temp in testTemps) {
         final fahrenheit = weatherService.celsiusToFahrenheit(temp);
         final backToCelsius = weatherService.fahrenheitToCelsius(fahrenheit);
