@@ -160,7 +160,7 @@ class _HomePageState extends State<HomePage> {
         ),
       )
       ..loadRequest(Uri.parse(urlToLoad));
-      
+
     // Update the static accessor so it can be used from other classes
     HomePage.webViewController = _webViewController;
   }
@@ -175,11 +175,11 @@ class _HomePageState extends State<HomePage> {
       final uri = Uri.parse(url);
       final pathSegments = uri.pathSegments;
       debugPrint('Path segments: $pathSegments');
-      
+
       // Check if the URL is '/chat' (exactly)
-      if (pathSegments.contains('chat') && 
-          (pathSegments.length == 1 || 
-          (pathSegments.length > 1 && pathSegments.last == 'chat'))) {
+      if (pathSegments.contains('chat') &&
+          (pathSegments.length == 1 ||
+              (pathSegments.length > 1 && pathSegments.last == 'chat'))) {
         // Handle case when URL is just '/chat' without another '/'
         debugPrint('URL is exactly /chat - setting conversation ID to "-"');
         final cookieManager = CookieManager();
@@ -515,14 +515,14 @@ class _HomePageState extends State<HomePage> {
   Future<void> _saveAgentValue(String agentValue) async {
     // Remove quotes that might be surrounding the agent value
     String cleanValue = agentValue;
-    
+
     // Check if the value starts and ends with quotes
     if (cleanValue.startsWith('"') && cleanValue.endsWith('"')) {
       cleanValue = cleanValue.substring(1, cleanValue.length - 1);
     }
-    
+
     debugPrint('Original agent value: $agentValue, Clean value: $cleanValue');
-    
+
     final cookieManager = CookieManager();
     await cookieManager.saveAgixtAgentCookie(cleanValue);
     debugPrint('Saved agent value: $cleanValue');

@@ -109,7 +109,8 @@ class AGiXTChatWidget implements AGiXTWidget {
             final cookieManager = CookieManager();
             final newConversationId = responseId.toString();
             await cookieManager.saveAgixtConversationId(newConversationId);
-            debugPrint('Saved conversation ID from response: $newConversationId');
+            debugPrint(
+                'Saved conversation ID from response: $newConversationId');
 
             // Only navigate if we get a different ID than "-"
             if (newConversationId != "-") {
@@ -152,7 +153,7 @@ class AGiXTChatWidget implements AGiXTWidget {
         final navigationUrl = '$baseUrl/chat/$conversationId';
 
         debugPrint('Navigating to conversation: $navigationUrl');
-        
+
         // Plain JavaScript navigation
         final plainJsNavigation = '''
         (function() {
@@ -161,9 +162,9 @@ class AGiXTChatWidget implements AGiXTWidget {
           return true;
         })();
         ''';
-        
+
         await webViewController.runJavaScriptReturningResult(plainJsNavigation);
-        
+
         // Also use loadRequest as a fallback
         await Future.delayed(const Duration(milliseconds: 300));
         await webViewController.loadRequest(Uri.parse(navigationUrl));
@@ -241,9 +242,9 @@ class AGiXTChatWidget implements AGiXTWidget {
         if (checklist.items.isEmpty) continue;
 
         result.add("${checklist.name}:");
-        checklist.items.forEach((item) {
+        for (var item in checklist.items) {
           result.add("- ${item.title}");
-        });
+        }
       }
 
       return result.join('\n');
