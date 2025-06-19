@@ -53,8 +53,8 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(_is24HourFormat
-                  ? 'Switched to 24-hour format on glasses'
-                  : 'Switched to 12-hour format on glasses'),
+                  ? 'Switched to 12-hour format on glasses'
+                  : 'Switched to 24-hour format on glasses'),
               duration: const Duration(seconds: 2),
               backgroundColor: Colors.green,
             ),

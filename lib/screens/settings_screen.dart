@@ -1,7 +1,6 @@
 import 'package:agixt/widgets/glass_status.dart';
 import 'package:agixt/screens/settings/dashboard_screen.dart';
 import 'package:agixt/screens/settings/notifications_screen.dart';
-import 'package:agixt/screens/settings/weather_screen.dart';
 import 'package:agixt/widgets/gravatar_image.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
@@ -171,22 +170,6 @@ class _SettingsPageState extends State<SettingsPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => CalendarsPage()),
-              );
-            },
-          ),
-          ListTile(
-            title: Row(
-              children: [
-                Icon(Icons.wb_sunny),
-                SizedBox(width: 10),
-                Text('Weather Settings'),
-              ],
-            ),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => WeatherScreen()),
               );
             },
           ),
