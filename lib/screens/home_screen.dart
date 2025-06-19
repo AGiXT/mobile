@@ -1,23 +1,13 @@
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/widgets/agixt_chat.dart'; // Import AGiXTChatWidget
 import 'package:agixt/screens/auth/profile_screen.dart';
-import 'package:agixt/screens/calendars_screen.dart';
-import 'package:agixt/screens/checklist_screen.dart';
-import 'package:agixt/screens/agixt_daily.dart';
-import 'package:agixt/screens/agixt_stop.dart';
 import 'package:agixt/screens/settings_screen.dart';
 import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/cookie_manager.dart';
 import 'package:agixt/utils/app_events.dart'; // Import AppEvents
-import 'package:agixt/utils/ui_perfs.dart';
-import 'package:agixt/widgets/current_agixt.dart';
 import 'package:agixt/widgets/gravatar_image.dart';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
-import 'package:webview_flutter_android/webview_flutter_android.dart';
-import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../services/bluetooth_manager.dart';
 
 class HomePage extends StatefulWidget {
@@ -33,15 +23,11 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final BluetoothManager bluetoothManager = BluetoothManager();
   final AIService aiService = AIService();
-  final UiPerfs _ui = UiPerfs.singleton;
 
   String? _userEmail;
   bool _isLoggedIn = true;
   bool _isSideButtonListenerAttached = false;
   WebViewController? _webViewController;
-  bool _isWebViewLoaded = false;
-  // WebView is now shown by default
-  final bool _showWebView = true;
 
   @override
   void initState() {
@@ -118,15 +104,6 @@ class _HomePageState extends State<HomePage> {
     await aiService.handleSideButtonPress();
   }
 
-  Future<void> _openAGiXTWeb() async {
-    final url = await AuthService.getWebUrlWithToken();
-    final uri = Uri.parse(url);
-
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
   Future<void> _initializeWebView() async {
     if (!_isLoggedIn) return;
 
@@ -158,10 +135,6 @@ class _HomePageState extends State<HomePage> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (String url) async {
-            setState(() {
-              _isWebViewLoaded = true;
-            });
-
             // Extract conversation ID from URL and agent cookie
             await _extractConversationIdAndAgentInfo(url);
 
@@ -187,7 +160,7 @@ class _HomePageState extends State<HomePage> {
         ),
       )
       ..loadRequest(Uri.parse(urlToLoad));
-      
+
     // Update the static accessor so it can be used from other classes
     HomePage.webViewController = _webViewController;
   }
@@ -202,11 +175,11 @@ class _HomePageState extends State<HomePage> {
       final uri = Uri.parse(url);
       final pathSegments = uri.pathSegments;
       debugPrint('Path segments: $pathSegments');
-      
+
       // Check if the URL is '/chat' (exactly)
-      if (pathSegments.contains('chat') && 
-          (pathSegments.length == 1 || 
-          (pathSegments.length > 1 && pathSegments.last == 'chat'))) {
+      if (pathSegments.contains('chat') &&
+          (pathSegments.length == 1 ||
+              (pathSegments.length > 1 && pathSegments.last == 'chat'))) {
         // Handle case when URL is just '/chat' without another '/'
         debugPrint('URL is exactly /chat - setting conversation ID to "-"');
         final cookieManager = CookieManager();
@@ -317,12 +290,6 @@ class _HomePageState extends State<HomePage> {
     } catch (e) {
       debugPrint('Error ensuring conversation ID: $e');
     }
-  }
-
-  // This method should not be used as we're not generating IDs anymore
-  // Kept for reference but not called anywhere
-  String _generateConversationId() {
-    return "-"; // Return "-" instead of generating an ID
   }
 
   // Retry extracting agent info after a delay
@@ -548,14 +515,14 @@ class _HomePageState extends State<HomePage> {
   Future<void> _saveAgentValue(String agentValue) async {
     // Remove quotes that might be surrounding the agent value
     String cleanValue = agentValue;
-    
+
     // Check if the value starts and ends with quotes
     if (cleanValue.startsWith('"') && cleanValue.endsWith('"')) {
       cleanValue = cleanValue.substring(1, cleanValue.length - 1);
     }
-    
+
     debugPrint('Original agent value: $agentValue, Clean value: $cleanValue');
-    
+
     final cookieManager = CookieManager();
     await cookieManager.saveAgixtAgentCookie(cleanValue);
     debugPrint('Saved agent value: $cleanValue');

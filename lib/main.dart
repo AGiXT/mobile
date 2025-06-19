@@ -9,7 +9,6 @@ import 'package:agixt/models/agixt/daily.dart';
 import 'package:agixt/models/agixt/stop.dart';
 import 'package:agixt/screens/auth/login_screen.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
-import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/utils/ui_perfs.dart';
@@ -21,14 +20,16 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:app_links/app_links.dart';
 import 'screens/home_screen.dart';
 
-
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 // Environment variables with defaults
-const String APP_NAME = String.fromEnvironment('APP_NAME', defaultValue: 'AGiXT');
-const String AGIXT_SERVER = String.fromEnvironment('AGIXT_SERVER', defaultValue: 'https://api.agixt.dev');
-const String APP_URI = String.fromEnvironment('APP_URI', defaultValue: 'https://agixt.dev');
+const String APP_NAME =
+    String.fromEnvironment('APP_NAME', defaultValue: 'AGiXT');
+const String AGIXT_SERVER = String.fromEnvironment('AGIXT_SERVER',
+    defaultValue: 'https://api.agixt.dev');
+const String APP_URI =
+    String.fromEnvironment('APP_URI', defaultValue: 'https://agixt.dev');
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -62,7 +63,6 @@ void main() async {
 
   await BluetoothManager.singleton.initialize();
   BluetoothManager.singleton.attemptReconnectFromStorage();
-  
 
   var channel = const MethodChannel('dev.agixt.agixt/background_service');
   var callbackHandle = PluginUtilities.getCallbackHandle(backgroundMain);
@@ -76,7 +76,7 @@ void backgroundMain() {
 }
 
 class AppRetainWidget extends StatelessWidget {
-  AppRetainWidget({super.key, required this.child});
+  const AppRetainWidget({super.key, required this.child});
 
   final Widget child;
 
@@ -106,7 +106,8 @@ class AGiXTApp extends StatefulWidget {
   const AGiXTApp({super.key});
 
   // Global navigator key for accessing context from anywhere
-  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  static final GlobalKey<NavigatorState> navigatorKey =
+      GlobalKey<NavigatorState>();
 
   @override
   State<AGiXTApp> createState() => _AGiXTAppState();
@@ -148,14 +149,14 @@ class _AGiXTAppState extends State<AGiXTApp> {
     }, onError: (error) {
       debugPrint('Error handling deep link: $error');
     });
-    
+
     // Set up the method channel for OAuth callback from native code
     const platform = MethodChannel('dev.agixt.agixt/oauth_callback');
     platform.setMethodCallHandler((call) async {
       if (call.method == 'handleOAuthCallback') {
         final args = call.arguments as Map;
         final token = args['token'] as String?;
-        
+
         if (token != null && token.isNotEmpty) {
           debugPrint('Received JWT token via method channel from native code');
           await _processJwtToken(token);
@@ -167,7 +168,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
       }
       return null;
     });
-    
+
     // Check if we have any pending tokens from native code that arrived before Flutter was initialized
     try {
       final result = await platform.invokeMethod('checkPendingToken');
@@ -183,23 +184,23 @@ class _AGiXTAppState extends State<AGiXTApp> {
 
   void _handleDeepLink(String link) {
     debugPrint('Received deep link: $link');
-    
+
     // Handle the agixt://callback URL format with token
     if (link.startsWith('agixt://callback')) {
       Uri uri = Uri.parse(link);
       String? token = uri.queryParameters['token'];
-      
+
       if (token != null && token.isNotEmpty) {
         debugPrint('Received JWT token from deep link');
         _processJwtToken(token);
       }
     }
   }
-  
+
   Future<void> _processJwtToken(String token) async {
     // Validate the token if necessary
-    bool isTokenValid = true;  // Replace with actual validation if needed
-    
+    bool isTokenValid = true; // Replace with actual validation if needed
+
     if (isTokenValid) {
       // Store JWT token and update login state
       await AuthService.storeJwt(token);
@@ -207,7 +208,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
         _isLoggedIn = true;
         _isLoading = false;
       });
-      
+
       // If we're already showing the login screen, navigate to home
       if (!_isLoggedIn && mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
@@ -284,8 +285,7 @@ Future<void> initializeService() async {
   const AndroidNotificationChannel channel = AndroidNotificationChannel(
     notificationChannelId, // id
     'AGiXT', // title
-    description:
-        'This channel is used for AGiXT notifications.', // description
+    description: 'This channel is used for AGiXT notifications.', // description
     importance: Importance.low, // importance must be at low or higher level
   );
 

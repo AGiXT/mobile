@@ -13,8 +13,11 @@ class DashboardSettingsPage extends StatefulWidget {
 class DashboardSettingsPageState extends State<DashboardSettingsPage> {
   bool _is24HourFormat =
       UiPerfs.singleton.timeFormat == TimeFormat.TWENTY_FOUR_HOUR;
+  bool _isFahrenheit =
+      UiPerfs.singleton.temperatureUnit == TemperatureUnit.FAHRENHEIT;
   final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
   bool _isUpdatingTime = false;
+  bool _isUpdatingTemperature = false;
 
   @override
   void initState() {
@@ -26,6 +29,8 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
     setState(() {
       _is24HourFormat =
           UiPerfs.singleton.timeFormat == TimeFormat.TWENTY_FOUR_HOUR;
+      _isFahrenheit =
+          UiPerfs.singleton.temperatureUnit == TemperatureUnit.FAHRENHEIT;
     });
   }
 
@@ -91,6 +96,68 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
     _bluetoothManager.sync();
   }
 
+  Future<void> _saveTemperatureSettingsAndTriggerUpdate() async {
+    setState(() {
+      _isUpdatingTemperature = true;
+    });
+
+    UiPerfs.singleton.temperatureUnit =
+        _isFahrenheit ? TemperatureUnit.FAHRENHEIT : TemperatureUnit.CELSIUS;
+
+    // Immediately update temperature unit on glasses if connected
+    if (_bluetoothManager.isConnected) {
+      try {
+        await TimeSync.updateTimeAndWeather();
+        debugPrint('Temperature unit updated on glasses instantly');
+
+        // Show success feedback
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_isFahrenheit
+                  ? 'Switched to Fahrenheit on glasses'
+                  : 'Switched to Celsius on glasses'),
+              duration: const Duration(seconds: 2),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        debugPrint('Error updating temperature unit on glasses: $e');
+
+        // Show error feedback
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to update glasses temperature unit'),
+              duration: const Duration(seconds: 3),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } else {
+      // Show glasses not connected message
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+                'Glasses not connected - unit will be updated when connected'),
+            duration: Duration(seconds: 3),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    }
+
+    setState(() {
+      _isUpdatingTemperature = false;
+    });
+
+    // Trigger full dashboard sync
+    _bluetoothManager.sync();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -102,6 +169,35 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16.0),
+              margin: const EdgeInsets.only(bottom: 24.0),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(8.0),
+                border: Border.all(color: Colors.blue.shade200),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline,
+                    color: Colors.blue.shade700,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'These settings apply to your Even Realities G1 glasses dashboard.',
+                      style: TextStyle(
+                        color: Colors.blue.shade700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
             SwitchListTile(
               title: Text(_is24HourFormat
                   ? '12-Hour Time Format'
@@ -126,6 +222,30 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
                         _is24HourFormat = value;
                       });
                       _saveSettingsAndTriggerUpdate();
+                    },
+            ),
+            SwitchListTile(
+              title: Text(_isFahrenheit ? 'Fahrenheit' : 'Celsius'),
+              subtitle: _isUpdatingTemperature
+                  ? const Row(
+                      children: [
+                        SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2)),
+                        SizedBox(width: 8),
+                        Text('Updating glasses...'),
+                      ],
+                    )
+                  : null,
+              value: _isFahrenheit,
+              onChanged: _isUpdatingTemperature
+                  ? null
+                  : (bool value) {
+                      setState(() {
+                        _isFahrenheit = value;
+                      });
+                      _saveTemperatureSettingsAndTriggerUpdate();
                     },
             ),
           ],

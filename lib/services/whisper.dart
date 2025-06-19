@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:dart_openai/dart_openai.dart';
-import 'package:agixt/models/agixt/whispermodel.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,8 +10,6 @@ import 'package:uuid/uuid.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:web_socket_client/web_socket_client.dart';
-import 'package:http/http.dart' as http;
-import 'package:agixt/models/agixt/auth/auth.dart';
 
 abstract class WhisperService {
   static Future<WhisperService> service() async {
@@ -26,7 +23,7 @@ abstract class WhisperService {
   }
 
   Future<String> transcribe(Uint8List voiceData);
-  
+
   // Method for AGiXT AI integration that returns a simulated transcription
   Future<String?> getTranscription() async {
     try {
@@ -35,13 +32,13 @@ abstract class WhisperService {
       // 1. Capture audio from the glasses
       // 2. Process the audio data
       // 3. Send to a speech-to-text service (OpenAI Whisper API or AGiXT's endpoint)
-      
+
       // Simulate processing time
       await Future.delayed(const Duration(seconds: 2));
-      
+
       // Return dummy transcription for testing
       return "What's on my schedule for today?";
-      
+
       /* 
       // Below is how you would implement the actual transcription with captured audio:
       
@@ -80,10 +77,10 @@ class WhisperLocalService implements WhisperService {
   // This method uses the device's native speech recognition for real-time transcription
   Future<String?> listenAndTranscribe({int timeoutInSeconds = 10}) async {
     await _ensureInitialized();
-    
+
     final Completer<String?> completer = Completer<String?>();
     String recognizedText = '';
-    
+
     if (await _speech.initialize()) {
       await _speech.listen(
         onResult: (result) {
@@ -99,7 +96,7 @@ class WhisperLocalService implements WhisperService {
         localeId: 'en_US', // Use the user's language preference
         cancelOnError: true,
       );
-      
+
       // Add a timeout
       Future.delayed(Duration(seconds: timeoutInSeconds + 5), () {
         if (!completer.isCompleted) {
@@ -110,45 +107,45 @@ class WhisperLocalService implements WhisperService {
     } else {
       completer.complete(null);
     }
-    
+
     return completer.future;
   }
 
   @override
   Future<String> transcribe(Uint8List voiceData) async {
-    final Directory documentDirectory = await getApplicationDocumentsDirectory();
+    final Directory documentDirectory =
+        await getApplicationDocumentsDirectory();
     final String wavPath = '${documentDirectory.path}/${Uuid().v4()}.wav';
-    
+
     await _ensureInitialized();
-    
+
     try {
       // We need to save the audio data to a file
       await File(wavPath).writeAsBytes(voiceData);
 
       // For devices that can't directly process the binary data through native APIs,
       // we'll try to use the speech recognition on audio we can record
-      
-      final Completer<String> completer = Completer<String>();
+
       String result = '';
-      
+
       // Try to get a transcription using native speech recognition
       // This is a fallback approach since we can't directly feed our voiceData to speech_to_text
       result = await listenAndTranscribe() ?? 'No transcription available';
-      
+
       // Cleanup
       try {
         await File(wavPath).delete();
       } catch (e) {
         debugPrint('Error deleting temporary audio file: $e');
       }
-      
+
       return result;
     } catch (e) {
       debugPrint('Error in WhisperLocalService.transcribe: $e');
       return 'Error transcribing audio';
     }
   }
-  
+
   @override
   Future<String?> getTranscription() async {
     try {
@@ -263,14 +260,14 @@ class WhisperRemoteService implements WhisperService {
 
     return text;
   }
-  
+
   @override
   Future<String?> getTranscription() async {
     // Call the implementation from the abstract class
     try {
       // Simulate processing time
       await Future.delayed(const Duration(seconds: 2));
-      
+
       // Return dummy transcription for testing
       return "What's on my schedule for today?";
     } catch (e) {

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:agixt/main.dart'; // Import AGiXTApp from main.dart
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/calendar.dart';
 import 'package:agixt/models/agixt/checklist.dart';
@@ -9,13 +8,10 @@ import 'package:agixt/models/g1/note.dart';
 import 'package:agixt/screens/home_screen.dart'; // Import HomePage
 import 'package:agixt/services/cookie_manager.dart';
 import 'package:device_calendar/device_calendar.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:webview_flutter/webview_flutter.dart'; // Import WebViewController
 
 class AGiXTChatWidget implements AGiXTWidget {
   static const String DEFAULT_MODEL = "XT";
@@ -113,7 +109,8 @@ class AGiXTChatWidget implements AGiXTWidget {
             final cookieManager = CookieManager();
             final newConversationId = responseId.toString();
             await cookieManager.saveAgixtConversationId(newConversationId);
-            debugPrint('Saved conversation ID from response: $newConversationId');
+            debugPrint(
+                'Saved conversation ID from response: $newConversationId');
 
             // Only navigate if we get a different ID than "-"
             if (newConversationId != "-") {
@@ -156,7 +153,7 @@ class AGiXTChatWidget implements AGiXTWidget {
         final navigationUrl = '$baseUrl/chat/$conversationId';
 
         debugPrint('Navigating to conversation: $navigationUrl');
-        
+
         // Plain JavaScript navigation
         final plainJsNavigation = '''
         (function() {
@@ -165,9 +162,9 @@ class AGiXTChatWidget implements AGiXTWidget {
           return true;
         })();
         ''';
-        
+
         await webViewController.runJavaScriptReturningResult(plainJsNavigation);
-        
+
         // Also use loadRequest as a fallback
         await Future.delayed(const Duration(milliseconds: 300));
         await webViewController.loadRequest(Uri.parse(navigationUrl));
@@ -245,9 +242,9 @@ class AGiXTChatWidget implements AGiXTWidget {
         if (checklist.items.isEmpty) continue;
 
         result.add("${checklist.name}:");
-        checklist.items.forEach((item) {
+        for (var item in checklist.items) {
           result.add("- ${item.title}");
-        });
+        }
       }
 
       return result.join('\n');
@@ -326,12 +323,6 @@ class AGiXTChatWidget implements AGiXTWidget {
       // Return "-" as default if there's an error
       return "-";
     }
-  }
-
-  // Generate a default conversation ID (now just returns "-")
-  String _generateConversationId() {
-    // No longer generating random IDs
-    return "-";
   }
 
   // Update the conversation ID when the URL changes

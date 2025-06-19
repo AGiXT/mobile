@@ -14,6 +14,7 @@ import 'package:agixt/models/g1/notification.dart';
 import 'package:agixt/models/g1/text.dart';
 import 'package:agixt/services/notifications_listener.dart';
 import 'package:agixt/services/stops_manager.dart';
+import 'package:agixt/services/weather_service.dart';
 import 'package:agixt/utils/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'; // Add this import for MethodChannel
@@ -715,5 +716,36 @@ class BluetoothManager {
     }
     debugPrint('Clearing glasses display');
     await sendText(' '); // Send empty space to clear display
+  }
+
+  /// Updates weather data on the glasses
+  Future<void> updateWeather() async {
+    if (!isConnected) {
+      debugPrint('Cannot update weather: glasses not connected');
+      return;
+    }
+
+    try {
+      await TimeSync.updateTimeAndWeather();
+      debugPrint('Weather updated successfully');
+    } catch (e) {
+      debugPrint('Error updating weather: $e');
+    }
+  }
+
+  /// Gets current weather information
+  Future<String> getCurrentWeatherInfo() async {
+    final weatherService = WeatherService();
+    try {
+      final weatherData = await weatherService.getCurrentWeather();
+      if (weatherData != null) {
+        return '${weatherData.location}: ${weatherData.summary}';
+      } else {
+        return 'No weather data available';
+      }
+    } catch (e) {
+      debugPrint('Error getting weather info: $e');
+      return 'Error fetching weather data';
+    }
   }
 }

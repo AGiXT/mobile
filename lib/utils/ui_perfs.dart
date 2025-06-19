@@ -1,8 +1,7 @@
 import 'package:shared_preferences/shared_preferences.dart';
-// Removed import for time_weather.dart
-import 'package:flutter/material.dart'; // Added missing import
 
 enum TimeFormat { TWELVE_HOUR, TWENTY_FOUR_HOUR } // Corrected enum values
+
 enum TemperatureUnit { CELSIUS, FAHRENHEIT } // Moved enum here
 
 class UiPerfs {
@@ -28,15 +27,14 @@ class UiPerfs {
   TimeFormat get timeFormat => _timeFormat;
   set timeFormat(TimeFormat value) => _setTimeFormat(value);
 
-
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     _trainNerdMode = prefs.getBool('trainNerdMode') ?? false;
-    
+
     // Load temperature unit preference (0 for Celsius, 1 for Fahrenheit)
     final tempUnitIdx = prefs.getInt('temperatureUnit') ?? 1;
     _temperatureUnit = TemperatureUnit.values[tempUnitIdx];
-    
+
     // Load time format preference (0 for 12-hour, 1 for 24-hour)
     final timeFormatIdx = prefs.getInt('timeFormat') ?? 0;
     _timeFormat = TimeFormat.values[timeFormatIdx];

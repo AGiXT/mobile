@@ -20,8 +20,6 @@ class _DebugPageSate extends State<DebugPage> {
   final TextEditingController _textController = TextEditingController();
   final BluetoothManager bluetoothManager = BluetoothManager();
 
-  int _seqId = 0;
-
   void _sendText() async {
     String text = _textController.text;
     if (text.isEmpty) {
@@ -172,7 +170,7 @@ class _DebugPageSate extends State<DebugPage> {
     final jwt = await AuthService.getJwt();
     final isLoggedIn = await AuthService.isLoggedIn();
     final email = await AuthService.getEmail();
-    
+
     if (mounted) {
       showDialog(
         context: context,
@@ -184,7 +182,7 @@ class _DebugPageSate extends State<DebugPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text('Logged in: ${isLoggedIn ? "Yes" : "No"}'),
-                if (email != null && email.isNotEmpty) 
+                if (email != null && email.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text('Email: $email'),
@@ -205,7 +203,8 @@ class _DebugPageSate extends State<DebugPage> {
                       children: [
                         Text(
                           jwt,
-                          style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+                          style: const TextStyle(
+                              fontFamily: 'monospace', fontSize: 12),
                         ),
                       ],
                     ),
