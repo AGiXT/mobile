@@ -7,8 +7,10 @@ import 'package:agixt/models/agixt/widgets/agixt_widget.dart';
 import 'package:agixt/models/g1/note.dart';
 import 'package:agixt/screens/home_screen.dart'; // Import HomePage
 import 'package:agixt/services/cookie_manager.dart';
+import 'package:agixt/services/location_service.dart'; // Import LocationService
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart'; // Import Geolocator
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -176,7 +178,7 @@ class AGiXTChatWidget implements AGiXTWidget {
     }
   }
 
-  // Build context data containing today's daily items, active checklists, and calendar items
+  // Build context data containing today's daily items, active checklists, calendar items, and location
   Future<String> _buildContextData() async {
     List<String> contextSections = [];
     contextSections.add("The users message is transcribed from voice to text.");
@@ -198,6 +200,12 @@ class AGiXTChatWidget implements AGiXTWidget {
     if (calendarItems.isNotEmpty) {
       contextSections
           .add("### Users calendar items for today\n\n$calendarItems");
+    }
+
+    // Get user's location if enabled
+    final locationData = await _getUserLocation();
+    if (locationData.isNotEmpty) {
+      contextSections.add("### User's Current Location\n\n$locationData");
     }
 
     return contextSections.join("\n\n");
@@ -424,6 +432,69 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     return ChatInteraction(
         question: question, answer: answer, timestamp: interactionTime);
+  }
+
+  // Get user's location if enabled
+  Future<String> _getUserLocation() async {
+    try {
+      final locationService = LocationService();
+      final bool isLocationEnabled = await locationService.isLocationEnabled();
+
+      if (!isLocationEnabled) {
+        return ''; // Location is disabled in settings
+      }
+
+      // Try to get current position first
+      final currentPosition = await locationService.getCurrentPosition();
+      if (currentPosition != null) {
+        return _formatLocationData(currentPosition);
+      }
+
+      // If current position is not available, try to get last known position
+      final lastPosition = await locationService.getLastPosition();
+      if (lastPosition.isNotEmpty) {
+        final formattedCoordinates = LocationService.formatCoordinates(
+            lastPosition['latitude'], lastPosition['longitude']);
+
+        List<String> locationInfo = [
+          "Coordinates: $formattedCoordinates",
+          "Latitude: ${lastPosition['latitude']}",
+          "Longitude: ${lastPosition['longitude']}",
+        ];
+
+        if (lastPosition['altitude'] != null) {
+          locationInfo.add(
+              "Altitude: ${lastPosition['altitude'].toStringAsFixed(1)} m");
+        }
+
+        if (lastPosition['timestamp'] != null) {
+          locationInfo.add("Recorded: ${lastPosition['timestamp']}");
+        }
+
+        return locationInfo.join('\n');
+      }
+
+      return ''; // No location data available
+    } catch (e) {
+      debugPrint('Error getting location for context: $e');
+      return '';
+    }
+  }
+
+  // Format position data into readable text
+  String _formatLocationData(Position position) {
+    final formattedCoordinates = LocationService.formatCoordinates(
+        position.latitude, position.longitude);
+
+    return [
+      "Coordinates: $formattedCoordinates",
+      "Latitude: ${position.latitude}",
+      "Longitude: ${position.longitude}",
+      "Altitude: ${position.altitude.toStringAsFixed(1)} m",
+      "Accuracy: ${position.accuracy.toStringAsFixed(1)} m",
+      "Speed: ${position.speed.toStringAsFixed(1)} m/s",
+      "Heading: ${position.heading.toStringAsFixed(1)}°",
+    ].join('\n');
   }
 }
 

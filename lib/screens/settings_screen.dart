@@ -1,5 +1,6 @@
 import 'package:agixt/widgets/glass_status.dart';
 import 'package:agixt/screens/settings/dashboard_screen.dart';
+import 'package:agixt/screens/settings/location_screen.dart';
 import 'package:agixt/screens/settings/notifications_screen.dart';
 import 'package:agixt/widgets/gravatar_image.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
@@ -170,6 +171,23 @@ class _SettingsPageState extends State<SettingsPage> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (context) => CalendarsPage()),
+              );
+            },
+          ),
+          ListTile(
+            title: Row(
+              children: [
+                Icon(Icons.location_on),
+                SizedBox(width: 10),
+                Text('Location Settings'),
+              ],
+            ),
+            trailing: Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => LocationSettingsScreen()),
               );
             },
           ),
