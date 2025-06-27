@@ -49,12 +49,13 @@ class TimeSync {
     try {
       final weatherService = OpenMeteoWeatherService();
       final weatherData = await weatherService.getCurrentWeather();
-      
+
       if (weatherData != null) {
         weatherIconId = weatherData.g1IconId;
         temperature = weatherData.temperature.round();
-        
-        debugPrint('Real weather data: ${weatherData.description}, ${weatherData.temperature}°C, Icon: 0x${weatherIconId.toRadixString(16)}');
+
+        debugPrint(
+            'Real weather data: ${weatherData.description}, ${weatherData.temperature}°C, Icon: 0x${weatherIconId.toRadixString(16)}');
       } else {
         // Fallback to time-based simulation
         weatherIconId = _getWeatherIconForTime(now);
@@ -126,7 +127,7 @@ class TimeSync {
   static int _getWeatherIconForTime(DateTime time) {
     final hour = time.hour;
     final isDay = hour >= 6 && hour < 20;
-    
+
     // Simple time-based weather simulation
     if (hour >= 6 && hour < 12) {
       return isDay ? 0x10 : 0x01; // Sunny/Clear
@@ -141,7 +142,7 @@ class TimeSync {
   /// Get temperature based on time of day
   static int _getTemperatureForTime(DateTime time) {
     final hour = time.hour;
-    
+
     // Simple temperature simulation based on time
     if (hour >= 6 && hour < 12) {
       return 18 + (hour - 6) * 2; // Temperature rises in morning

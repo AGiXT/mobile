@@ -22,7 +22,8 @@ class WeatherData {
     required this.timestamp,
   });
 
-  factory WeatherData.fromOpenMeteo(Map<String, dynamic> json, double lat, double lon) {
+  factory WeatherData.fromOpenMeteo(
+      Map<String, dynamic> json, double lat, double lon) {
     final current = json['current'];
     return WeatherData(
       temperature: (current['temperature_2m'] as num).toDouble(),
@@ -112,42 +113,72 @@ class WeatherData {
 
   String get description {
     switch (weatherCode) {
-      case 0: return 'Clear sky';
-      case 1: return 'Mainly clear';
-      case 2: return 'Partly cloudy';
-      case 3: return 'Overcast';
-      case 45: return 'Fog';
-      case 48: return 'Depositing rime fog';
-      case 51: return 'Light drizzle';
-      case 53: return 'Moderate drizzle';
-      case 55: return 'Dense drizzle';
-      case 56: return 'Light freezing drizzle';
-      case 57: return 'Dense freezing drizzle';
-      case 61: return 'Slight rain';
-      case 63: return 'Moderate rain';
-      case 65: return 'Heavy rain';
-      case 66: return 'Light freezing rain';
-      case 67: return 'Heavy freezing rain';
-      case 71: return 'Slight snow';
-      case 73: return 'Moderate snow';
-      case 75: return 'Heavy snow';
-      case 77: return 'Snow grains';
-      case 80: return 'Slight rain showers';
-      case 81: return 'Moderate rain showers';
-      case 82: return 'Violent rain showers';
-      case 85: return 'Slight snow showers';
-      case 86: return 'Heavy snow showers';
-      case 95: return 'Thunderstorm';
-      case 96: return 'Thunderstorm with slight hail';
-      case 99: return 'Thunderstorm with heavy hail';
-      default: return 'Unknown weather';
+      case 0:
+        return 'Clear sky';
+      case 1:
+        return 'Mainly clear';
+      case 2:
+        return 'Partly cloudy';
+      case 3:
+        return 'Overcast';
+      case 45:
+        return 'Fog';
+      case 48:
+        return 'Depositing rime fog';
+      case 51:
+        return 'Light drizzle';
+      case 53:
+        return 'Moderate drizzle';
+      case 55:
+        return 'Dense drizzle';
+      case 56:
+        return 'Light freezing drizzle';
+      case 57:
+        return 'Dense freezing drizzle';
+      case 61:
+        return 'Slight rain';
+      case 63:
+        return 'Moderate rain';
+      case 65:
+        return 'Heavy rain';
+      case 66:
+        return 'Light freezing rain';
+      case 67:
+        return 'Heavy freezing rain';
+      case 71:
+        return 'Slight snow';
+      case 73:
+        return 'Moderate snow';
+      case 75:
+        return 'Heavy snow';
+      case 77:
+        return 'Snow grains';
+      case 80:
+        return 'Slight rain showers';
+      case 81:
+        return 'Moderate rain showers';
+      case 82:
+        return 'Violent rain showers';
+      case 85:
+        return 'Slight snow showers';
+      case 86:
+        return 'Heavy snow showers';
+      case 95:
+        return 'Thunderstorm';
+      case 96:
+        return 'Thunderstorm with slight hail';
+      case 99:
+        return 'Thunderstorm with heavy hail';
+      default:
+        return 'Unknown weather';
     }
   }
 }
 
 /// Service for fetching weather data using Open-Meteo API
 class OpenMeteoWeatherService {
-  static final OpenMeteoWeatherService _instance = OpenMeteoWeatherService._internal();
+  static final OpenMeteoWeatherService _instance =
+      OpenMeteoWeatherService._internal();
   factory OpenMeteoWeatherService() => _instance;
   OpenMeteoWeatherService._internal();
 
@@ -169,16 +200,19 @@ class OpenMeteoWeatherService {
       // Get user location
       final position = await _getCurrentPosition();
       if (position == null) {
-        debugPrint('Could not get user location, using cached data if available');
+        debugPrint(
+            'Could not get user location, using cached data if available');
         return cachedData; // Return cached data even if expired
       }
 
       // Fetch weather from Open-Meteo
-      final weatherData = await _fetchWeatherFromAPI(position.latitude, position.longitude);
-      
+      final weatherData =
+          await _fetchWeatherFromAPI(position.latitude, position.longitude);
+
       if (weatherData != null) {
         await _cacheWeather(weatherData);
-        debugPrint('Weather fetched from Open-Meteo: ${weatherData.description}, ${weatherData.temperature}°C');
+        debugPrint(
+            'Weather fetched from Open-Meteo: ${weatherData.description}, ${weatherData.temperature}°C');
         return weatherData;
       }
 
@@ -227,11 +261,11 @@ class OpenMeteoWeatherService {
   }
 
   /// Fetch weather data from Open-Meteo API
-  Future<WeatherData?> _fetchWeatherFromAPI(double latitude, double longitude) async {
+  Future<WeatherData?> _fetchWeatherFromAPI(
+      double latitude, double longitude) async {
     try {
       final url = Uri.parse(
-        '$_baseUrl?latitude=$latitude&longitude=$longitude&current=temperature_2m,weather_code,is_day&timezone=auto'
-      );
+          '$_baseUrl?latitude=$latitude&longitude=$longitude&current=temperature_2m,weather_code,is_day&timezone=auto');
 
       debugPrint('Fetching weather from: $url');
 
@@ -256,7 +290,8 @@ class OpenMeteoWeatherService {
       final prefs = await SharedPreferences.getInstance();
       final weatherJson = jsonEncode(weatherData.toJson());
       await prefs.setString(_cacheKey, weatherJson);
-      await prefs.setInt(_cacheTimestampKey, DateTime.now().millisecondsSinceEpoch);
+      await prefs.setInt(
+          _cacheTimestampKey, DateTime.now().millisecondsSinceEpoch);
     } catch (e) {
       debugPrint('Error caching weather: $e');
     }

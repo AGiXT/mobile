@@ -738,7 +738,7 @@ class BluetoothManager {
     try {
       final weatherService = OpenMeteoWeatherService();
       final weatherData = await weatherService.getCurrentWeather();
-      
+
       if (weatherData != null) {
         return '${weatherData.latitude.toStringAsFixed(2)}, ${weatherData.longitude.toStringAsFixed(2)}: ${weatherData.description}, ${weatherData.temperature.round()}°C';
       } else {

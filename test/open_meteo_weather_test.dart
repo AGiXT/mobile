@@ -12,7 +12,8 @@ void main() {
         }
       };
 
-      final weatherData = WeatherData.fromOpenMeteo(mockResponse, 40.7128, -74.0060);
+      final weatherData =
+          WeatherData.fromOpenMeteo(mockResponse, 40.7128, -74.0060);
 
       expect(weatherData.temperature, equals(22.5));
       expect(weatherData.weatherCode, equals(0));
