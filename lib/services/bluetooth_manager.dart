@@ -14,7 +14,7 @@ import 'package:agixt/models/g1/notification.dart';
 import 'package:agixt/models/g1/text.dart';
 import 'package:agixt/services/notifications_listener.dart';
 import 'package:agixt/services/stops_manager.dart';
-import 'package:agixt/services/weather_service.dart';
+import 'package:agixt/services/open_meteo_weather_service.dart';
 import 'package:agixt/utils/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'; // Add this import for MethodChannel
@@ -735,11 +735,12 @@ class BluetoothManager {
 
   /// Gets current weather information
   Future<String> getCurrentWeatherInfo() async {
-    final weatherService = WeatherService();
     try {
+      final weatherService = OpenMeteoWeatherService();
       final weatherData = await weatherService.getCurrentWeather();
+      
       if (weatherData != null) {
-        return '${weatherData.location}: ${weatherData.summary}';
+        return '${weatherData.latitude.toStringAsFixed(2)}, ${weatherData.longitude.toStringAsFixed(2)}: ${weatherData.description}, ${weatherData.temperature.round()}°C';
       } else {
         return 'No weather data available';
       }
