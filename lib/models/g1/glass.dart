@@ -26,6 +26,7 @@ class Glass {
   int heartbeatSeq = 0;
   int _connectRetries = 0;
   static const int maxConnectRetries = 3;
+  bool _externalHeartbeatManaged = false;
 
   // Callback function for when side button is pressed
   SideButtonCallback? onSideButtonPress;
@@ -49,13 +50,16 @@ class Glass {
     try {
       // Cancel any existing subscriptions first
       await disconnect();
-      
+
       // Set up connection state monitoring first
-      connectionStateSubscription = device.connectionState.listen((BluetoothConnectionState state) {
+      connectionStateSubscription =
+          device.connectionState.listen((BluetoothConnectionState state) {
         debugPrint('[$side Glass] Connection state: $state');
-        if (state == BluetoothConnectionState.disconnected && _connectRetries < maxConnectRetries) {
+        if (state == BluetoothConnectionState.disconnected &&
+            _connectRetries < maxConnectRetries) {
           _connectRetries++;
-          debugPrint('[$side Glass] Auto-reconnect attempt $_connectRetries/$maxConnectRetries');
+          debugPrint(
+              '[$side Glass] Auto-reconnect attempt $_connectRetries/$maxConnectRetries');
           _connectWithRetry();
         }
       });
@@ -63,7 +67,6 @@ class Glass {
       // Initial connection attempt
       await _connectWithRetry();
       _connectRetries = 0; // Reset counter after successful connection
-      
     } catch (e) {
       debugPrint('[$side Glass] Connection error: $e');
       await disconnect();
@@ -78,21 +81,24 @@ class Glass {
         bool connected = false;
         while (!connected && _connectRetries < maxConnectRetries) {
           try {
-            debugPrint('[$side Glass] Trying to connect (attempt ${_connectRetries + 1})');
+            debugPrint(
+                '[$side Glass] Trying to connect (attempt ${_connectRetries + 1})');
             await device.connect(timeout: const Duration(seconds: 15));
             connected = true;
           } catch (e) {
             _connectRetries++;
-            debugPrint('[$side Glass] Connection attempt $_connectRetries failed: $e');
+            debugPrint(
+                '[$side Glass] Connection attempt $_connectRetries failed: $e');
             if (_connectRetries < maxConnectRetries) {
               await Future.delayed(const Duration(seconds: 1));
             } else {
-              throw Exception('Failed to connect after $maxConnectRetries attempts');
+              throw Exception(
+                  'Failed to connect after $maxConnectRetries attempts');
             }
           }
         }
       }
-      
+
       // Once connected, proceed with service discovery and setup
       debugPrint('[$side Glass] Connected, discovering services...');
       await discoverServices();
@@ -102,10 +108,11 @@ class Glass {
       await device.requestConnectionPriority(
           connectionPriorityRequest: ConnectionPriority.high);
       startHeartbeat();
-      debugPrint('[$side Glass] Setup complete - connection established successfully');
+      debugPrint(
+          '[$side Glass] Setup complete - connection established successfully');
     } catch (e) {
       debugPrint('[$side Glass] Connection process failed: $e');
-      throw e; // Let the caller handle this error
+      rethrow; // Let the caller handle this error
     }
   }
 
@@ -192,7 +199,31 @@ class Glass {
     ];
   }
 
+  /// Send a single heartbeat message to keep the connection alive
+  Future<void> sendHeartbeat() async {
+    if (device.isConnected) {
+      List<int> heartbeatData = _constructHeartbeat(heartbeatSeq++);
+      await sendData(heartbeatData);
+      debugPrint('[$side Glass] Heartbeat sent (seq: ${heartbeatSeq - 1})');
+    }
+  }
+
+  /// Set whether heartbeat is managed externally (by background service)
+  void setExternalHeartbeatManaged(bool managed) {
+    _externalHeartbeatManaged = managed;
+    if (managed) {
+      heartbeatTimer?.cancel();
+      heartbeatTimer = null;
+    } else {
+      startHeartbeat();
+    }
+  }
+
   void startHeartbeat() {
+    if (_externalHeartbeatManaged) {
+      return; // Don't start internal heartbeat if managed externally
+    }
+
     const heartbeatInterval = Duration(seconds: 5);
     heartbeatTimer = Timer.periodic(heartbeatInterval, (timer) async {
       if (device.isConnected) {

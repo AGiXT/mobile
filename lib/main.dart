@@ -10,6 +10,7 @@ import 'package:agixt/models/agixt/stop.dart';
 import 'package:agixt/screens/auth/login_screen.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
+import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/utils/ui_perfs.dart';
 import 'package:flutter/material.dart';
@@ -58,11 +59,14 @@ void main() async {
   );
 
   await _initHive();
-  await initializeService();
+  await BluetoothBackgroundService.initialize();
   await UiPerfs.singleton.load();
 
   await BluetoothManager.singleton.initialize();
   BluetoothManager.singleton.attemptReconnectFromStorage();
+
+  // Initialize but don't start the bluetooth background service automatically
+  // Users can enable it from settings
 
   var channel = const MethodChannel('dev.agixt.agixt/background_service');
   var callbackHandle = PluginUtilities.getCallbackHandle(backgroundMain);

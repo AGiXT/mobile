@@ -109,6 +109,12 @@ class BluetoothManager {
     });
   }
 
+  /// Set whether heartbeat is managed externally (e.g., by background service)
+  void setExternalHeartbeatManaged(bool managed) {
+    leftGlass?.setExternalHeartbeatManaged(managed);
+    rightGlass?.setExternalHeartbeatManaged(managed);
+  }
+
   Future<void> _requestPermissions() async {
     if (!Platform.isAndroid && !Platform.isIOS) {
       return;
