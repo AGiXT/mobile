@@ -109,10 +109,39 @@ class BluetoothManager {
     });
   }
 
-  /// Set whether heartbeat is managed externally (e.g., by background service)
+  /// Set whether heartbeat is managed externally (by background service)
   void setExternalHeartbeatManaged(bool managed) {
+    if (managed) {
+      _syncTimer?.cancel();
+      _syncTimer = null;
+    } else {
+      // Restart internal sync timer if needed
+      _syncTimer ??= Timer.periodic(const Duration(minutes: 1), (timer) {
+        _sync();
+      });
+    }
+
+    // Propagate to glasses
     leftGlass?.setExternalHeartbeatManaged(managed);
     rightGlass?.setExternalHeartbeatManaged(managed);
+  }
+
+  /// Clean up all resources and connections
+  Future<void> dispose() async {
+    // Cancel all timers
+    _syncTimer?.cancel();
+    _syncTimer = null;
+    _scanTimer?.cancel();
+    _scanTimer = null;
+
+    // Stop scanning
+    stopScanning();
+
+    // Disconnect and clean up glasses
+    await disconnectFromGlasses();
+
+    // Note: NotificationListener doesn't have a dispose method
+    // The stream is handled automatically
   }
 
   Future<void> _requestPermissions() async {
@@ -173,6 +202,13 @@ class BluetoothManager {
   Future<void> startScanAndConnect({
     required OnUpdate onUpdate,
   }) async {
+    // Prevent multiple simultaneous scans
+    if (_isScanning) {
+      debugPrint('Scan already in progress, ignoring new scan request');
+      onUpdate('Scan already in progress');
+      return;
+    }
+
     try {
       // this will fail in backround mode
       await _requestPermissions();
@@ -211,52 +247,58 @@ class BluetoothManager {
   StreamSubscription? _scanningSubscription;
 
   Future<void> _startScan(OnUpdate onUpdate) async {
-    await FlutterBluePlus.stopScan();
-    debugPrint('Starting new scan attempt ${_retryCount + 1}/$maxRetries');
+    try {
+      await FlutterBluePlus.stopScan();
+      debugPrint('Starting new scan attempt ${_retryCount + 1}/$maxRetries');
 
-    // Cancel any existing subscriptions
-    _scanSubscription?.cancel();
-    _scanningSubscription?.cancel();
+      // Cancel any existing subscriptions
+      _scanSubscription?.cancel();
+      _scanningSubscription?.cancel();
 
-    // Set scan timeout
-    _scanTimer?.cancel();
-    _scanTimer = Timer(const Duration(seconds: 30), () {
-      if (_isScanning) {
-        _handleScanTimeout(onUpdate);
-      }
-    });
-
-    await FlutterBluePlus.startScan(
-      timeout: const Duration(seconds: 30),
-      androidUsesFineLocation: true,
-    );
-
-    // Listen for scan results
-    _scanSubscription = FlutterBluePlus.scanResults.listen(
-      (results) {
-        for (ScanResult result in results) {
-          String deviceName = result.device.name;
-          String deviceId = result.device.id.id;
-          debugPrint('Found device: $deviceName ($deviceId)');
-
-          if (deviceName.isNotEmpty) {
-            _handleDeviceFound(result, onUpdate);
-          }
+      // Set scan timeout
+      _scanTimer?.cancel();
+      _scanTimer = Timer(const Duration(seconds: 30), () {
+        if (_isScanning) {
+          _handleScanTimeout(onUpdate);
         }
-      },
-      onError: (error) {
-        debugPrint('Scan results error: $error');
-        onUpdate(error.toString());
-      },
-    );
+      });
 
-    // Monitor scanning state
-    _scanningSubscription = FlutterBluePlus.isScanning.listen((isScanning) {
-      debugPrint('Scanning state changed: $isScanning');
-      if (!isScanning && _isScanning) {
-        _handleScanComplete(onUpdate);
-      }
-    });
+      await FlutterBluePlus.startScan(
+        timeout: const Duration(seconds: 30),
+        androidUsesFineLocation: true,
+      );
+
+      // Listen for scan results
+      _scanSubscription = FlutterBluePlus.scanResults.listen(
+        (results) {
+          for (ScanResult result in results) {
+            String deviceName = result.device.name;
+            String deviceId = result.device.id.id;
+            debugPrint('Found device: $deviceName ($deviceId)');
+
+            if (deviceName.isNotEmpty) {
+              _handleDeviceFound(result, onUpdate);
+            }
+          }
+        },
+        onError: (error) {
+          debugPrint('Scan results error: $error');
+          onUpdate(error.toString());
+        },
+      );
+
+      // Monitor scanning state
+      _scanningSubscription = FlutterBluePlus.isScanning.listen((isScanning) {
+        debugPrint('Scanning state changed: $isScanning');
+        if (!isScanning && _isScanning) {
+          _handleScanComplete(onUpdate);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error in _startScan: $e');
+      _isScanning = false;
+      onUpdate('Scan failed: $e');
+    }
   }
 
   void _handleDeviceFound(ScanResult result, OnUpdate onUpdate) async {
@@ -689,10 +731,22 @@ class BluetoothManager {
 
   Future<void> disconnectFromGlasses() async {
     debugPrint('Disconnecting from glasses');
-    leftGlass?.disconnect();
-    rightGlass?.disconnect();
-    leftGlass = null;
-    rightGlass = null;
+
+    try {
+      await leftGlass?.disconnect();
+    } catch (e) {
+      debugPrint('Error disconnecting left glass: $e');
+    } finally {
+      leftGlass = null;
+    }
+
+    try {
+      await rightGlass?.disconnect();
+    } catch (e) {
+      debugPrint('Error disconnecting right glass: $e');
+    } finally {
+      rightGlass = null;
+    }
   }
 
   Future<bool> _isGlassesDisplayEnabled() async {

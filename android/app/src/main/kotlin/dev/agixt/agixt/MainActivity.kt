@@ -18,6 +18,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import android.net.Uri
 import android.util.Log
+import android.os.PowerManager
+import android.provider.Settings
+import android.os.Build
 import android.view.KeyEvent // Import KeyEvent
 
 class MainActivity: FlutterActivity() {
@@ -198,6 +201,40 @@ class MainActivity: FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, BUTTON_EVENTS_CHANNEL).setMethodCallHandler { call, result ->
             // Currently no methods expected from Flutter on this channel, but handler is needed
             result.notImplemented()
+        }
+        
+        // Add battery optimization method channel
+        MethodChannel(binaryMessenger, "dev.agixt.agixt/battery_optimization").apply {
+            setMethodCallHandler { method, result ->
+                when (method.method) {
+                    "isBatteryOptimizationDisabled" -> {
+                        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+                        val isIgnoring = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            powerManager.isIgnoringBatteryOptimizations(packageName)
+                        } else {
+                            true // Battery optimization not available on older versions
+                        }
+                        result.success(isIgnoring)
+                    }
+                    "requestDisableBatteryOptimization" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                            intent.data = Uri.parse("package:$packageName")
+                            try {
+                                startActivity(intent)
+                                result.success(true)
+                            } catch (e: Exception) {
+                                result.success(false)
+                            }
+                        } else {
+                            result.success(true)
+                        }
+                    }
+                    else -> {
+                        result.notImplemented()
+                    }
+                }
+            }
         }
     }
 

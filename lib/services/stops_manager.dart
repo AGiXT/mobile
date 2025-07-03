@@ -96,4 +96,9 @@ class StopsManager {
     }
     timers.clear();
   }
+
+  /// Dispose of all resources
+  void dispose() {
+    cancelTimers();
+  }
 }

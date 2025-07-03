@@ -176,9 +176,13 @@ class Glass {
   Future<void> sendData(List<int> data) async {
     if (uartTx != null) {
       try {
-        await uartTx!.write(data, withoutResponse: false);
-        //debugPrint(
-        //    'Sent data to $side glass: ${data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        if (device.isConnected) {
+          await uartTx!.write(data, withoutResponse: false);
+          //debugPrint(
+          //    'Sent data to $side glass: ${data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        } else {
+          debugPrint('Device not connected, cannot send data to $side glass.');
+        }
       } catch (e) {
         debugPrint('Error sending data to $side glass: $e');
       }
@@ -214,7 +218,7 @@ class Glass {
     if (managed) {
       heartbeatTimer?.cancel();
       heartbeatTimer = null;
-    } else {
+    } else if (device.isConnected) {
       startHeartbeat();
     }
   }
@@ -224,20 +228,36 @@ class Glass {
       return; // Don't start internal heartbeat if managed externally
     }
 
+    // Cancel existing timer first to prevent duplicates
+    heartbeatTimer?.cancel();
+    heartbeatTimer = null;
+
     const heartbeatInterval = Duration(seconds: 5);
     heartbeatTimer = Timer.periodic(heartbeatInterval, (timer) async {
       if (device.isConnected) {
-        List<int> heartbeatData = _constructHeartbeat(heartbeatSeq++);
-        await sendData(heartbeatData);
+        try {
+          List<int> heartbeatData = _constructHeartbeat(heartbeatSeq++);
+          await sendData(heartbeatData);
+        } catch (e) {
+          debugPrint('[$side Glass] Heartbeat failed: $e');
+          timer.cancel();
+        }
+      } else {
+        timer.cancel();
       }
     });
   }
 
   Future<void> disconnect() async {
-    // Cancel all subscriptions
+    // Cancel all subscriptions and timers first
     await notificationSubscription?.cancel();
+    notificationSubscription = null;
+
     await connectionStateSubscription?.cancel();
+    connectionStateSubscription = null;
+
     heartbeatTimer?.cancel();
+    heartbeatTimer = null;
 
     // Reset state
     _connectRetries = 0;
@@ -246,7 +266,9 @@ class Glass {
 
     // Then disconnect the device
     try {
-      await device.disconnect();
+      if (device.isConnected) {
+        await device.disconnect();
+      }
     } catch (e) {
       debugPrint('[$side Glass] Error during disconnect: $e');
     }

@@ -414,6 +414,12 @@ class BluetoothReciever {
       }
     }
   }
+
+  /// Dispose of all resources to prevent memory leaks
+  void dispose() {
+    _stopListening();
+    // Note: speech_to_text doesn't require explicit disposal
+  }
 }
 
 // Voice data buffer to collect chunks

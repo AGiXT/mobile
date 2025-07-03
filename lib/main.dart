@@ -60,23 +60,37 @@ void main() async {
 
   await _initHive();
   await BluetoothBackgroundService.initialize();
+  await BluetoothBackgroundService.requestBatteryOptimizationExemption();
   await UiPerfs.singleton.load();
 
   await BluetoothManager.singleton.initialize();
-  BluetoothManager.singleton.attemptReconnectFromStorage();
 
-  // Initialize but don't start the bluetooth background service automatically
-  // Users can enable it from settings
+  // Don't attempt reconnection here to avoid conflicts
+  // Let the background service handle connections
+  // BluetoothManager.singleton.attemptReconnectFromStorage();
 
-  var channel = const MethodChannel('dev.agixt.agixt/background_service');
-  var callbackHandle = PluginUtilities.getCallbackHandle(backgroundMain);
-  channel.invokeMethod('startService', callbackHandle?.toRawHandle());
+  // Only start background service if not already running to prevent conflicts
+  final backgroundService = FlutterBackgroundService();
+  final isBackgroundServiceRunning = await backgroundService.isRunning();
+
+  if (!isBackgroundServiceRunning) {
+    var channel = const MethodChannel('dev.agixt.agixt/background_service');
+    var callbackHandle = PluginUtilities.getCallbackHandle(backgroundMain);
+    channel.invokeMethod('startService', callbackHandle?.toRawHandle());
+  } else {
+    debugPrint('Background service already running, skipping start');
+  }
 
   runApp(const AGiXTApp());
 }
 
 void backgroundMain() {
-  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    debugPrint('Background main initialized successfully');
+  } catch (e) {
+    debugPrint('Error in background main: $e');
+  }
 }
 
 class AppRetainWidget extends StatelessWidget {
@@ -133,6 +147,20 @@ class _AGiXTAppState extends State<AGiXTApp> {
   @override
   void dispose() {
     _deepLinkSubscription?.cancel();
+
+    // Clean up all singletons and services with error handling
+    try {
+      BluetoothManager.singleton.dispose();
+    } catch (e) {
+      debugPrint('Error disposing BluetoothManager: $e');
+    }
+
+    try {
+      StopsManager().dispose();
+    } catch (e) {
+      debugPrint('Error disposing StopsManager: $e');
+    }
+
     super.dispose();
   }
 
@@ -346,6 +374,12 @@ Future<void> onStart(ServiceInstance service) async {
   // }
   // bring to foreground
   Timer.periodic(const Duration(seconds: 30), (timer) async {
+    // Check if service is still running to prevent memory leaks
+    if (!(await FlutterBackgroundService().isRunning())) {
+      timer.cancel();
+      return;
+    }
+
     if (service is AndroidServiceInstance) {
       if (await service.isForegroundService()) {
         flutterLocalNotificationsPlugin.show(

@@ -3,6 +3,7 @@ import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/widgets/gravatar_image.dart';
 import 'package:agixt/widgets/current_agixt.dart';
 import 'package:agixt/utils/ui_perfs.dart';
+import 'package:agixt/utils/battery_optimization_helper.dart';
 import 'package:agixt/screens/agixt_daily.dart';
 import 'package:agixt/screens/agixt_stop.dart';
 import 'package:agixt/screens/checklist_screen.dart';
@@ -149,6 +150,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     // Handle the side button press to activate AI communications
     await aiService.handleSideButtonPress();
+  }
+
+  // Handler for battery optimization request
+  Future<void> _handleBatteryOptimizationRequest() async {
+    final isDisabled =
+        await BatteryOptimizationHelper.isBatteryOptimizationDisabled();
+
+    if (isDisabled) {
+      // Already disabled, show info dialog
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Background Performance'),
+          content: Text('Battery optimization is already disabled for AGiXT. '
+              'The app can work properly in the background and respond '
+              'to voice commands when the screen is locked.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('OK'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      // Show explanation and request to disable
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Improve Background Performance'),
+          content: Text(
+              BatteryOptimizationHelper.getBatteryOptimizationExplanation()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await BatteryOptimizationHelper
+                    .requestDisableBatteryOptimization();
+              },
+              child: Text('Open Settings'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -506,6 +556,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           },
                         ),
+                        const Divider(height: 1),
+
+                        // Battery Optimization Setting
+                        ListTile(
+                          leading:
+                              Icon(Icons.battery_saver, color: Colors.green),
+                          title: Text('Background Performance'),
+                          subtitle: Text(
+                              'Optimize for voice commands when screen is locked'),
+                          trailing: Icon(Icons.chevron_right),
+                          onTap: () => _handleBatteryOptimizationRequest(),
+                        ),
+                        const Divider(height: 1),
                       ],
                     ),
                   ),
