@@ -70,17 +70,15 @@ class AGiXTChatWidget implements AGiXTWidget {
 
       // Create chat request with context if available
       String finalMessage = message;
-      
+
       // Build context data with timeout to prevent blocking AI responses
       String contextData = '';
       try {
-        contextData = await _buildContextData().timeout(
-          const Duration(seconds: 3),
-          onTimeout: () {
-            debugPrint('Context building timed out, proceeding without context');
-            return '';
-          }
-        );
+        contextData = await _buildContextData()
+            .timeout(const Duration(seconds: 3), onTimeout: () {
+          debugPrint('Context building timed out, proceeding without context');
+          return '';
+        });
         if (contextData.isNotEmpty) {
           debugPrint('Adding context data to user message');
         }
@@ -264,10 +262,8 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     // Get today's daily items with timeout
     try {
-      final dailyItems = await _getTodaysDailyItems().timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => ''
-      );
+      final dailyItems = await _getTodaysDailyItems()
+          .timeout(const Duration(seconds: 1), onTimeout: () => '');
       if (dailyItems.isNotEmpty) {
         contextSections.add("### Users items for today\n\n$dailyItems");
       }
@@ -277,10 +273,8 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     // Get user's current active checklist tasks with timeout
     try {
-      final currentTasks = await _getCurrentChecklistTasks().timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => ''
-      );
+      final currentTasks = await _getCurrentChecklistTasks()
+          .timeout(const Duration(seconds: 1), onTimeout: () => '');
       if (currentTasks.isNotEmpty) {
         contextSections.add("### Users current task\n\n$currentTasks");
       }
@@ -290,10 +284,8 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     // Get today's calendar items with timeout
     try {
-      final calendarItems = await _getTodaysCalendarItems().timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => ''
-      );
+      final calendarItems = await _getTodaysCalendarItems()
+          .timeout(const Duration(seconds: 1), onTimeout: () => '');
       if (calendarItems.isNotEmpty) {
         contextSections
             .add("### Users calendar items for today\n\n$calendarItems");
@@ -304,10 +296,8 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     // Get user's location if enabled with timeout
     try {
-      final locationData = await _getUserLocation().timeout(
-        const Duration(seconds: 1),
-        onTimeout: () => ''
-      );
+      final locationData = await _getUserLocation()
+          .timeout(const Duration(seconds: 1), onTimeout: () => '');
       if (locationData.isNotEmpty) {
         contextSections.add("### User's Current Location\n\n$locationData");
       }
@@ -554,8 +544,7 @@ class AGiXTChatWidget implements AGiXTWidget {
       // Use a very short timeout (2 seconds) to prevent blocking AI responses
       // This is especially important when screen is locked or in background mode
       final currentPosition = await locationService.getCurrentPosition(
-        timeout: const Duration(seconds: 2)
-      );
+          timeout: const Duration(seconds: 2));
       if (currentPosition != null) {
         return _formatLocationData(currentPosition);
       }

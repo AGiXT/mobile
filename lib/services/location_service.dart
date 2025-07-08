@@ -71,7 +71,8 @@ class LocationService {
   }
 
   // Get current position
-  Future<Position?> getCurrentPosition({Duration timeout = const Duration(seconds: 5)}) async {
+  Future<Position?> getCurrentPosition(
+      {Duration timeout = const Duration(seconds: 5)}) async {
     if (!await isLocationEnabled()) {
       return null;
     }

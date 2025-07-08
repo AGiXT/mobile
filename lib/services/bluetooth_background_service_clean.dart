@@ -30,7 +30,8 @@ class BluetoothBackgroundService {
           _channelId,
           'AGiXT Glasses Connection',
           description: 'Maintains connection to your glasses in the background',
-          importance: Importance.max, // Changed from high to max for better background processing
+          importance: Importance
+              .max, // Changed from high to max for better background processing
           playSound: false,
           enableVibration: false,
           showBadge: false,
@@ -348,8 +349,10 @@ class BluetoothBackgroundService {
                 'AGiXT Glasses Connection',
                 icon: 'branding',
                 ongoing: true,
-                importance: Importance.max, // Changed from high to max for better persistence
-                priority: Priority.max, // Changed from high to max for better persistence
+                importance: Importance
+                    .max, // Changed from high to max for better persistence
+                priority: Priority
+                    .max, // Changed from high to max for better persistence
                 category: AndroidNotificationCategory.service,
                 showWhen: true,
                 usesChronometer: false,
@@ -413,24 +416,31 @@ class BluetoothBackgroundService {
     try {
       // First check if location services are enabled
       final isLocationEnabled = await _isLocationServicesEnabled();
-      
+
       if (isLocationEnabled) {
-        debugPrint('BluetoothBackgroundService: Location services are enabled, requesting battery optimization exemption');
-        
+        debugPrint(
+            'BluetoothBackgroundService: Location services are enabled, requesting battery optimization exemption');
+
         // Request battery optimization exemption to maintain service when location is enabled
-        final isOptimizationDisabled = await BatteryOptimizationHelper.isBatteryOptimizationDisabled();
-        
+        final isOptimizationDisabled =
+            await BatteryOptimizationHelper.isBatteryOptimizationDisabled();
+
         if (!isOptimizationDisabled) {
-          debugPrint('BluetoothBackgroundService: Battery optimization is enabled, this may affect service performance with location enabled');
-          debugPrint('BluetoothBackgroundService: ${BatteryOptimizationHelper.getBatteryOptimizationExplanation()}');
+          debugPrint(
+              'BluetoothBackgroundService: Battery optimization is enabled, this may affect service performance with location enabled');
+          debugPrint(
+              'BluetoothBackgroundService: ${BatteryOptimizationHelper.getBatteryOptimizationExplanation()}');
         } else {
-          debugPrint('BluetoothBackgroundService: Battery optimization is disabled, service should work properly with location enabled');
+          debugPrint(
+              'BluetoothBackgroundService: Battery optimization is disabled, service should work properly with location enabled');
         }
       } else {
-        debugPrint('BluetoothBackgroundService: Location services are disabled');
+        debugPrint(
+            'BluetoothBackgroundService: Location services are disabled');
       }
     } catch (e) {
-      debugPrint('BluetoothBackgroundService: Error checking location and battery optimization: $e');
+      debugPrint(
+          'BluetoothBackgroundService: Error checking location and battery optimization: $e');
     }
   }
 
@@ -440,7 +450,8 @@ class BluetoothBackgroundService {
       final locationService = LocationService();
       return await locationService.isLocationEnabled();
     } catch (e) {
-      debugPrint('BluetoothBackgroundService: Error checking location services: $e');
+      debugPrint(
+          'BluetoothBackgroundService: Error checking location services: $e');
       return false;
     }
   }
