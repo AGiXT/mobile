@@ -39,6 +39,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
+    // Initialize AIService for foreground mode
+    aiService.setBackgroundMode(false);
     _loadUserData();
     _loadAGiXTDebugInfo();
     _loadSilentModeStatus();
@@ -144,7 +146,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     // Check if user is logged in
     if (!await AuthService.isLoggedIn()) {
-      bluetoothManager.sendText('Please log in to use AI assistant');
+      bluetoothManager.sendAIResponse('Please log in to use AI assistant');
       return;
     }
 

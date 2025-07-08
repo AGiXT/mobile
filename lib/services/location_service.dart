@@ -71,7 +71,7 @@ class LocationService {
   }
 
   // Get current position
-  Future<Position?> getCurrentPosition() async {
+  Future<Position?> getCurrentPosition({Duration timeout = const Duration(seconds: 5)}) async {
     if (!await isLocationEnabled()) {
       return null;
     }
@@ -81,7 +81,10 @@ class LocationService {
     }
 
     try {
-      return await Geolocator.getCurrentPosition();
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: timeout,
+      );
     } catch (e) {
       debugPrint('Error getting current position: $e');
       return null;

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:agixt/services/location_service.dart';
+import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -105,10 +106,59 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
       _positionStreamSubscription = null;
     }
 
+    // Ensure background service continues to work with location changes
+    await _handleBackgroundServiceLocationChange(value);
+
     setState(() {
       _isLocationEnabled = value;
       _isLoading = false;
     });
+  }
+
+  /// Handle background service when location setting changes
+  Future<void> _handleBackgroundServiceLocationChange(bool locationEnabled) async {
+    try {
+      debugPrint('LocationSettingsScreen: Location setting changed to $locationEnabled');
+      
+      // If location is now enabled, ensure background service is optimized for it
+      if (locationEnabled) {
+        debugPrint('LocationSettingsScreen: Location enabled, ensuring background service is optimized');
+        
+        // Request battery optimization exemption when location is enabled
+        await BluetoothBackgroundService.requestBatteryOptimizationExemption();
+        
+        // Restart background service to ensure it handles location properly
+        if (await BluetoothBackgroundService.isRunning()) {
+          await BluetoothBackgroundService.stop();
+          await Future.delayed(Duration(seconds: 2)); // Wait a bit for service to stop
+          await BluetoothBackgroundService.start();
+        } else {
+          await BluetoothBackgroundService.start();
+        }
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Location enabled. Background service optimized for location usage.'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } else {
+        debugPrint('LocationSettingsScreen: Location disabled, background service should continue normally');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Location disabled. Background service continues normally.'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('LocationSettingsScreen: Error handling background service location change: $e');
+    }
   }
 
   @override

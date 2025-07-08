@@ -135,8 +135,13 @@ class BluetoothReciever {
       _isListening = false; // Recognition finished
       if (_lastWords.isNotEmpty) {
         debugPrint('Final transcription: $_lastWords');
-        // Use AIService to send transcription to AGiXT Chat
-        await AIService.singleton.processVoiceCommand(_lastWords);
+        // Use appropriate AIService method based on background mode
+        final aiService = AIService.singleton;
+        if (aiService.isBackgroundMode) {
+          await aiService.processVoiceCommandBackground(_lastWords);
+        } else {
+          await aiService.processVoiceCommand(_lastWords);
+        }
       } else {
         debugPrint('Final transcription is empty.');
       }
@@ -284,9 +289,14 @@ class BluetoothReciever {
             debugPrint(
                 '[$side] Remote Transcription took: ${endTime.difference(startTime).inSeconds} seconds');
 
-            // Use AIService to send transcription to AGiXT Chat
+            // Use appropriate AIService method based on background mode
             if (transcription.isNotEmpty) {
-              await AIService.singleton.processVoiceCommand(transcription);
+              final aiService = AIService.singleton;
+              if (aiService.isBackgroundMode) {
+                await aiService.processVoiceCommandBackground(transcription);
+              } else {
+                await aiService.processVoiceCommand(transcription);
+              }
             } else {
               debugPrint('[$side] Remote transcription was empty.');
             }

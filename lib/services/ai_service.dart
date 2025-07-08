@@ -17,6 +17,8 @@ class AIService {
   
   bool _isProcessing = false;
   Timer? _micTimer;
+  bool _isBackgroundMode = false;
+  bool _methodChannelInitialized = false;
   
   factory AIService() {
     return singleton;
@@ -24,8 +26,24 @@ class AIService {
   
   AIService._internal() {
     _initWhisperService();
-    // Set up the method call handler for button events
-    _buttonEventsChannel.setMethodCallHandler(_handleButtonEvents);
+    // Method channel handler will be set up when needed
+  }
+  
+  /// Initialize AIService for background operations
+  void setBackgroundMode(bool isBackground) {
+    _isBackgroundMode = isBackground;
+    debugPrint('AIService: Background mode set to $isBackground');
+    
+    if (!_isBackgroundMode && !_methodChannelInitialized) {
+      // Set up the method call handler for button events (only in foreground mode)
+      try {
+        _buttonEventsChannel.setMethodCallHandler(_handleButtonEvents);
+        _methodChannelInitialized = true;
+        debugPrint('AIService: Method channel handler initialized');
+      } catch (e) {
+        debugPrint('AIService: Failed to set method call handler: $e');
+      }
+    }
   }
   
   // Handle method calls from the button events channel
@@ -109,15 +127,15 @@ class AIService {
   // Send message to AGiXT API and display response
   Future<void> _sendMessageToAGiXT(String message) async {
     try {
-      // Show sending message
-      await _bluetoothManager.sendText('Sending to AGiXT: "$message"');
+      // Show sending message using AI response method
+      await _bluetoothManager.sendAIResponse('Sending to AGiXT: "$message"');
       
       // Get response using the AGiXTChatWidget
       final response = await _chatWidget.sendChatMessage(message);
       
       if (response != null && response.isNotEmpty) {
-        // Display response on glasses
-        await _bluetoothManager.sendText(response);
+        // Display response on glasses using AI response method that bypasses display checks
+        await _bluetoothManager.sendAIResponse(response);
       } else {
         await _showErrorMessage('No response from AGiXT');
       }
@@ -135,7 +153,7 @@ class AIService {
     
     _isProcessing = true;
     try {
-      await _bluetoothManager.sendText('Processing voice command...');
+      await _bluetoothManager.sendAIResponse('Processing voice command...');
       
       // Send the command to AGiXT without requiring button press
       await _sendMessageToAGiXT(commandText);
@@ -147,16 +165,62 @@ class AIService {
     }
   }
   
+  /// Process voice command specifically for background mode (screen locked)
+  /// This bypasses heavy context building to ensure responses work when locked
+  Future<void> processVoiceCommandBackground(String commandText) async {
+    if (_isProcessing) {
+      debugPrint('Already processing a request');
+      return;
+    }
+    
+    _isProcessing = true;
+    try {
+      await _bluetoothManager.sendAIResponse('Processing voice command...');
+      
+      // Send the command to AGiXT without context building to avoid timeouts
+      await _sendMessageToAGiXTDirect(commandText);
+    } catch (e) {
+      debugPrint('Error processing background voice command: $e');
+      await _showErrorMessage('Error processing voice command');
+    } finally {
+      _isProcessing = false;
+    }
+  }
+
+  /// Send message to AGiXT API directly without context (for background mode)
+  Future<void> _sendMessageToAGiXTDirect(String message) async {
+    try {
+      // Show sending message using AI response method
+      await _bluetoothManager.sendAIResponse('Sending to AGiXT: "$message"');
+      
+      // Get response using a minimal chat request (no context to avoid blocking)
+      final response = await _chatWidget.sendChatMessageDirect(message);
+      
+      if (response != null && response.isNotEmpty) {
+        // Display response on glasses using AI response method that bypasses display checks
+        await _bluetoothManager.sendAIResponse(response);
+      } else {
+        await _showErrorMessage('No response from AGiXT');
+      }
+    } catch (e) {
+      debugPrint('Error sending message to AGiXT: $e');
+      await _showErrorMessage('Failed to get response from AGiXT');
+    }
+  }
+
   // Helper methods for displaying status messages
   Future<void> _showListeningIndicator() async {
-    await _bluetoothManager.sendText('Listening...');
+    await _bluetoothManager.sendAIResponse('Listening...');
   }
   
   Future<void> _showProcessingMessage() async {
-    await _bluetoothManager.sendText('Processing...');
+    await _bluetoothManager.sendAIResponse('Processing...');
   }
   
   Future<void> _showErrorMessage(String message) async {
-    await _bluetoothManager.sendText('Error: $message');
+    await _bluetoothManager.sendAIResponse('Error: $message');
   }
+
+  /// Check if AIService is in background mode
+  bool get isBackgroundMode => _isBackgroundMode;
 }

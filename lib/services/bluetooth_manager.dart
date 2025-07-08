@@ -462,6 +462,13 @@ class BluetoothManager {
       return;
     }
 
+    await _sendTextDirect(text, delay: delay);
+  }
+
+  /// Send text directly to glasses without display preference checks
+  /// Used for AI responses and system messages
+  Future<void> _sendTextDirect(String text,
+      {Duration delay = const Duration(seconds: 5)}) async {
     final textMsg = TextMessage(text);
     List<List<int>> packets = textMsg.constructSendText();
 
@@ -474,6 +481,14 @@ class BluetoothManager {
         await Future.delayed(delay);
       }
     }
+  }
+
+  /// Send AI response text directly to glasses, bypassing display preference checks
+  /// This ensures AI responses are always displayed regardless of location settings
+  Future<void> sendAIResponse(String text,
+      {Duration delay = const Duration(seconds: 5)}) async {
+    debugPrint('Sending AI response to glasses: $text');
+    await _sendTextDirect(text, delay: delay);
   }
 
   Future<void> setDashboardLayout(List<int> option) async {

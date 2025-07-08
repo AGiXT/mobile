@@ -70,9 +70,23 @@ class AGiXTChatWidget implements AGiXTWidget {
 
       // Create chat request with context if available
       String finalMessage = message;
-      final contextData = await _buildContextData();
-      if (contextData.isNotEmpty) {
-        debugPrint('Adding context data to user message');
+      
+      // Build context data with timeout to prevent blocking AI responses
+      String contextData = '';
+      try {
+        contextData = await _buildContextData().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {
+            debugPrint('Context building timed out, proceeding without context');
+            return '';
+          }
+        );
+        if (contextData.isNotEmpty) {
+          debugPrint('Adding context data to user message');
+        }
+      } catch (e) {
+        debugPrint('Error building context data, proceeding without it: $e');
+        contextData = '';
       }
 
       final Map<String, dynamic> requestBody = {
@@ -139,6 +153,71 @@ class AGiXTChatWidget implements AGiXTWidget {
     }
   }
 
+  /// Send chat message without context data (for background mode)
+  Future<String?> sendChatMessageDirect(String message) async {
+    try {
+      final jwt = await AuthService.getJwt();
+      if (jwt == null) {
+        return "Please login to use AGiXT chat.";
+      }
+
+      // Get the current conversation ID
+      final conversationId = await _getCurrentConversationId();
+      debugPrint('Using conversation ID for direct chat: $conversationId');
+
+      // Create minimal chat request without context to avoid blocking
+      final Map<String, dynamic> requestBody = {
+        "model": await _getAgentName(),
+        "messages": [
+          {
+            "role": "user",
+            "content": message,
+          }
+        ],
+        "user": conversationId // Use the conversation ID for the user field
+      };
+
+      // Send request to AGiXT API
+      final response = await http.post(
+        Uri.parse('${AuthService.serverUrl}/v1/chat/completions'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': jwt,
+        },
+        body: jsonEncode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final jsonResponse = jsonDecode(response.body);
+        if (jsonResponse['choices'] != null &&
+            jsonResponse['choices'].isNotEmpty &&
+            jsonResponse['choices'][0]['message'] != null) {
+          final answer = jsonResponse['choices'][0]['message']['content'];
+
+          // Extract the conversation ID from the response
+          final responseId = jsonResponse['id'];
+          if (responseId != null && responseId.toString().isNotEmpty) {
+            // Save the conversation ID from the response
+            final cookieManager = CookieManager();
+            final newConversationId = responseId.toString();
+            await cookieManager.saveAgixtConversationId(newConversationId);
+            debugPrint(
+                'Saved conversation ID from direct response: $newConversationId');
+          }
+
+          debugPrint('AGiXT Direct Response: $answer');
+          return answer;
+        }
+      }
+
+      debugPrint('AGiXT API Error: ${response.statusCode} - ${response.body}');
+      return "Error: Unable to get response from AGiXT (${response.statusCode})";
+    } catch (e) {
+      debugPrint('Error sending direct chat message: $e');
+      return "Error: Failed to communicate with AGiXT";
+    }
+  }
+
   // Navigate to the conversation in the WebView
   Future<void> _navigateToConversation(
       String conversationId, String jwt) async {
@@ -183,29 +262,57 @@ class AGiXTChatWidget implements AGiXTWidget {
     List<String> contextSections = [];
     contextSections.add("The users message is transcribed from voice to text.");
 
-    // Get today's daily items
-    final dailyItems = await _getTodaysDailyItems();
-    if (dailyItems.isNotEmpty) {
-      contextSections.add("### Users items for today\n\n$dailyItems");
+    // Get today's daily items with timeout
+    try {
+      final dailyItems = await _getTodaysDailyItems().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => ''
+      );
+      if (dailyItems.isNotEmpty) {
+        contextSections.add("### Users items for today\n\n$dailyItems");
+      }
+    } catch (e) {
+      debugPrint('Error getting daily items: $e');
     }
 
-    // Get user's current active checklist tasks
-    final currentTasks = await _getCurrentChecklistTasks();
-    if (currentTasks.isNotEmpty) {
-      contextSections.add("### Users current task\n\n$currentTasks");
+    // Get user's current active checklist tasks with timeout
+    try {
+      final currentTasks = await _getCurrentChecklistTasks().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => ''
+      );
+      if (currentTasks.isNotEmpty) {
+        contextSections.add("### Users current task\n\n$currentTasks");
+      }
+    } catch (e) {
+      debugPrint('Error getting checklist tasks: $e');
     }
 
-    // Get today's calendar items
-    final calendarItems = await _getTodaysCalendarItems();
-    if (calendarItems.isNotEmpty) {
-      contextSections
-          .add("### Users calendar items for today\n\n$calendarItems");
+    // Get today's calendar items with timeout
+    try {
+      final calendarItems = await _getTodaysCalendarItems().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => ''
+      );
+      if (calendarItems.isNotEmpty) {
+        contextSections
+            .add("### Users calendar items for today\n\n$calendarItems");
+      }
+    } catch (e) {
+      debugPrint('Error getting calendar items: $e');
     }
 
-    // Get user's location if enabled
-    final locationData = await _getUserLocation();
-    if (locationData.isNotEmpty) {
-      contextSections.add("### User's Current Location\n\n$locationData");
+    // Get user's location if enabled with timeout
+    try {
+      final locationData = await _getUserLocation().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => ''
+      );
+      if (locationData.isNotEmpty) {
+        contextSections.add("### User's Current Location\n\n$locationData");
+      }
+    } catch (e) {
+      debugPrint('Error getting location data: $e');
     }
 
     return contextSections.join("\n\n");
@@ -434,7 +541,7 @@ class AGiXTChatWidget implements AGiXTWidget {
         question: question, answer: answer, timestamp: interactionTime);
   }
 
-  // Get user's location if enabled
+  // Get user's location if enabled (with timeout for AI responses)
   Future<String> _getUserLocation() async {
     try {
       final locationService = LocationService();
@@ -444,8 +551,11 @@ class AGiXTChatWidget implements AGiXTWidget {
         return ''; // Location is disabled in settings
       }
 
-      // Try to get current position first
-      final currentPosition = await locationService.getCurrentPosition();
+      // Use a very short timeout (2 seconds) to prevent blocking AI responses
+      // This is especially important when screen is locked or in background mode
+      final currentPosition = await locationService.getCurrentPosition(
+        timeout: const Duration(seconds: 2)
+      );
       if (currentPosition != null) {
         return _formatLocationData(currentPosition);
       }
@@ -477,7 +587,7 @@ class AGiXTChatWidget implements AGiXTWidget {
       return ''; // No location data available
     } catch (e) {
       debugPrint('Error getting location for context: $e');
-      return '';
+      return ''; // Return empty string instead of blocking
     }
   }
 

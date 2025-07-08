@@ -69,6 +69,9 @@ void main() async {
   // Let the background service handle connections
   // BluetoothManager.singleton.attemptReconnectFromStorage();
 
+  // Start the enhanced background service which handles location-enabled scenarios
+  await BluetoothBackgroundService.start();
+
   // Only start background service if not already running to prevent conflicts
   final backgroundService = FlutterBackgroundService();
   final isBackgroundServiceRunning = await backgroundService.isRunning();

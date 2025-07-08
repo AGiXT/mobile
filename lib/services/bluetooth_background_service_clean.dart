@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_reciever.dart';
 import 'package:agixt/services/location_service.dart';
@@ -16,7 +15,6 @@ class BluetoothBackgroundService {
   static Timer? _connectionMonitorTimer;
   static BluetoothManager? _bluetoothManager;
   static BluetoothReciever? _bluetoothReceiver;
-  static AIService? _aiService;
   static bool _isRunning = false;
 
   /// Initialize and start the background service
@@ -179,11 +177,6 @@ class BluetoothBackgroundService {
     try {
       _bluetoothManager = BluetoothManager.singleton;
       await _bluetoothManager!.initialize();
-
-      // Initialize AIService for background operations
-      _aiService = AIService.singleton;
-      _aiService!.setBackgroundMode(true);
-      debugPrint('BluetoothBackgroundService: AIService initialized for background mode');
 
       // Initialize Bluetooth Receiver to handle voice commands
       _bluetoothReceiver = BluetoothReciever.singleton;
@@ -387,12 +380,6 @@ class BluetoothBackgroundService {
     // Re-enable internal heartbeat management
     if (_bluetoothManager != null) {
       _bluetoothManager!.setExternalHeartbeatManaged(false);
-    }
-
-    // Clean up AIService background mode
-    if (_aiService != null) {
-      _aiService!.setBackgroundMode(false);
-      _aiService = null;
     }
 
     // Clean up Bluetooth receiver
