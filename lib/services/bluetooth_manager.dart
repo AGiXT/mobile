@@ -8,6 +8,7 @@ import 'package:agixt/models/g1/commands.dart';
 import 'package:agixt/models/g1/crc.dart';
 import 'package:agixt/models/g1/dashboard.dart';
 import 'package:agixt/models/g1/setup.dart';
+import 'package:agixt/models/g1/battery.dart';
 import 'package:agixt/services/dashboard_controller.dart';
 import 'package:agixt/models/g1/note.dart';
 import 'package:agixt/models/g1/notification.dart';
@@ -74,9 +75,22 @@ class BluetoothManager {
 
   AndroidNotificationsListener? notificationListener;
 
+  // Battery status management
+  G1BatteryStatus _batteryStatus = G1BatteryStatus(lastUpdated: DateTime.now());
+  final StreamController<G1BatteryStatus> _batteryStatusController =
+      StreamController<G1BatteryStatus>.broadcast();
+  Timer? _batteryUpdateTimer;
+
   get isConnected =>
       leftGlass?.isConnected == true && rightGlass?.isConnected == true;
   get isScanning => _isScanning;
+
+  /// Stream of battery status updates
+  Stream<G1BatteryStatus> get batteryStatusStream =>
+      _batteryStatusController.stream;
+
+  /// Current battery status
+  G1BatteryStatus get batteryStatus => _batteryStatus;
 
   Timer? _scanTimer;
   bool _isScanning = false;
@@ -128,6 +142,12 @@ class BluetoothManager {
 
   /// Clean up all resources and connections
   Future<void> dispose() async {
+    // Stop battery monitoring
+    _stopBatteryMonitoring();
+
+    // Close battery status stream
+    await _batteryStatusController.close();
+
     // Cancel all timers
     _syncTimer?.cancel();
     _syncTimer = null;
@@ -737,6 +757,11 @@ class BluetoothManager {
     // Sync silent mode setting with glasses
     bool isDisplayEnabled = await _isGlassesDisplayEnabled();
     await setSilentMode(!isDisplayEnabled);
+
+    // Set up battery monitoring if not already set up
+    if (_batteryUpdateTimer == null && isConnected) {
+      _setupBatteryMonitoring();
+    }
   }
 
   Future<void> setMicrophone(bool open) async {
@@ -832,6 +857,90 @@ class BluetoothManager {
     } catch (e) {
       debugPrint('Error getting weather info: $e');
       return 'Error fetching weather data';
+    }
+  }
+
+  /// Request battery information from both glasses
+  Future<void> requestBatteryInfo() async {
+    if (!isConnected) {
+      debugPrint('Cannot request battery: glasses not connected');
+      return;
+    }
+
+    debugPrint('Requesting battery info from both glasses');
+
+    // Request from left glass
+    if (leftGlass?.isConnected == true) {
+      await leftGlass!.requestBatteryInfo();
+    }
+
+    // Request from right glass
+    if (rightGlass?.isConnected == true) {
+      await rightGlass!.requestBatteryInfo();
+    }
+  }
+
+  /// Set up battery status callbacks and start periodic updates
+  void _setupBatteryMonitoring() {
+    // Set up battery response callbacks for both glasses
+    if (leftGlass != null) {
+      leftGlass!.onBatteryResponse = (batteryInfo) {
+        _updateBatteryStatus(batteryInfo);
+      };
+    }
+
+    if (rightGlass != null) {
+      rightGlass!.onBatteryResponse = (batteryInfo) {
+        _updateBatteryStatus(batteryInfo);
+      };
+    }
+
+    // Start periodic battery updates every 1 minute for more accurate tracking
+    _batteryUpdateTimer?.cancel();
+    _batteryUpdateTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
+      if (isConnected) {
+        requestBatteryInfo();
+      } else {
+        timer.cancel();
+      }
+    });
+
+    // Request initial battery info
+    requestBatteryInfo();
+  }
+
+  /// Update internal battery status and broadcast changes
+  void _updateBatteryStatus(G1BatteryInfo batteryInfo) {
+    debugPrint('Updating battery status: ${batteryInfo.toString()}');
+
+    final now = DateTime.now();
+    if (batteryInfo.side == GlassSide.left) {
+      _batteryStatus = _batteryStatus.copyWith(
+        leftBattery: batteryInfo,
+        lastUpdated: now,
+      );
+    } else {
+      _batteryStatus = _batteryStatus.copyWith(
+        rightBattery: batteryInfo,
+        lastUpdated: now,
+      );
+    }
+
+    // Broadcast the updated status
+    _batteryStatusController.add(_batteryStatus);
+  }
+
+  /// Stop battery monitoring and clean up resources
+  void _stopBatteryMonitoring() {
+    _batteryUpdateTimer?.cancel();
+    _batteryUpdateTimer = null;
+
+    if (leftGlass != null) {
+      leftGlass!.onBatteryResponse = null;
+    }
+
+    if (rightGlass != null) {
+      rightGlass!.onBatteryResponse = null;
     }
   }
 }

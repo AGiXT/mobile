@@ -20,4 +20,5 @@ class Commands {
   static const int CRC = 0x16;
   static const int SETUP = 0x04;
   static const int BUTTON_PRESS = 0x23; // Added for side button press handling
+  static const int GET_BATTERY = 0x2C; // Battery command
 }
