@@ -12,6 +12,7 @@ import 'package:agixt/screens/auth/profile_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
+import 'package:agixt/services/permission_manager.dart';
 import 'package:agixt/utils/ui_perfs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -33,58 +34,153 @@ const String APP_URI =
     String.fromEnvironment('APP_URI', defaultValue: 'https://agixt.dev');
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize AuthService with environment variables
-  AuthService.init(
-    serverUrl: AGIXT_SERVER,
-    appUri: APP_URI,
-    appName: APP_NAME,
-  );
+    // Initialize AuthService with environment variables
+    AuthService.init(
+      serverUrl: AGIXT_SERVER,
+      appUri: APP_URI,
+      appName: APP_NAME,
+    );
 
-  flutterLocalNotificationsPlugin.initialize(
-    InitializationSettings(
-      android: AndroidInitializationSettings('branding'),
-    ),
-    onDidReceiveNotificationResponse: (NotificationResponse resp) async {
-      debugPrint('onDidReceiveBackgroundNotificationResponse: $resp');
-      if (resp.actionId == null) {
-        return;
+    // Initialize notifications with error handling
+    try {
+      await flutterLocalNotificationsPlugin.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('branding'),
+        ),
+        onDidReceiveNotificationResponse: (NotificationResponse resp) async {
+          debugPrint('onDidReceiveBackgroundNotificationResponse: $resp');
+          if (resp.actionId == null) {
+            return;
+          }
+          if (resp.actionId!.startsWith("delete_")) {
+            _handleDeleteAction(resp.actionId!);
+          }
+        },
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+      );
+    } catch (e) {
+      debugPrint('Failed to initialize notifications: $e');
+    }
+
+    // Initialize Hive with error handling
+    try {
+      await _initHive();
+    } catch (e) {
+      debugPrint('Failed to initialize Hive: $e');
+    }
+
+    // Initialize UI preferences with error handling
+    try {
+      await UiPerfs.singleton.load();
+    } catch (e) {
+      debugPrint('Failed to load UI preferences: $e');
+    }
+
+    // Initialize services sequentially to avoid race conditions
+    try {
+      await BluetoothBackgroundService.initialize();
+    } catch (e) {
+      debugPrint('Failed to initialize BluetoothBackgroundService: $e');
+    }
+
+    try {
+      await BluetoothBackgroundService.requestBatteryOptimizationExemption();
+    } catch (e) {
+      debugPrint('Failed to request battery optimization exemption: $e');
+    }
+
+    try {
+      await BluetoothManager.singleton.initialize();
+    } catch (e) {
+      debugPrint('Failed to initialize BluetoothManager: $e');
+    }
+
+    // Start services with error handling and delay to prevent conflicts
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+      await BluetoothBackgroundService.start();
+    } catch (e) {
+      debugPrint('Failed to start BluetoothBackgroundService: $e');
+    }
+
+    // Start the legacy background service only if needed
+    try {
+      final backgroundService = FlutterBackgroundService();
+      final isBackgroundServiceRunning = await backgroundService.isRunning();
+
+      if (!isBackgroundServiceRunning) {
+        var channel = const MethodChannel('dev.agixt.agixt/background_service');
+        var callbackHandle = PluginUtilities.getCallbackHandle(backgroundMain);
+        await channel.invokeMethod(
+            'startService', callbackHandle?.toRawHandle());
+      } else {
+        debugPrint('Background service already running, skipping start');
       }
-      if (resp.actionId!.startsWith("delete_")) {
-        _handleDeleteAction(resp.actionId!);
-      }
-    },
-    onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
-  );
+    } catch (e) {
+      debugPrint('Failed to start background service: $e');
+    }
 
-  await _initHive();
-  await BluetoothBackgroundService.initialize();
-  await BluetoothBackgroundService.requestBatteryOptimizationExemption();
-  await UiPerfs.singleton.load();
+    // Start the app first, then request permissions asynchronously
+    runApp(const AGiXTApp());
 
-  await BluetoothManager.singleton.initialize();
+    // Request permissions after the app has started to avoid freezing
+    _requestPermissionsAsync();
+  } catch (e, stackTrace) {
+    debugPrint('Fatal error during app initialization: $e');
+    debugPrint('Stack trace: $stackTrace');
 
-  // Don't attempt reconnection here to avoid conflicts
-  // Let the background service handle connections
-  // BluetoothManager.singleton.attemptReconnectFromStorage();
-
-  // Start the enhanced background service which handles location-enabled scenarios
-  await BluetoothBackgroundService.start();
-
-  // Only start background service if not already running to prevent conflicts
-  final backgroundService = FlutterBackgroundService();
-  final isBackgroundServiceRunning = await backgroundService.isRunning();
-
-  if (!isBackgroundServiceRunning) {
-    var channel = const MethodChannel('dev.agixt.agixt/background_service');
-    var callbackHandle = PluginUtilities.getCallbackHandle(backgroundMain);
-    channel.invokeMethod('startService', callbackHandle?.toRawHandle());
-  } else {
-    debugPrint('Background service already running, skipping start');
+    // Try to run the app with minimal initialization
+    runApp(MaterialApp(
+      title: 'AGiXT',
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text(
+                'App initialization failed',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text('Error: $e'),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () {
+                  // Restart the app
+                  main();
+                },
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ));
   }
+}
 
-  runApp(const AGiXTApp());
+/// Request permissions asynchronously after app startup to prevent UI freezing
+void _requestPermissionsAsync() {
+  Future.delayed(const Duration(milliseconds: 1000), () async {
+    try {
+      debugPrint('Starting async permission requests...');
+      final permissionsGranted =
+          await PermissionManager.initializePermissions();
+      if (!permissionsGranted) {
+        debugPrint(
+            'Some critical permissions were denied, app may have limited functionality');
+      } else {
+        debugPrint('All critical permissions granted successfully');
+      }
+    } catch (e) {
+      debugPrint('Failed to initialize permissions asynchronously: $e');
+    }
+  });
 }
 
 void backgroundMain() {
@@ -105,17 +201,22 @@ class AppRetainWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) async {
+        if (didPop) return;
+
         if (Platform.isAndroid) {
           if (Navigator.of(context).canPop()) {
-            return true;
+            Navigator.of(context).pop();
           } else {
-            _channel.invokeMethod('sendToBackground');
-            return false;
+            try {
+              await _channel.invokeMethod('sendToBackground');
+            } catch (e) {
+              debugPrint('Error sending app to background: $e');
+              // Fallback: just minimize the app
+            }
           }
-        } else {
-          return true;
         }
       },
       child: child,
@@ -143,8 +244,45 @@ class _AGiXTAppState extends State<AGiXTApp> {
   @override
   void initState() {
     super.initState();
-    _checkLoginStatus();
-    _initDeepLinkHandling();
+
+    // Initialize with proper error handling
+    _safeInitialization();
+  }
+
+  Future<void> _safeInitialization() async {
+    try {
+      await _checkLoginStatus();
+      await _initDeepLinkHandling();
+
+      // Request permissions after a delay to ensure UI is ready
+      _schedulePermissionRequest();
+    } catch (e) {
+      debugPrint('Error during app state initialization: $e');
+      // Set safe defaults
+      setState(() {
+        _isLoggedIn = false;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _schedulePermissionRequest() {
+    // Schedule permission request after UI is fully loaded
+    Future.delayed(const Duration(milliseconds: 2000), () async {
+      if (mounted) {
+        try {
+          debugPrint('Requesting permissions after UI initialization...');
+          final permissionsGranted =
+              await PermissionManager.initializePermissions();
+          if (!permissionsGranted) {
+            debugPrint('Some critical permissions were denied');
+            // Could show a snackbar or dialog here to inform the user
+          }
+        } catch (e) {
+          debugPrint('Error requesting permissions: $e');
+        }
+      }
+    });
   }
 
   @override
@@ -168,52 +306,70 @@ class _AGiXTAppState extends State<AGiXTApp> {
   }
 
   Future<void> _initDeepLinkHandling() async {
-    // Handle links that opened the app
     try {
-      final initialUri = await _appLinks.getInitialAppLink();
-      if (initialUri != null) {
-        _handleDeepLink(initialUri.toString());
-      }
-    } catch (e) {
-      debugPrint('Error getting initial deep link: $e');
-    }
-
-    // Handle links while app is running
-    _deepLinkSubscription = _appLinks.uriLinkStream.listen((Uri uri) {
-      _handleDeepLink(uri.toString());
-    }, onError: (error) {
-      debugPrint('Error handling deep link: $error');
-    });
-
-    // Set up the method channel for OAuth callback from native code
-    const platform = MethodChannel('dev.agixt.agixt/oauth_callback');
-    platform.setMethodCallHandler((call) async {
-      if (call.method == 'handleOAuthCallback') {
-        final args = call.arguments as Map;
-        final token = args['token'] as String?;
-
-        if (token != null && token.isNotEmpty) {
-          debugPrint('Received JWT token via method channel from native code');
-          await _processJwtToken(token);
+      // Handle links that opened the app
+      try {
+        final initialUri = await _appLinks.getInitialAppLink();
+        if (initialUri != null) {
+          _handleDeepLink(initialUri.toString());
         }
-      } else if (call.method == 'checkPendingToken') {
-        // This method is called by Flutter to check if there's a pending token
-        // No action needed here as we already handle this in native code
-        return null;
+      } catch (e) {
+        debugPrint('Error getting initial deep link: $e');
       }
-      return null;
-    });
 
-    // Check if we have any pending tokens from native code that arrived before Flutter was initialized
-    try {
-      final result = await platform.invokeMethod('checkPendingToken');
-      if (result != null && result is Map && result.containsKey('token')) {
-        final token = result['token'] as String;
-        debugPrint('Retrieved pending JWT token from native code');
-        await _processJwtToken(token);
+      // Handle links while app is running
+      try {
+        _deepLinkSubscription = _appLinks.uriLinkStream.listen((Uri uri) {
+          _handleDeepLink(uri.toString());
+        }, onError: (error) {
+          debugPrint('Error handling deep link: $error');
+        });
+      } catch (e) {
+        debugPrint('Error setting up deep link stream: $e');
+      }
+
+      // Set up the method channel for OAuth callback from native code
+      try {
+        const platform = MethodChannel('dev.agixt.agixt/oauth_callback');
+        platform.setMethodCallHandler((call) async {
+          try {
+            if (call.method == 'handleOAuthCallback') {
+              final args = call.arguments as Map;
+              final token = args['token'] as String?;
+
+              if (token != null && token.isNotEmpty) {
+                debugPrint(
+                    'Received JWT token via method channel from native code');
+                await _processJwtToken(token);
+              }
+            } else if (call.method == 'checkPendingToken') {
+              // This method is called by Flutter to check if there's a pending token
+              // No action needed here as we already handle this in native code
+              return null;
+            }
+            return null;
+          } catch (e) {
+            debugPrint('Error in method call handler: $e');
+            return null;
+          }
+        });
+
+        // Check if we have any pending tokens from native code that arrived before Flutter was initialized
+        try {
+          final result = await platform.invokeMethod('checkPendingToken');
+          if (result != null && result is Map && result.containsKey('token')) {
+            final token = result['token'] as String;
+            debugPrint('Retrieved pending JWT token from native code');
+            await _processJwtToken(token);
+          }
+        } catch (e) {
+          debugPrint('Error checking for pending tokens: $e');
+        }
+      } catch (e) {
+        debugPrint('Error setting up OAuth method channel: $e');
       }
     } catch (e) {
-      debugPrint('Error checking for pending tokens: $e');
+      debugPrint('Error initializing deep link handling: $e');
     }
   }
 
@@ -233,74 +389,197 @@ class _AGiXTAppState extends State<AGiXTApp> {
   }
 
   Future<void> _processJwtToken(String token) async {
-    // Validate the token if necessary
-    bool isTokenValid = true; // Replace with actual validation if needed
+    try {
+      // Validate the token if necessary
+      bool isTokenValid = true; // Replace with actual validation if needed
 
-    if (isTokenValid) {
-      // Store JWT token and update login state
-      await AuthService.storeJwt(token);
-      setState(() {
-        _isLoggedIn = true;
-        _isLoading = false;
-      });
+      if (isTokenValid) {
+        // Store JWT token and update login state
+        await AuthService.storeJwt(token);
 
-      // If we're already showing the login screen, navigate to home
-      if (!_isLoggedIn && mounted) {
-        Navigator.of(context).pushReplacementNamed('/home');
+        if (mounted) {
+          setState(() {
+            _isLoggedIn = true;
+            _isLoading = false;
+          });
+
+          // If we're already showing the login screen, navigate to home
+          if (Navigator.of(context).canPop()) {
+            Navigator.of(context).pushReplacementNamed('/home');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error processing JWT token: $e');
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = false;
+          _isLoading = false;
+        });
       }
     }
   }
 
   Future<void> _checkLoginStatus() async {
-    final isLoggedIn = await AuthService.isLoggedIn();
-    setState(() {
-      _isLoggedIn = isLoggedIn;
-      _isLoading = false;
-    });
+    try {
+      final isLoggedIn = await AuthService.isLoggedIn();
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = isLoggedIn;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking login status: $e');
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = false;
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: APP_NAME,
-      navigatorKey: AGiXTApp.navigatorKey,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        brightness: Brightness.light,
-      ),
-      darkTheme: ThemeData(
-        primarySwatch: Colors.blue,
-        visualDensity: VisualDensity.adaptivePlatformDensity,
-        brightness: Brightness.dark,
-      ),
-      themeMode: ThemeMode.system,
-      home: _isLoading
-          ? const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            )
-          : AppRetainWidget(
-              child: _isLoggedIn ? const HomePage() : const LoginScreen(),
+    try {
+      return MaterialApp(
+        title: APP_NAME,
+        navigatorKey: AGiXTApp.navigatorKey,
+        theme: ThemeData(
+          primarySwatch: Colors.blue,
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+          brightness: Brightness.light,
+        ),
+        darkTheme: ThemeData(
+          primarySwatch: Colors.blue,
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+          brightness: Brightness.dark,
+        ),
+        themeMode: ThemeMode.system,
+        home: _buildHome(),
+        routes: {
+          '/home': (context) => const HomePage(),
+          '/login': (context) => const LoginScreen(),
+          '/profile': (context) => const ProfileScreen(),
+        },
+      );
+    } catch (e) {
+      debugPrint('Error building MaterialApp: $e');
+      return MaterialApp(
+        title: 'AGiXT - Error',
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                const Text('App Error', style: TextStyle(fontSize: 24)),
+                const SizedBox(height: 8),
+                Text('$e'),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => _safeInitialization(),
+                  child: const Text('Retry'),
+                ),
+              ],
             ),
-      // Note: We're using HomePage which already has Gravatar implementation in the app bar
-      routes: {
-        '/home': (context) => const HomePage(),
-        '/login': (context) => const LoginScreen(),
-        '/profile': (context) => const ProfileScreen(),
-      },
-    );
+          ),
+        ),
+      );
+    }
+  }
+
+  Widget _buildHome() {
+    try {
+      if (_isLoading) {
+        return const Scaffold(
+          body: Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      return AppRetainWidget(
+        child: _isLoggedIn ? const HomePage() : const LoginScreen(),
+      );
+    } catch (e) {
+      debugPrint('Error building home widget: $e');
+      return Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.warning, size: 48, color: Colors.orange),
+              const SizedBox(height: 16),
+              const Text('Loading Error'),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () => _safeInitialization(),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 }
 
 Future<void> _initHive() async {
-  Hive.registerAdapter(AGiXTDailyItemAdapter());
-  Hive.registerAdapter(AGiXTStopItemAdapter());
-  Hive.registerAdapter(AGiXTCalendarAdapter());
-  Hive.registerAdapter(AGiXTCheckListItemAdapter());
-  Hive.registerAdapter(AGiXTChecklistAdapter());
-  await Hive.initFlutter();
+  try {
+    // Initialize Hive
+    await Hive.initFlutter();
+
+    // Register adapters
+    try {
+      Hive.registerAdapter(AGiXTDailyItemAdapter());
+      Hive.registerAdapter(AGiXTStopItemAdapter());
+      Hive.registerAdapter(AGiXTCalendarAdapter());
+      Hive.registerAdapter(AGiXTCheckListItemAdapter());
+      Hive.registerAdapter(AGiXTChecklistAdapter());
+    } catch (e) {
+      // Adapters might already be registered
+      debugPrint('Hive adapters already registered or error registering: $e');
+    }
+
+    // Open boxes with error handling
+    try {
+      if (!Hive.isBoxOpen('agixtDailyBox')) {
+        await Hive.openBox<AGiXTDailyItem>('agixtDailyBox');
+      }
+    } catch (e) {
+      debugPrint('Failed to open agixtDailyBox: $e');
+    }
+
+    try {
+      if (!Hive.isBoxOpen('agixtStopBox')) {
+        await Hive.openLazyBox<AGiXTStopItem>('agixtStopBox');
+      }
+    } catch (e) {
+      debugPrint('Failed to open agixtStopBox: $e');
+    }
+
+    try {
+      if (!Hive.isBoxOpen('agixtCalendarBox')) {
+        await Hive.openBox<AGiXTCalendar>('agixtCalendarBox');
+      }
+    } catch (e) {
+      debugPrint('Failed to open agixtCalendarBox: $e');
+    }
+
+    try {
+      if (!Hive.isBoxOpen('agixtChecklistBox')) {
+        await Hive.openBox<AGiXTChecklist>('agixtChecklistBox');
+      }
+    } catch (e) {
+      debugPrint('Failed to open agixtChecklistBox: $e');
+    }
+  } catch (e) {
+    debugPrint('Critical error initializing Hive: $e');
+    rethrow;
+  }
 }
 
 // this will be used as notification channel id
@@ -352,55 +631,92 @@ Future<void> initializeService() async {
 
 @pragma('vm:entry-point')
 Future<void> onStart(ServiceInstance service) async {
-  // Only available for flutter 3.0.0 and later
-  //DartPluginRegistrant.ensureInitialized();
+  try {
+    // Only available for flutter 3.0.0 and later
+    //DartPluginRegistrant.ensureInitialized();
 
-  // try {
-  //   await Hive.initFlutter();
-  //   _initHive();
-  // } catch (e) {
-  //   debugPrint('Hive already initialized');
-  // }
+    // Initialize Hive safely
+    try {
+      await Hive.initFlutter();
 
-  // if (!Hive.isBoxOpen('agixtDailyBox')) {
-  //   await Hive.openBox<AGiXTDailyItem>('agixtDailyBox');
-  // }
-  // if (!Hive.isBoxOpen('agixtStopBox')) {
-  //   await Hive.openLazyBox<AGiXTStopItem>('agixtStopBox');
-  // }
-
-  // final bt =
-  //     BluetoothManager.singleton; // initialize bluetooth manager singleton
-  // await bt.initialize();
-  // if (!bt.isConnected) {
-  //   bt.attemptReconnectFromStorage();
-  // }
-  // bring to foreground
-  Timer.periodic(const Duration(seconds: 30), (timer) async {
-    // Check if service is still running to prevent memory leaks
-    if (!(await FlutterBackgroundService().isRunning())) {
-      timer.cancel();
-      return;
-    }
-
-    if (service is AndroidServiceInstance) {
-      if (await service.isForegroundService()) {
-        flutterLocalNotificationsPlugin.show(
-          notificationId,
-          'AGiXT',
-          'Awesome ${DateTime.now()}',
-          const NotificationDetails(
-            android: AndroidNotificationDetails(
-              notificationChannelId,
-              'MY FOREGROUND SERVICE',
-              icon: 'branding',
-              ongoing: true,
-            ),
-          ),
-        );
+      // Register adapters if not already registered
+      try {
+        Hive.registerAdapter(AGiXTDailyItemAdapter());
+        Hive.registerAdapter(AGiXTStopItemAdapter());
+        Hive.registerAdapter(AGiXTCalendarAdapter());
+        Hive.registerAdapter(AGiXTCheckListItemAdapter());
+        Hive.registerAdapter(AGiXTChecklistAdapter());
+      } catch (e) {
+        debugPrint('Adapters already registered: $e');
       }
+
+      // Open boxes safely
+      try {
+        if (!Hive.isBoxOpen('agixtDailyBox')) {
+          await Hive.openBox<AGiXTDailyItem>('agixtDailyBox');
+        }
+      } catch (e) {
+        debugPrint('Failed to open agixtDailyBox in background service: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('agixtStopBox')) {
+          await Hive.openLazyBox<AGiXTStopItem>('agixtStopBox');
+        }
+      } catch (e) {
+        debugPrint('Failed to open agixtStopBox in background service: $e');
+      }
+    } catch (e) {
+      debugPrint('Failed to initialize Hive in background service: $e');
     }
-  });
+
+    // Initialize BluetoothManager safely
+    try {
+      final bt = BluetoothManager.singleton;
+      await bt.initialize();
+      if (!bt.isConnected) {
+        bt.attemptReconnectFromStorage();
+      }
+    } catch (e) {
+      debugPrint('Failed to initialize Bluetooth in background service: $e');
+    }
+
+    // Foreground service periodic task
+    Timer.periodic(const Duration(seconds: 30), (timer) async {
+      try {
+        // Check if service is still running to prevent memory leaks
+        if (!(await FlutterBackgroundService().isRunning())) {
+          timer.cancel();
+          return;
+        }
+
+        if (service is AndroidServiceInstance) {
+          if (await service.isForegroundService()) {
+            await flutterLocalNotificationsPlugin.show(
+              notificationId,
+              'AGiXT',
+              'Active ${DateTime.now().toString().substring(11, 19)}',
+              const NotificationDetails(
+                android: AndroidNotificationDetails(
+                  notificationChannelId,
+                  'AGiXT Background Service',
+                  icon: 'branding',
+                  ongoing: true,
+                  autoCancel: false,
+                  playSound: false,
+                  enableVibration: false,
+                ),
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint('Error in background service periodic task: $e');
+      }
+    });
+  } catch (e) {
+    debugPrint('Critical error in background service onStart: $e');
+  }
 }
 
 void startBackgroundService() {
@@ -431,21 +747,35 @@ void _handleDeleteAction(String actionId) async {
   if (actionId.startsWith("delete_")) {
     final id = actionId.split("_")[1];
     try {
-      await Hive.openBox<AGiXTStopItem>('agixtStopBox');
-    } catch (e) {
-      debugPrint('Hive box already open');
-    }
-    final box = Hive.lazyBox<AGiXTStopItem>('agixtStopBox');
-    debugPrint('Deleting item with id: $id');
-    for (var i = 0; i < box.length; i++) {
-      final item = await box.getAt(i);
-      if (item!.uuid == id) {
-        debugPrint('Deleting item: $i');
-        await box.deleteAt(i);
-        await box.flush();
-        break;
+      // Ensure box is open
+      if (!Hive.isBoxOpen('agixtStopBox')) {
+        await Hive.openLazyBox<AGiXTStopItem>('agixtStopBox');
       }
+
+      final box = Hive.lazyBox<AGiXTStopItem>('agixtStopBox');
+      debugPrint('Deleting item with id: $id');
+
+      for (var i = 0; i < box.length; i++) {
+        try {
+          final item = await box.getAt(i);
+          if (item?.uuid == id) {
+            debugPrint('Deleting item at index: $i');
+            await box.deleteAt(i);
+            await box.flush();
+            break;
+          }
+        } catch (e) {
+          debugPrint('Error processing item at index $i: $e');
+        }
+      }
+
+      try {
+        StopsManager().reload();
+      } catch (e) {
+        debugPrint('Error reloading StopsManager: $e');
+      }
+    } catch (e) {
+      debugPrint('Error in _handleDeleteAction: $e');
     }
-    StopsManager().reload();
   }
 }

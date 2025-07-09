@@ -35,8 +35,8 @@ class MainActivity: FlutterActivity() {
         super.onCreate(savedInstanceState)
         Notifications.createNotificationChannels(this)
         
-        // Request microphone permission at startup
-        requestMicrophonePermission()
+        // Don't request microphone permission here to avoid blocking the UI
+        // Let Flutter handle all permission requests asynchronously
         
         // Handle intent when app is first launched
         handleIntent(intent)

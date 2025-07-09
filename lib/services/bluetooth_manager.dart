@@ -148,22 +148,29 @@ class BluetoothManager {
     if (!Platform.isAndroid && !Platform.isIOS) {
       return;
     }
-    Map<Permission, PermissionStatus> statuses = await [
-      //Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ].request();
 
-    if (statuses.values.any((status) => status.isDenied)) {
-      throw Exception(
-          'All permissions are required to use Bluetooth. Please enable them in the app settings.');
-    }
+    try {
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.location,
+      ].request();
 
-    if (statuses.values.any((status) => status.isPermanentlyDenied)) {
-      await openAppSettings();
-      throw Exception(
-          'All permissions are required to use Bluetooth. Please enable them in the app settings.');
+      // Don't throw exceptions for denied permissions, just log them
+      if (statuses.values.any((status) => status.isDenied)) {
+        debugPrint(
+            'Some Bluetooth permissions were denied. App functionality may be limited.');
+
+        if (statuses.values.any((status) => status.isPermanentlyDenied)) {
+          debugPrint(
+              'Some permissions are permanently denied. User should enable them in settings.');
+        }
+      } else {
+        debugPrint('All Bluetooth permissions granted successfully');
+      }
+    } catch (e) {
+      debugPrint('Error requesting Bluetooth permissions: $e');
+      // Don't rethrow - let the app continue with limited functionality
     }
   }
 
@@ -210,10 +217,13 @@ class BluetoothManager {
     }
 
     try {
-      // this will fail in backround mode
+      // Request permissions but don't fail if denied
       await _requestPermissions();
     } catch (e) {
-      onUpdate(e.toString());
+      debugPrint('Permission request failed: $e');
+      onUpdate(
+          'Permission request failed, continuing with limited functionality');
+      // Continue execution instead of returning
     }
 
     if (!await FlutterBluePlus.isAvailable) {
