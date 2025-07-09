@@ -32,6 +32,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Initialize AIService for foreground mode
+    aiService.setBackgroundMode(false);
     _loadUserDetails();
     _setupBluetoothListeners();
     _initializeWebView();
@@ -96,7 +98,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _handleSideButtonPress() async {
     // Check if user is logged in
     if (!await AuthService.isLoggedIn()) {
-      bluetoothManager.sendText('Please log in to use AI assistant');
+      bluetoothManager.sendAIResponse('Please log in to use AI assistant');
       return;
     }
 

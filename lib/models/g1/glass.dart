@@ -26,6 +26,7 @@ class Glass {
   int heartbeatSeq = 0;
   int _connectRetries = 0;
   static const int maxConnectRetries = 3;
+  bool _externalHeartbeatManaged = false;
 
   // Callback function for when side button is pressed
   SideButtonCallback? onSideButtonPress;
@@ -49,13 +50,16 @@ class Glass {
     try {
       // Cancel any existing subscriptions first
       await disconnect();
-      
+
       // Set up connection state monitoring first
-      connectionStateSubscription = device.connectionState.listen((BluetoothConnectionState state) {
+      connectionStateSubscription =
+          device.connectionState.listen((BluetoothConnectionState state) {
         debugPrint('[$side Glass] Connection state: $state');
-        if (state == BluetoothConnectionState.disconnected && _connectRetries < maxConnectRetries) {
+        if (state == BluetoothConnectionState.disconnected &&
+            _connectRetries < maxConnectRetries) {
           _connectRetries++;
-          debugPrint('[$side Glass] Auto-reconnect attempt $_connectRetries/$maxConnectRetries');
+          debugPrint(
+              '[$side Glass] Auto-reconnect attempt $_connectRetries/$maxConnectRetries');
           _connectWithRetry();
         }
       });
@@ -63,7 +67,6 @@ class Glass {
       // Initial connection attempt
       await _connectWithRetry();
       _connectRetries = 0; // Reset counter after successful connection
-      
     } catch (e) {
       debugPrint('[$side Glass] Connection error: $e');
       await disconnect();
@@ -78,21 +81,24 @@ class Glass {
         bool connected = false;
         while (!connected && _connectRetries < maxConnectRetries) {
           try {
-            debugPrint('[$side Glass] Trying to connect (attempt ${_connectRetries + 1})');
+            debugPrint(
+                '[$side Glass] Trying to connect (attempt ${_connectRetries + 1})');
             await device.connect(timeout: const Duration(seconds: 15));
             connected = true;
           } catch (e) {
             _connectRetries++;
-            debugPrint('[$side Glass] Connection attempt $_connectRetries failed: $e');
+            debugPrint(
+                '[$side Glass] Connection attempt $_connectRetries failed: $e');
             if (_connectRetries < maxConnectRetries) {
               await Future.delayed(const Duration(seconds: 1));
             } else {
-              throw Exception('Failed to connect after $maxConnectRetries attempts');
+              throw Exception(
+                  'Failed to connect after $maxConnectRetries attempts');
             }
           }
         }
       }
-      
+
       // Once connected, proceed with service discovery and setup
       debugPrint('[$side Glass] Connected, discovering services...');
       await discoverServices();
@@ -102,10 +108,11 @@ class Glass {
       await device.requestConnectionPriority(
           connectionPriorityRequest: ConnectionPriority.high);
       startHeartbeat();
-      debugPrint('[$side Glass] Setup complete - connection established successfully');
+      debugPrint(
+          '[$side Glass] Setup complete - connection established successfully');
     } catch (e) {
       debugPrint('[$side Glass] Connection process failed: $e');
-      throw e; // Let the caller handle this error
+      rethrow; // Let the caller handle this error
     }
   }
 
@@ -169,9 +176,13 @@ class Glass {
   Future<void> sendData(List<int> data) async {
     if (uartTx != null) {
       try {
-        await uartTx!.write(data, withoutResponse: false);
-        //debugPrint(
-        //    'Sent data to $side glass: ${data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        if (device.isConnected) {
+          await uartTx!.write(data, withoutResponse: false);
+          //debugPrint(
+          //    'Sent data to $side glass: ${data.map((b) => b.toRadixString(16).padLeft(2, '0')).join(' ')}');
+        } else {
+          debugPrint('Device not connected, cannot send data to $side glass.');
+        }
       } catch (e) {
         debugPrint('Error sending data to $side glass: $e');
       }
@@ -192,21 +203,61 @@ class Glass {
     ];
   }
 
+  /// Send a single heartbeat message to keep the connection alive
+  Future<void> sendHeartbeat() async {
+    if (device.isConnected) {
+      List<int> heartbeatData = _constructHeartbeat(heartbeatSeq++);
+      await sendData(heartbeatData);
+      debugPrint('[$side Glass] Heartbeat sent (seq: ${heartbeatSeq - 1})');
+    }
+  }
+
+  /// Set whether heartbeat is managed externally (by background service)
+  void setExternalHeartbeatManaged(bool managed) {
+    _externalHeartbeatManaged = managed;
+    if (managed) {
+      heartbeatTimer?.cancel();
+      heartbeatTimer = null;
+    } else if (device.isConnected) {
+      startHeartbeat();
+    }
+  }
+
   void startHeartbeat() {
+    if (_externalHeartbeatManaged) {
+      return; // Don't start internal heartbeat if managed externally
+    }
+
+    // Cancel existing timer first to prevent duplicates
+    heartbeatTimer?.cancel();
+    heartbeatTimer = null;
+
     const heartbeatInterval = Duration(seconds: 5);
     heartbeatTimer = Timer.periodic(heartbeatInterval, (timer) async {
       if (device.isConnected) {
-        List<int> heartbeatData = _constructHeartbeat(heartbeatSeq++);
-        await sendData(heartbeatData);
+        try {
+          List<int> heartbeatData = _constructHeartbeat(heartbeatSeq++);
+          await sendData(heartbeatData);
+        } catch (e) {
+          debugPrint('[$side Glass] Heartbeat failed: $e');
+          timer.cancel();
+        }
+      } else {
+        timer.cancel();
       }
     });
   }
 
   Future<void> disconnect() async {
-    // Cancel all subscriptions
+    // Cancel all subscriptions and timers first
     await notificationSubscription?.cancel();
+    notificationSubscription = null;
+
     await connectionStateSubscription?.cancel();
+    connectionStateSubscription = null;
+
     heartbeatTimer?.cancel();
+    heartbeatTimer = null;
 
     // Reset state
     _connectRetries = 0;
@@ -215,7 +266,9 @@ class Glass {
 
     // Then disconnect the device
     try {
-      await device.disconnect();
+      if (device.isConnected) {
+        await device.disconnect();
+      }
     } catch (e) {
       debugPrint('[$side Glass] Error during disconnect: $e');
     }

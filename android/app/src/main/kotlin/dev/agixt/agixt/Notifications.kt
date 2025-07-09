@@ -16,9 +16,14 @@ object Notifications {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID_BACKGROUND_SERVICE,
-                "Background Service",
-                NotificationManager.IMPORTANCE_DEFAULT
-            )
+                "AGiXT Background Service",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Maintains glasses connection and processes commands"
+                setShowBadge(false)
+                setSound(null, null)
+                enableVibration(false)
+            }
             val manager =
                 context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(channel)
@@ -26,12 +31,16 @@ object Notifications {
     }
 
     fun buildForegroundNotification(context: Context): Notification {
-        println("creating notificationnn");
+        println("creating notification for background service");
         return NotificationCompat
             .Builder(context, CHANNEL_ID_BACKGROUND_SERVICE)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Background Service")
-            .setContentText("Keeps app process on foreground.")
+            .setContentTitle("AGiXT Background Service")
+            .setContentText("Maintaining glasses connection and processing commands.")
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setOngoing(true)
+            .setAutoCancel(false)
             .build()
     }
 }

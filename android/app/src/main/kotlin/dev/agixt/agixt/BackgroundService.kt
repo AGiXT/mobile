@@ -37,6 +37,10 @@ class BackgroundService : Service(), LifecycleDetector.Listener {
             if (callbackRawHandle != -1L) setCallbackRawHandle(callbackRawHandle)
         }
 
+        // Ensure service maintains proper foreground state even when location is enabled
+        val notification = Notifications.buildForegroundNotification(this)
+        startForeground(Notifications.NOTIFICATION_ID_BACKGROUND_SERVICE, notification)
+
         if (!LifecycleDetector.isActivityRunning) {
             startFlutterNativeView()
         }

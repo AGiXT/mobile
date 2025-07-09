@@ -109,26 +109,68 @@ class BluetoothManager {
     });
   }
 
+  /// Set whether heartbeat is managed externally (by background service)
+  void setExternalHeartbeatManaged(bool managed) {
+    if (managed) {
+      _syncTimer?.cancel();
+      _syncTimer = null;
+    } else {
+      // Restart internal sync timer if needed
+      _syncTimer ??= Timer.periodic(const Duration(minutes: 1), (timer) {
+        _sync();
+      });
+    }
+
+    // Propagate to glasses
+    leftGlass?.setExternalHeartbeatManaged(managed);
+    rightGlass?.setExternalHeartbeatManaged(managed);
+  }
+
+  /// Clean up all resources and connections
+  Future<void> dispose() async {
+    // Cancel all timers
+    _syncTimer?.cancel();
+    _syncTimer = null;
+    _scanTimer?.cancel();
+    _scanTimer = null;
+
+    // Stop scanning
+    stopScanning();
+
+    // Disconnect and clean up glasses
+    await disconnectFromGlasses();
+
+    // Note: NotificationListener doesn't have a dispose method
+    // The stream is handled automatically
+  }
+
   Future<void> _requestPermissions() async {
     if (!Platform.isAndroid && !Platform.isIOS) {
       return;
     }
-    Map<Permission, PermissionStatus> statuses = await [
-      //Permission.bluetooth,
-      Permission.bluetoothScan,
-      Permission.bluetoothConnect,
-      Permission.location,
-    ].request();
 
-    if (statuses.values.any((status) => status.isDenied)) {
-      throw Exception(
-          'All permissions are required to use Bluetooth. Please enable them in the app settings.');
-    }
+    try {
+      Map<Permission, PermissionStatus> statuses = await [
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+        Permission.location,
+      ].request();
 
-    if (statuses.values.any((status) => status.isPermanentlyDenied)) {
-      await openAppSettings();
-      throw Exception(
-          'All permissions are required to use Bluetooth. Please enable them in the app settings.');
+      // Don't throw exceptions for denied permissions, just log them
+      if (statuses.values.any((status) => status.isDenied)) {
+        debugPrint(
+            'Some Bluetooth permissions were denied. App functionality may be limited.');
+
+        if (statuses.values.any((status) => status.isPermanentlyDenied)) {
+          debugPrint(
+              'Some permissions are permanently denied. User should enable them in settings.');
+        }
+      } else {
+        debugPrint('All Bluetooth permissions granted successfully');
+      }
+    } catch (e) {
+      debugPrint('Error requesting Bluetooth permissions: $e');
+      // Don't rethrow - let the app continue with limited functionality
     }
   }
 
@@ -167,11 +209,21 @@ class BluetoothManager {
   Future<void> startScanAndConnect({
     required OnUpdate onUpdate,
   }) async {
+    // Prevent multiple simultaneous scans
+    if (_isScanning) {
+      debugPrint('Scan already in progress, ignoring new scan request');
+      onUpdate('Scan already in progress');
+      return;
+    }
+
     try {
-      // this will fail in backround mode
+      // Request permissions but don't fail if denied
       await _requestPermissions();
     } catch (e) {
-      onUpdate(e.toString());
+      debugPrint('Permission request failed: $e');
+      onUpdate(
+          'Permission request failed, continuing with limited functionality');
+      // Continue execution instead of returning
     }
 
     if (!await FlutterBluePlus.isAvailable) {
@@ -205,52 +257,58 @@ class BluetoothManager {
   StreamSubscription? _scanningSubscription;
 
   Future<void> _startScan(OnUpdate onUpdate) async {
-    await FlutterBluePlus.stopScan();
-    debugPrint('Starting new scan attempt ${_retryCount + 1}/$maxRetries');
+    try {
+      await FlutterBluePlus.stopScan();
+      debugPrint('Starting new scan attempt ${_retryCount + 1}/$maxRetries');
 
-    // Cancel any existing subscriptions
-    _scanSubscription?.cancel();
-    _scanningSubscription?.cancel();
+      // Cancel any existing subscriptions
+      _scanSubscription?.cancel();
+      _scanningSubscription?.cancel();
 
-    // Set scan timeout
-    _scanTimer?.cancel();
-    _scanTimer = Timer(const Duration(seconds: 30), () {
-      if (_isScanning) {
-        _handleScanTimeout(onUpdate);
-      }
-    });
-
-    await FlutterBluePlus.startScan(
-      timeout: const Duration(seconds: 30),
-      androidUsesFineLocation: true,
-    );
-
-    // Listen for scan results
-    _scanSubscription = FlutterBluePlus.scanResults.listen(
-      (results) {
-        for (ScanResult result in results) {
-          String deviceName = result.device.name;
-          String deviceId = result.device.id.id;
-          debugPrint('Found device: $deviceName ($deviceId)');
-
-          if (deviceName.isNotEmpty) {
-            _handleDeviceFound(result, onUpdate);
-          }
+      // Set scan timeout
+      _scanTimer?.cancel();
+      _scanTimer = Timer(const Duration(seconds: 30), () {
+        if (_isScanning) {
+          _handleScanTimeout(onUpdate);
         }
-      },
-      onError: (error) {
-        debugPrint('Scan results error: $error');
-        onUpdate(error.toString());
-      },
-    );
+      });
 
-    // Monitor scanning state
-    _scanningSubscription = FlutterBluePlus.isScanning.listen((isScanning) {
-      debugPrint('Scanning state changed: $isScanning');
-      if (!isScanning && _isScanning) {
-        _handleScanComplete(onUpdate);
-      }
-    });
+      await FlutterBluePlus.startScan(
+        timeout: const Duration(seconds: 30),
+        androidUsesFineLocation: true,
+      );
+
+      // Listen for scan results
+      _scanSubscription = FlutterBluePlus.scanResults.listen(
+        (results) {
+          for (ScanResult result in results) {
+            String deviceName = result.device.name;
+            String deviceId = result.device.id.id;
+            debugPrint('Found device: $deviceName ($deviceId)');
+
+            if (deviceName.isNotEmpty) {
+              _handleDeviceFound(result, onUpdate);
+            }
+          }
+        },
+        onError: (error) {
+          debugPrint('Scan results error: $error');
+          onUpdate(error.toString());
+        },
+      );
+
+      // Monitor scanning state
+      _scanningSubscription = FlutterBluePlus.isScanning.listen((isScanning) {
+        debugPrint('Scanning state changed: $isScanning');
+        if (!isScanning && _isScanning) {
+          _handleScanComplete(onUpdate);
+        }
+      });
+    } catch (e) {
+      debugPrint('Error in _startScan: $e');
+      _isScanning = false;
+      onUpdate('Scan failed: $e');
+    }
   }
 
   void _handleDeviceFound(ScanResult result, OnUpdate onUpdate) async {
@@ -414,6 +472,13 @@ class BluetoothManager {
       return;
     }
 
+    await _sendTextDirect(text, delay: delay);
+  }
+
+  /// Send text directly to glasses without display preference checks
+  /// Used for AI responses and system messages
+  Future<void> _sendTextDirect(String text,
+      {Duration delay = const Duration(seconds: 5)}) async {
     final textMsg = TextMessage(text);
     List<List<int>> packets = textMsg.constructSendText();
 
@@ -426,6 +491,14 @@ class BluetoothManager {
         await Future.delayed(delay);
       }
     }
+  }
+
+  /// Send AI response text directly to glasses, bypassing display preference checks
+  /// This ensures AI responses are always displayed regardless of location settings
+  Future<void> sendAIResponse(String text,
+      {Duration delay = const Duration(seconds: 5)}) async {
+    debugPrint('Sending AI response to glasses: $text');
+    await _sendTextDirect(text, delay: delay);
   }
 
   Future<void> setDashboardLayout(List<int> option) async {
@@ -683,10 +756,22 @@ class BluetoothManager {
 
   Future<void> disconnectFromGlasses() async {
     debugPrint('Disconnecting from glasses');
-    leftGlass?.disconnect();
-    rightGlass?.disconnect();
-    leftGlass = null;
-    rightGlass = null;
+
+    try {
+      await leftGlass?.disconnect();
+    } catch (e) {
+      debugPrint('Error disconnecting left glass: $e');
+    } finally {
+      leftGlass = null;
+    }
+
+    try {
+      await rightGlass?.disconnect();
+    } catch (e) {
+      debugPrint('Error disconnecting right glass: $e');
+    } finally {
+      rightGlass = null;
+    }
   }
 
   Future<bool> _isGlassesDisplayEnabled() async {

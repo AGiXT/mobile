@@ -130,7 +130,10 @@ class AuthService {
   static String? _appName;
 
   // Initialize with environment variables
-  static void init({required String serverUrl, required String appUri, required String appName}) {
+  static void init(
+      {required String serverUrl,
+      required String appUri,
+      required String appName}) {
     _serverUrl = serverUrl;
     _appUri = appUri;
     _appName = appName;
@@ -142,39 +145,69 @@ class AuthService {
 
   // Store JWT token
   static Future<void> storeJwt(String token) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(JWT_KEY, token);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(JWT_KEY, token);
+    } catch (e) {
+      debugPrint('Error storing JWT token: $e');
+      rethrow;
+    }
   }
 
   // Store user email
   static Future<void> storeEmail(String email) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(EMAIL_KEY, email);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(EMAIL_KEY, email);
+    } catch (e) {
+      debugPrint('Error storing email: $e');
+      rethrow;
+    }
   }
 
   // Get stored JWT token
   static Future<String?> getJwt() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(JWT_KEY);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(JWT_KEY);
+    } catch (e) {
+      debugPrint('Error getting JWT token: $e');
+      return null;
+    }
   }
 
   // Get stored email
   static Future<String?> getEmail() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(EMAIL_KEY);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(EMAIL_KEY);
+    } catch (e) {
+      debugPrint('Error getting email: $e');
+      return null;
+    }
   }
 
   // Clear stored JWT token and email (logout)
   static Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(JWT_KEY);
-    await prefs.remove(EMAIL_KEY);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(JWT_KEY);
+      await prefs.remove(EMAIL_KEY);
+    } catch (e) {
+      debugPrint('Error during logout: $e');
+      rethrow;
+    }
   }
 
   // Check if user is logged in
   static Future<bool> isLoggedIn() async {
-    final jwt = await getJwt();
-    return jwt != null && jwt.isNotEmpty;
+    try {
+      final jwt = await getJwt();
+      return jwt != null && jwt.isNotEmpty;
+    } catch (e) {
+      debugPrint('Error checking login status: $e');
+      return false;
+    }
   }
 
   // Login with email and MFA token
@@ -192,7 +225,7 @@ class AuthService {
       if (response.statusCode == 200) {
         final responseBody = jsonDecode(response.body);
         String? jwt;
-        
+
         // Handle response as string (magic link with token)
         if (responseBody is String) {
           final loginUrl = responseBody;
@@ -203,9 +236,10 @@ class AuthService {
               jwt = parts[1].trim();
             }
           }
-        } 
+        }
         // Handle response with 'detail' field containing the URL with token
-        else if (responseBody is Map<String, dynamic> && responseBody.containsKey('detail')) {
+        else if (responseBody is Map<String, dynamic> &&
+            responseBody.containsKey('detail')) {
           final loginUrl = responseBody['detail'];
           if (loginUrl is String && loginUrl.contains('?token=')) {
             final parts = loginUrl.split('?token=');
@@ -215,28 +249,31 @@ class AuthService {
           }
         }
         // Handle response as object with token field
-        else if (responseBody is Map<String, dynamic> && responseBody.containsKey('token')) {
+        else if (responseBody is Map<String, dynamic> &&
+            responseBody.containsKey('token')) {
           jwt = responseBody['token'];
           // Remove 'Bearer ' prefix if present
           if (jwt != null && jwt.startsWith('Bearer ')) {
             jwt = jwt.substring(7);
           }
         }
-        
+
         if (jwt != null && jwt.isNotEmpty) {
           await storeJwt(jwt);
           await storeEmail(email);
           return jwt;
         } else {
           // 200 status code but couldn't extract JWT
-          debugPrint('Login successful but couldn\'t extract JWT token from response: $responseBody');
+          debugPrint(
+              'Login successful but couldn\'t extract JWT token from response: $responseBody');
           return null;
         }
       } else if (response.statusCode == 401) {
         debugPrint('Login failed: Unauthorized (401) - Invalid credentials');
         return null;
       } else {
-        debugPrint('Login failed: ${response.statusCode} - ${response.reasonPhrase}');
+        debugPrint(
+            'Login failed: ${response.statusCode} - ${response.reasonPhrase}');
         return null;
       }
     } catch (e) {
@@ -250,16 +287,16 @@ class AuthService {
     final jwt = await getJwt();
     return '$appUri?token=$jwt';
   }
-  
+
   // Fetch user information from the server
   static Future<UserModel?> getUserInfo() async {
     try {
       final jwt = await getJwt();
-      
+
       if (jwt == null || jwt.isEmpty) {
         return null;
       }
-      
+
       final response = await http.get(
         Uri.parse('$serverUrl/v1/user'),
         headers: {
@@ -267,7 +304,7 @@ class AuthService {
           'Authorization': 'Bearer $jwt'
         },
       );
-      
+
       if (response.statusCode == 200) {
         final Map<String, dynamic> userData = jsonDecode(response.body);
         return UserModel.fromJson(userData);
@@ -289,39 +326,39 @@ class AuthService {
       if (!isLoggedIn) {
         return null;
       }
-      
+
       // Get user info
       final userInfo = await getUserInfo();
       if (userInfo == null) {
         return null;
       }
-      
+
       // Find the primary company
       CompanyModel? primaryCompany;
       try {
-        primaryCompany = userInfo.companies.firstWhere(
-          (company) => company.primary
-        );
+        primaryCompany =
+            userInfo.companies.firstWhere((company) => company.primary);
       } catch (e) {
         // No primary company found, try to use the first one if available
         if (userInfo.companies.isNotEmpty) {
           primaryCompany = userInfo.companies.first;
         }
       }
-      
+
       if (primaryCompany != null) {
         // Return the agent name from the primary company
-        debugPrint('Found primary company: ${primaryCompany.name} with agent: ${primaryCompany.agentName}');
+        debugPrint(
+            'Found primary company: ${primaryCompany.name} with agent: ${primaryCompany.agentName}');
         return primaryCompany.agentName;
       }
-      
+
       return null;
     } catch (e) {
       debugPrint('Error getting primary agent name: $e');
       return null;
     }
   }
-  
+
   // Get preference for displaying Even Realities glasses
   static Future<bool> getGlassesDisplayPreference() async {
     try {
@@ -334,7 +371,7 @@ class AuthService {
       return true;
     }
   }
-  
+
   // Save preference for displaying Even Realities glasses
   static Future<void> setGlassesDisplayPreference(bool value) async {
     try {
