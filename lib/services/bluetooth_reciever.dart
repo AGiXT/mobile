@@ -196,6 +196,12 @@ class BluetoothReciever {
           handleVoiceData(side, seq, voiceData);
         }
         break;
+      case Commands.GET_BATTERY: // Battery Response
+        // Battery responses are handled directly in the Glass class
+        // This case is here for completeness and potential future use
+        debugPrint(
+            '[$side] Battery response received in receiver: ${data.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+        break;
       case Commands.QUICK_NOTE:
         handleQuickNoteCommand(side, data);
         break;

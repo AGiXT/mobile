@@ -1,4 +1,5 @@
 import 'package:agixt/models/g1/commands.dart';
+import 'package:agixt/models/g1/battery.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'dart:async';
@@ -10,6 +11,8 @@ enum GlassSide { left, right }
 
 // Define type for side button press callback
 typedef SideButtonCallback = void Function();
+// Define type for battery response callback
+typedef BatteryResponseCallback = void Function(G1BatteryInfo batteryInfo);
 
 class Glass {
   final String name;
@@ -30,6 +33,9 @@ class Glass {
 
   // Callback function for when side button is pressed
   SideButtonCallback? onSideButtonPress;
+
+  // Callback function for battery responses
+  BatteryResponseCallback? onBatteryResponse;
 
   get isConnected => device.isConnected;
 
@@ -169,6 +175,24 @@ class Glass {
       }
     }
 
+    // Check for battery response (0x2C command)
+    if (data.length >= 3 && data[0] == Commands.GET_BATTERY) {
+      debugPrint(
+          '[$side Glass] Battery response received: ${data.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+
+      // Parse battery info using the protocol parser
+      final batteryInfo = G1BatteryInfo.fromResponse(data, side);
+      if (batteryInfo != null) {
+        debugPrint('[$side Glass] Battery parsed: ${batteryInfo.toString()}');
+        // Call the battery response callback if it's defined
+        if (onBatteryResponse != null) {
+          onBatteryResponse!(batteryInfo);
+        }
+      } else {
+        debugPrint('[$side Glass] Failed to parse battery response');
+      }
+    }
+
     // Call the receive handler function
     await reciever.receiveHandler(side, data);
   }
@@ -273,5 +297,24 @@ class Glass {
       debugPrint('[$side Glass] Error during disconnect: $e');
     }
     debugPrint('[$side Glass] Disconnected and cleaned up');
+  }
+
+  /// Request battery information from the glasses
+  /// According to protocol: Command 0x2C, Subcommand 0x01
+  Future<void> requestBatteryInfo() async {
+    if (!device.isConnected) {
+      debugPrint('[$side Glass] Cannot request battery: not connected');
+      return;
+    }
+
+    try {
+      // Construct battery request command: [0x2C, 0x01]
+      List<int> batteryCommand = [Commands.GET_BATTERY, 0x01];
+      debugPrint(
+          '[$side Glass] Requesting battery info: ${batteryCommand.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+      await sendData(batteryCommand);
+    } catch (e) {
+      debugPrint('[$side Glass] Error requesting battery info: $e');
+    }
   }
 }
