@@ -54,7 +54,7 @@ dependencies:
   duration_picker: ^1.2.0
   fuzzywuzzy: ^1.2.0
   dart_openai: ^5.1.0
-  package_info_plus: ^8.3.0 # Updated to the compatible version
+  package_info_plus: ^8.3.1 # Updated to the compatible version
   web_socket_client: ^0.1.5
   mutex: ^3.1.0
   csv: ^6.0.0
