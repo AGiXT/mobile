@@ -7,6 +7,7 @@ class PermissionManager {
     Permission.bluetoothScan,
     Permission.bluetoothConnect,
     Permission.location,
+    Permission.ignoreBatteryOptimizations,
     Permission.notification,
   ];
 

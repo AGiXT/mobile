@@ -11,6 +11,7 @@ import 'package:agixt/widgets/g1_battery_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/bluetooth_manager.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -152,9 +153,15 @@ class _HomePageState extends State<HomePage> {
           },
           onNavigationRequest: (NavigationRequest request) {
             debugPrint('Navigation request to: ${request.url}');
-            // Extract conversation ID whenever navigation happens
-            _extractConversationIdAndAgentInfo(request.url);
-            return NavigationDecision.navigate;
+            if (!request.url.contains('agixt')) {
+              // External link, launch in browser
+              _launchInBrowser(request.url);
+              return NavigationDecision.prevent;
+            } else {
+              // Internal link, extract info and navigate
+              _extractConversationIdAndAgentInfo(request.url);
+              return NavigationDecision.navigate;
+            }
           },
           onUrlChange: (UrlChange change) {
             // This catches client-side navigation that might not trigger a full navigation request
@@ -568,6 +575,14 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _batteryStatus = bluetoothManager.batteryStatus;
     });
+  }
+
+  Future<void> _launchInBrowser(String url) async {
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url));
+    } else {
+      throw 'Could not launch $url';
+    }
   }
 
   @override

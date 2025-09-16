@@ -174,6 +174,7 @@ class BluetoothManager {
         Permission.bluetoothScan,
         Permission.bluetoothConnect,
         Permission.location,
+        Permission.ignoreBatteryOptimizations,
       ].request();
 
       // Don't throw exceptions for denied permissions, just log them
