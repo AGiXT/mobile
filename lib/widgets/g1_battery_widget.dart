@@ -72,9 +72,8 @@ class G1BatteryWidget extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.battery_full,
-                    color:
-                        Color(0xFF2196F3)), // Material Blue 500 to match theme
+                Icon(Icons.battery_full,
+                    color: Theme.of(context).colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(
                   'G1 Glasses Battery',
@@ -111,9 +110,11 @@ class G1BatteryWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.grey[50],
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,7 +153,7 @@ class G1BatteryWidget extends StatelessWidget {
                     const SizedBox(height: 4),
                     LinearProgressIndicator(
                       value: batteryInfo.percentage / 100,
-                      backgroundColor: Colors.grey[300],
+                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         _getBatteryColor(batteryInfo.percentage),
                       ),
@@ -168,17 +169,22 @@ class G1BatteryWidget extends StatelessWidget {
   }
 
   Color _getBatteryColor(int percentage) {
-    if (percentage >= 80)
+    if (percentage >= 80) {
       return const Color(0xFF4CAF50); // Material Green 500 - Excellent
-    if (percentage >= 60)
+    }
+    if (percentage >= 60) {
       return const Color(0xFF66BB6A); // Material Green 400 - Good
-    if (percentage >= 40)
+    }
+    if (percentage >= 40) {
       return const Color(
           0xFF2196F3); // Material Blue 500 - Fair (matches app theme)
-    if (percentage >= 20)
+    }
+    if (percentage >= 20) {
       return const Color(0xFFFF9800); // Material Orange 500 - Low
-    if (percentage >= 10)
+    }
+    if (percentage >= 10) {
       return const Color(0xFFFF5722); // Material Deep Orange 500 - Very Low
+    }
     return const Color(0xFFF44336); // Material Red 500 - Critical
   }
 
@@ -249,17 +255,22 @@ class G1BatteryIndicator extends StatelessWidget {
   }
 
   Color _getBatteryColor(int percentage) {
-    if (percentage >= 80)
+    if (percentage >= 80) {
       return const Color(0xFF4CAF50); // Material Green 500 - Excellent
-    if (percentage >= 60)
+    }
+    if (percentage >= 60) {
       return const Color(0xFF66BB6A); // Material Green 400 - Good
-    if (percentage >= 40)
+    }
+    if (percentage >= 40) {
       return const Color(
           0xFF2196F3); // Material Blue 500 - Fair (matches app theme)
-    if (percentage >= 20)
+    }
+    if (percentage >= 20) {
       return const Color(0xFFFF9800); // Material Orange 500 - Low
-    if (percentage >= 10)
+    }
+    if (percentage >= 10) {
       return const Color(0xFFFF5722); // Material Deep Orange 500 - Very Low
+    }
     return const Color(0xFFF44336); // Material Red 500 - Critical
   }
 
