@@ -209,6 +209,7 @@ class BluetoothManager {
       );
       await leftGlass!.connect();
       _setReconnect(leftGlass!);
+      _setupImmediateBatteryMonitoring(leftGlass!);
     }
 
     if (rightUid != null) {
@@ -219,6 +220,7 @@ class BluetoothManager {
       );
       await rightGlass!.connect();
       _setReconnect(rightGlass!);
+      _setupImmediateBatteryMonitoring(rightGlass!);
     }
 
     // Sync settings if both glasses are connected
@@ -380,6 +382,9 @@ class BluetoothManager {
 
         _setReconnect(glass);
 
+        // Set up battery monitoring immediately for this glass
+        _setupImmediateBatteryMonitoring(glass);
+
         // Verify both glasses are connected before stopping scan
         if (leftGlass != null && rightGlass != null) {
           if (leftGlass!.isConnected && rightGlass!.isConnected) {
@@ -400,6 +405,40 @@ class BluetoothManager {
         // Don't rethrow - let the scan continue to retry
       }
     }
+  }
+
+  /// Set up battery monitoring immediately for a single glass upon connection
+  void _setupImmediateBatteryMonitoring(Glass glass) {
+    // Set up battery response callback immediately
+    glass.onBatteryResponse = (batteryInfo) {
+      _updateBatteryStatus(batteryInfo);
+    };
+
+    // Request battery info immediately after connection
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      if (glass.isConnected) {
+        try {
+          await glass.requestBatteryInfo();
+          debugPrint('Immediate battery request sent to ${glass.side} glass');
+        } catch (e) {
+          debugPrint(
+              'Error requesting immediate battery info from ${glass.side} glass: $e');
+        }
+      }
+    });
+
+    // Follow up with additional requests to ensure we get the data
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (glass.isConnected) {
+        try {
+          await glass.requestBatteryInfo();
+          debugPrint('Follow-up battery request sent to ${glass.side} glass');
+        } catch (e) {
+          debugPrint(
+              'Error in follow-up battery request from ${glass.side} glass: $e');
+        }
+      }
+    });
   }
 
   void _setReconnect(Glass glass) {
@@ -906,8 +945,24 @@ class BluetoothManager {
       }
     });
 
-    // Request initial battery info
+    // Request initial battery info immediately, then retry a few times to ensure we get it
+    _requestBatteryInfoWithRetry();
+  }
+
+  /// Request battery info with automatic retries for faster initial display
+  Future<void> _requestBatteryInfoWithRetry() async {
+    // Request immediately
     requestBatteryInfo();
+
+    // Retry every 2 seconds for the first 10 seconds to get battery info quickly
+    for (int i = 0; i < 5; i++) {
+      await Future.delayed(const Duration(seconds: 2));
+      if (isConnected) {
+        requestBatteryInfo();
+      } else {
+        break;
+      }
+    }
   }
 
   /// Update internal battery status and broadcast changes

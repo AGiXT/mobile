@@ -3,10 +3,13 @@ import 'package:agixt/screens/settings/dashboard_screen.dart';
 import 'package:agixt/screens/settings/location_screen.dart';
 import 'package:agixt/screens/settings/notifications_screen.dart';
 import 'package:agixt/widgets/gravatar_image.dart';
+import 'package:agixt/widgets/g1_battery_widget.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
+import 'package:agixt/models/g1/battery.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
 import 'package:agixt/screens/calendars_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
+import 'dart:async';
 import 'package:flutter/material.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -20,12 +23,15 @@ class _SettingsPageState extends State<SettingsPage> {
   String? _userEmail;
   String? _userName;
   bool _isGlassesDisplayEnabled = true;
+  G1BatteryStatus _batteryStatus = G1BatteryStatus(lastUpdated: DateTime.now());
+  StreamSubscription<G1BatteryStatus>? _batterySubscription;
 
   @override
   void initState() {
     super.initState();
     _loadUserDetails();
     _loadGlassesDisplayPreference();
+    _startBatteryStatusTracking(); // Start tracking battery status
   }
 
   Future<void> _loadUserDetails() async {
@@ -65,6 +71,51 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  // Start tracking battery status
+  void _startBatteryStatusTracking() {
+    try {
+      final bluetoothManager = BluetoothManager();
+
+      // Listen to battery status updates from BluetoothManager
+      _batterySubscription = bluetoothManager.batteryStatusStream.listen(
+        (status) {
+          if (mounted) {
+            setState(() {
+              _batteryStatus = status;
+            });
+          }
+        },
+        onError: (error) {
+          // Handle stream errors gracefully
+          debugPrint('Battery status stream error: $error');
+        },
+      );
+
+      // Get initial battery status
+      if (mounted) {
+        setState(() {
+          _batteryStatus = bluetoothManager.batteryStatus;
+        });
+      }
+
+      // Request fresh battery info immediately when starting tracking
+      try {
+        bluetoothManager.requestBatteryInfo();
+      } catch (e) {
+        debugPrint('Error requesting battery info in settings: $e');
+      }
+    } catch (e) {
+      // Handle any initialization errors
+      debugPrint('Error starting battery status tracking: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _batterySubscription?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -74,6 +125,9 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         children: [
           GlassStatus(),
+
+          // Battery status widget with detailed view
+          G1BatteryWidget(batteryStatus: _batteryStatus, showDetails: true),
 
           // Profile Section
           if (_userEmail != null)
