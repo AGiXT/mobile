@@ -153,7 +153,8 @@ class G1BatteryWidget extends StatelessWidget {
                     const SizedBox(height: 4),
                     LinearProgressIndicator(
                       value: batteryInfo.percentage / 100,
-                      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+                      backgroundColor:
+                          Theme.of(context).colorScheme.surfaceContainerHigh,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         _getBatteryColor(batteryInfo.percentage),
                       ),
