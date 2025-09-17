@@ -50,14 +50,12 @@ class Crc32 extends Converter<Uint8List, int> {
     return _crc;
   }
 
-  @override
   void add(Uint8List data) {
     for (var byte in data) {
       _crc = (_crc >> 8) ^ _table[(byte ^ _crc) & 0xFF];
     }
   }
 
-  @override
   int close() {
     return _crc ^ 0xFFFFFFFF;
   }

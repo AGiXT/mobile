@@ -1,13 +1,11 @@
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/widgets/agixt_chat.dart'; // Import AGiXTChatWidget
-import 'package:agixt/models/g1/battery.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
 import 'package:agixt/screens/settings_screen.dart';
 import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/cookie_manager.dart';
 import 'package:agixt/utils/app_events.dart'; // Import AppEvents
 import 'package:agixt/widgets/gravatar_image.dart';
-import 'package:agixt/widgets/g1_battery_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/bluetooth_manager.dart';
@@ -31,7 +29,6 @@ class _HomePageState extends State<HomePage> {
   bool _isLoggedIn = true;
   bool _isSideButtonListenerAttached = false;
   WebViewController? _webViewController;
-  G1BatteryStatus _batteryStatus = G1BatteryStatus(lastUpdated: DateTime.now());
 
   @override
   void initState() {
@@ -43,7 +40,6 @@ class _HomePageState extends State<HomePage> {
     _initializeWebView();
     _ensureConversationId(); // Ensure a conversation ID exists at startup
     _initializeAgentCookie(); // Initialize the agent cookie with primary agent if needed
-    _startBatteryStatusTracking(); // Start tracking battery status
   }
 
   Future<void> _loadUserDetails() async {
@@ -560,23 +556,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Start tracking battery status
-  void _startBatteryStatusTracking() {
-    // Listen to battery status updates from BluetoothManager
-    bluetoothManager.batteryStatusStream.listen((status) {
-      if (mounted) {
-        setState(() {
-          _batteryStatus = status;
-        });
-      }
-    });
-
-    // Get initial battery status
-    setState(() {
-      _batteryStatus = bluetoothManager.batteryStatus;
-    });
-  }
-
   Future<void> _launchInBrowser(String url) async {
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url));
@@ -643,16 +622,8 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    return Column(
-      children: [
-        // Battery status widget
-        G1BatteryWidget(batteryStatus: _batteryStatus),
-        Expanded(
-          child: WebViewWidget(
-            controller: _webViewController!,
-          ),
-        ),
-      ],
+    return WebViewWidget(
+      controller: _webViewController!,
     );
   }
 }
