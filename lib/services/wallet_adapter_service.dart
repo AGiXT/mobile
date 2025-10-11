@@ -482,13 +482,10 @@ class WalletAdapterService {
           }
         }
         final Uri baseUri = walletUri;
-        final Uri? normalized = canonical != null
-            ? _normalizeWalletUriForProvider(
-                baseUri,
-                canonical,
-                hint: app,
-              )
-            : null;
+        final Uri? normalized =
+            canonical != null
+                ? _normalizeWalletUriForProvider(baseUri, canonical, hint: app)
+                : null;
         if (normalized != null) {
           return normalized;
         }

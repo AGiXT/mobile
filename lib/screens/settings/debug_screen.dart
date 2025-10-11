@@ -24,9 +24,9 @@ class _DebugPageSate extends State<DebugPage> {
     if (!mounted) {
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _sendText() async {
@@ -130,7 +130,9 @@ class _DebugPageSate extends State<DebugPage> {
       toLanguage: TranslateLanguages.ENGLISH,
     );
     await bluetoothManager.sendCommandToGlasses(tr.buildSetupCommand());
-    await bluetoothManager.rightGlass!.sendData(tr.buildRightGlassStartCommand());
+    await bluetoothManager.rightGlass!.sendData(
+      tr.buildRightGlassStartCommand(),
+    );
     for (final cmd in tr.buildInitalScreenLoad()) {
       await bluetoothManager.sendCommandToGlasses(cmd);
     }
@@ -145,7 +147,7 @@ class _DebugPageSate extends State<DebugPage> {
       "but nobody is talking??",
       "that is why I said DEMO...",
       "anyway enjoy AGiXT",
-      "and don't forget to like and subscribe"
+      "and don't forget to like and subscribe",
     ];
     final demoTextFrench = [
       "Bonjour et bienvenue à AGiXT",
@@ -155,13 +157,15 @@ class _DebugPageSate extends State<DebugPage> {
       "mais personne ne parle??",
       "c'est pourquoi j'ai dit DEMO...",
       "de toute façon, profitez de AGiXT",
-      "et n'oubliez pas de liker et de vous abonner"
+      "et n'oubliez pas de liker et de vous abonner",
     ];
     for (var i = 0; i < demoText.length; i++) {
-      await bluetoothManager
-          .sendCommandToGlasses(tr.buildTranslatedCommand(demoText[i]));
-      await bluetoothManager
-          .sendCommandToGlasses(tr.buildOriginalCommand(demoTextFrench[i]));
+      await bluetoothManager.sendCommandToGlasses(
+        tr.buildTranslatedCommand(demoText[i]),
+      );
+      await bluetoothManager.sendCommandToGlasses(
+        tr.buildOriginalCommand(demoTextFrench[i]),
+      );
       await Future.delayed(const Duration(seconds: 4));
     }
     await bluetoothManager.setMicrophone(false);
@@ -175,68 +179,73 @@ class _DebugPageSate extends State<DebugPage> {
     if (mounted) {
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('JWT Information'),
-          content: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('Logged in: ${isLoggedIn ? "Yes" : "No"}'),
-                if (email != null && email.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text('Email: $email'),
-                  ),
-                if (jwt != null && jwt.isNotEmpty) ...[
-                  const Padding(
-                    padding: EdgeInsets.only(top: 16.0, bottom: 8.0),
-                    child: Text('JWT Token:'),
-                  ),
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    padding: const EdgeInsets.all(8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          jwt,
-                          style: const TextStyle(
-                              fontFamily: 'monospace', fontSize: 12),
+        builder:
+            (context) => AlertDialog(
+              title: const Text('JWT Information'),
+              content: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text('Logged in: ${isLoggedIn ? "Yes" : "No"}'),
+                    if (email != null && email.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text('Email: $email'),
+                      ),
+                    if (jwt != null && jwt.isNotEmpty) ...[
+                      const Padding(
+                        padding: EdgeInsets.only(top: 16.0, bottom: 8.0),
+                        child: Text('JWT Token:'),
+                      ),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey[200],
+                          borderRadius: BorderRadius.circular(4),
                         ),
-                      ],
-                    ),
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              jwt,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (jwt == null || jwt.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 16.0),
+                        child: Text('No JWT token found. Not logged in.'),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                if (jwt != null && jwt.isNotEmpty)
+                  TextButton(
+                    onPressed: () {
+                      Clipboard.setData(ClipboardData(text: jwt));
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('JWT copied to clipboard'),
+                        ),
+                      );
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('Copy JWT'),
                   ),
-                ],
-                if (jwt == null || jwt.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 16.0),
-                    child: Text('No JWT token found. Not logged in.'),
-                  ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
               ],
             ),
-          ),
-          actions: [
-            if (jwt != null && jwt.isNotEmpty)
-              TextButton(
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: jwt));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('JWT copied to clipboard')),
-                  );
-                  Navigator.of(context).pop();
-                },
-                child: const Text('Copy JWT'),
-              ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
       );
     }
   }
@@ -250,17 +259,13 @@ class _DebugPageSate extends State<DebugPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Debug'),
-      ),
+      appBar: AppBar(title: Text('Debug')),
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
           TextField(
             controller: _textController,
-            decoration: const InputDecoration(
-              labelText: 'Enter text to send',
-            ),
+            decoration: const InputDecoration(labelText: 'Enter text to send'),
           ),
           const SizedBox(height: 20),
           Row(

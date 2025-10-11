@@ -16,11 +16,12 @@ Future<Uint8List> generateBadAppleBMP(int i) async {
   final canvas = ui.Canvas(recorder);
 
   // Draw background (black)
-  final backgroundPaint = ui.Paint()
-    ..color = const ui.Color.fromARGB(255, 255, 255, 255);
+  final backgroundPaint =
+      ui.Paint()..color = const ui.Color.fromARGB(255, 255, 255, 255);
   canvas.drawRect(
-      ui.Rect.fromLTWH(0, 0, canvasWidth.toDouble(), canvasHeight.toDouble()),
-      backgroundPaint);
+    ui.Rect.fromLTWH(0, 0, canvasWidth.toDouble(), canvasHeight.toDouble()),
+    backgroundPaint,
+  );
 
   // open the asset file
   // convert i to a string from 001 to 6500
@@ -49,8 +50,10 @@ Future<Uint8List> generateBadAppleBMP(int i) async {
 
   // Convert to an image
   final picture = recorder.endRecording();
-  final byteData = await (await picture.toImage(canvasWidth, canvasHeight))
-      .toByteData(format: ui.ImageByteFormat.rawRgba);
+  final byteData = await (await picture.toImage(
+    canvasWidth,
+    canvasHeight,
+  )).toByteData(format: ui.ImageByteFormat.rawRgba);
   final rgbaData = byteData!.buffer.asUint8List();
 
   // Convert RGBA to 1-bit monochrome (0=black, 1=white)
@@ -73,22 +76,27 @@ Future<Uint8List> generateDemoBMP() async {
   final canvas = ui.Canvas(recorder);
 
   // Draw background (black)
-  final backgroundPaint = ui.Paint()
-    ..color = const ui.Color.fromARGB(255, 255, 255, 255);
+  final backgroundPaint =
+      ui.Paint()..color = const ui.Color.fromARGB(255, 255, 255, 255);
   canvas.drawRect(
-      ui.Rect.fromLTWH(0, 0, canvasWidth.toDouble(), canvasHeight.toDouble()),
-      backgroundPaint);
+    ui.Rect.fromLTWH(0, 0, canvasWidth.toDouble(), canvasHeight.toDouble()),
+    backgroundPaint,
+  );
 
   // Draw text in white
-  final textStyle =
-      ui.TextStyle(color: ui.Color.fromARGB(255, 0, 0, 0), fontSize: 24);
+  final textStyle = ui.TextStyle(
+    color: ui.Color.fromARGB(255, 0, 0, 0),
+    fontSize: 24,
+  );
   final paragraphStyle = ui.ParagraphStyle(textAlign: ui.TextAlign.center);
-  final paragraphBuilder = ui.ParagraphBuilder(paragraphStyle)
-    ..pushStyle(textStyle)
-    ..addText("Hello World!");
+  final paragraphBuilder =
+      ui.ParagraphBuilder(paragraphStyle)
+        ..pushStyle(textStyle)
+        ..addText("Hello World!");
 
-  final paragraph = paragraphBuilder.build()
-    ..layout(ui.ParagraphConstraints(width: canvasWidth.toDouble()));
+  final paragraph =
+      paragraphBuilder.build()
+        ..layout(ui.ParagraphConstraints(width: canvasWidth.toDouble()));
   canvas.drawParagraph(paragraph, ui.Offset(0, canvasHeight / 2));
 
   // Convert to an image
@@ -110,7 +118,9 @@ Future<Uint8List> generateDemoBMP() async {
 }
 
 Future<Uint8List> generateNavigationBMP(
-    String maneuver, double distance) async {
+  String maneuver,
+  double distance,
+) async {
   const canvasWidth = 576;
   const canvasHeight = 136;
 
@@ -120,8 +130,9 @@ Future<Uint8List> generateNavigationBMP(
   // Draw background (black)
   final backgroundPaint = ui.Paint()..color = const ui.Color(0xFF000000);
   canvas.drawRect(
-      ui.Rect.fromLTWH(0, 0, canvasWidth.toDouble(), canvasHeight.toDouble()),
-      backgroundPaint);
+    ui.Rect.fromLTWH(0, 0, canvasWidth.toDouble(), canvasHeight.toDouble()),
+    backgroundPaint,
+  );
 
   // Draw icon
   final iconData = await _loadManeuverIcon(maneuver);
@@ -144,11 +155,13 @@ Future<Uint8List> generateNavigationBMP(
   // Draw distance text in white
   final textStyle = ui.TextStyle(color: ui.Color(0xFFFFFFFF), fontSize: 24);
   final paragraphStyle = ui.ParagraphStyle(textAlign: ui.TextAlign.center);
-  final paragraphBuilder = ui.ParagraphBuilder(paragraphStyle)
-    ..pushStyle(textStyle)
-    ..addText("${distance.toStringAsFixed(1)} m");
-  final paragraph = paragraphBuilder.build()
-    ..layout(ui.ParagraphConstraints(width: canvasWidth.toDouble()));
+  final paragraphBuilder =
+      ui.ParagraphBuilder(paragraphStyle)
+        ..pushStyle(textStyle)
+        ..addText("${distance.toStringAsFixed(1)} m");
+  final paragraph =
+      paragraphBuilder.build()
+        ..layout(ui.ParagraphConstraints(width: canvasWidth.toDouble()));
   canvas.drawParagraph(paragraph, ui.Offset(0, canvasHeight * 0.7));
 
   // Convert to an image
@@ -182,7 +195,7 @@ Future<Uint8List?> _loadManeuverIcon(String maneuver) async {
     final data = await rootBundle.load(iconPath);
     return data.buffer.asUint8List();
   } catch (e) {
-  debugPrint("Error loading icon: $e");
+    debugPrint("Error loading icon: $e");
     return null;
   }
 }
@@ -194,9 +207,9 @@ Future<void> _saveBitmapToDisk(Uint8List bmpData, String fileName) async {
     final filePath = '${tempDir.path}/$fileName';
     final file = File(filePath);
     await file.writeAsBytes(bmpData);
-  debugPrint('Bitmap saved temporarily at $filePath');
+    debugPrint('Bitmap saved temporarily at $filePath');
   } catch (e) {
-  debugPrint('Error saving bitmap to disk: $e');
+    debugPrint('Error saving bitmap to disk: $e');
   }
 }
 

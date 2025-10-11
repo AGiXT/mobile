@@ -65,8 +65,11 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
           return _AddItemDialog(
             item: item,
             onAdd: (title, time) async {
-              final newItem =
-                  AGiXTStopItem(title: title, time: time, uuid: item.uuid);
+              final newItem = AGiXTStopItem(
+                title: title,
+                time: time,
+                uuid: item.uuid,
+              );
               await _agixtStopBox.putAt(index, newItem);
               await _sortBox();
               setState(() {});
@@ -126,12 +129,7 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('AGiXT Stops'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add),
-            onPressed: _addItem,
-          ),
-        ],
+        actions: [IconButton(icon: Icon(Icons.add), onPressed: _addItem)],
       ),
       body: FutureBuilder<List<AGiXTStopItem>>(
         future: _getItems(),
@@ -151,7 +149,8 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
                 return ListTile(
                   title: Text(item.title),
                   subtitle: Text(
-                      '${item.time.year}-${item.time.month.toString().padLeft(2, '0')}-${item.time.day.toString().padLeft(2, '0')} ${item.time.hour.toString().padLeft(2, '0')}:${item.time.minute.toString().padLeft(2, '0')}'),
+                    '${item.time.year}-${item.time.month.toString().padLeft(2, '0')}-${item.time.day.toString().padLeft(2, '0')} ${item.time.hour.toString().padLeft(2, '0')}:${item.time.minute.toString().padLeft(2, '0')}',
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -211,7 +210,8 @@ class _AddItemDialogState extends State<_AddItemDialog> {
           Row(
             children: [
               Text(
-                  'Time: ${DateFormat('yyyy-MM-dd HH:mm').format(time.toLocal())}'),
+                'Time: ${DateFormat('yyyy-MM-dd HH:mm').format(time.toLocal())}',
+              ),
               SizedBox(width: 10),
               IconButton(
                 onPressed: () async {
@@ -228,9 +228,10 @@ class _AddItemDialogState extends State<_AddItemDialog> {
                   if (pickedDate != null) {
                     final TimeOfDay? pickedTime = await showTimePicker(
                       context: dialogContext,
-                      initialTime: widget.item != null
-                          ? TimeOfDay.fromDateTime(widget.item!.time)
-                          : TimeOfDay.now(),
+                      initialTime:
+                          widget.item != null
+                              ? TimeOfDay.fromDateTime(widget.item!.time)
+                              : TimeOfDay.now(),
                     );
                     if (!mounted || !dialogContext.mounted) {
                       return;

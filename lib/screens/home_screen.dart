@@ -52,9 +52,9 @@ class _HomePageState extends State<HomePage> {
         _isLoggedIn = isLoggedIn;
       });
 
-  // For debugging
-  debugPrint("User email: $_userEmail");
-  debugPrint("Is logged in: $_isLoggedIn");
+      // For debugging
+      debugPrint("User email: $_userEmail");
+      debugPrint("Is logged in: $_isLoggedIn");
 
       // Redirect to login if not logged in
       if (!_isLoggedIn) {
@@ -133,42 +133,43 @@ class _HomePageState extends State<HomePage> {
     }
 
     // Initialize the WebView controller
-    _webViewController = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageFinished: (String url) async {
-            // Extract conversation ID from URL and agent cookie
-            await _extractConversationIdAndAgentInfo(url);
+    _webViewController =
+        WebViewController()
+          ..setJavaScriptMode(JavaScriptMode.unrestricted)
+          ..setNavigationDelegate(
+            NavigationDelegate(
+              onPageFinished: (String url) async {
+                // Extract conversation ID from URL and agent cookie
+                await _extractConversationIdAndAgentInfo(url);
 
-            // Set up URL change observer using JavaScript
-            await _setupUrlChangeObserver();
+                // Set up URL change observer using JavaScript
+                await _setupUrlChangeObserver();
 
-            // Set up agent selection observer
-            await _setupAgentSelectionObserver();
-          },
-          onNavigationRequest: (NavigationRequest request) {
-            debugPrint('Navigation request to: ${request.url}');
-            if (!request.url.contains('agixt')) {
-              // External link, launch in browser
-              _launchInBrowser(request.url);
-              return NavigationDecision.prevent;
-            } else {
-              // Internal link, extract info and navigate
-              _extractConversationIdAndAgentInfo(request.url);
-              return NavigationDecision.navigate;
-            }
-          },
-          onUrlChange: (UrlChange change) {
-            // This catches client-side navigation that might not trigger a full navigation request
-            debugPrint('URL changed to: ${change.url}');
-            if (change.url != null) {
-              _extractConversationIdAndAgentInfo(change.url!);
-            }
-          },
-        ),
-      )
-      ..loadRequest(Uri.parse(urlToLoad));
+                // Set up agent selection observer
+                await _setupAgentSelectionObserver();
+              },
+              onNavigationRequest: (NavigationRequest request) {
+                debugPrint('Navigation request to: ${request.url}');
+                if (!request.url.contains('agixt')) {
+                  // External link, launch in browser
+                  _launchInBrowser(request.url);
+                  return NavigationDecision.prevent;
+                } else {
+                  // Internal link, extract info and navigate
+                  _extractConversationIdAndAgentInfo(request.url);
+                  return NavigationDecision.navigate;
+                }
+              },
+              onUrlChange: (UrlChange change) {
+                // This catches client-side navigation that might not trigger a full navigation request
+                debugPrint('URL changed to: ${change.url}');
+                if (change.url != null) {
+                  _extractConversationIdAndAgentInfo(change.url!);
+                }
+              },
+            ),
+          )
+          ..loadRequest(Uri.parse(urlToLoad));
 
     // Update the static accessor so it can be used from other classes
     HomePage.webViewController = _webViewController;
@@ -256,8 +257,11 @@ class _HomePageState extends State<HomePage> {
       })()
       ''';
 
-      final agentCookieValue = await _webViewController!
-          .runJavaScriptReturningResult(agentCookieScript) as String?;
+      final agentCookieValue =
+          await _webViewController!.runJavaScriptReturningResult(
+                agentCookieScript,
+              )
+              as String?;
 
       debugPrint('Extracted agent value: ${agentCookieValue ?? "null"}');
 
@@ -339,8 +343,9 @@ class _HomePageState extends State<HomePage> {
       })()
       ''';
 
-      final agentValue = await _webViewController!
-          .runJavaScriptReturningResult(altAgentScript) as String?;
+      final agentValue =
+          await _webViewController!.runJavaScriptReturningResult(altAgentScript)
+              as String?;
 
       if (agentValue != null &&
           agentValue.isNotEmpty &&
@@ -579,13 +584,11 @@ class _HomePageState extends State<HomePage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                        builder: (context) => const ProfileScreen()),
+                      builder: (context) => const ProfileScreen(),
+                    ),
                   );
                 },
-                child: GravatarImage(
-                  email: _userEmail!,
-                  size: 40,
-                ),
+                child: GravatarImage(email: _userEmail!, size: 40),
               ),
             )
           else
@@ -595,7 +598,8 @@ class _HomePageState extends State<HomePage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const ProfileScreen()),
+                    builder: (context) => const ProfileScreen(),
+                  ),
                 );
               },
             ),
@@ -617,13 +621,9 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildWebView() {
     if (_webViewController == null) {
-      return const Center(
-        child: CircularProgressIndicator(),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
 
-    return WebViewWidget(
-      controller: _webViewController!,
-    );
+    return WebViewWidget(controller: _webViewController!);
   }
 }
