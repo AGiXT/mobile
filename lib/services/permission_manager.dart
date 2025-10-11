@@ -13,7 +13,8 @@ class PermissionManager {
 
   static const List<Permission> _optionalPermissions = [
     Permission.microphone,
-    Permission.calendar,
+    Permission.calendarFullAccess,
+    Permission.calendarWriteOnly,
     Permission.storage,
   ];
 

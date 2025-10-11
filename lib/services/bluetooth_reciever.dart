@@ -224,7 +224,9 @@ class BluetoothReciever {
         voiceCollectorAI.reset();
         break;
       case 1:
-        debugPrint('[$side] Page ${side == 'left' ? 'up' : 'down'} control');
+        debugPrint(
+          '[$side] Page ${side == GlassSide.left ? 'up' : 'down'} control',
+        );
         await bt.setMicrophone(false);
         voiceCollectorAI.isRecording = false;
         break;

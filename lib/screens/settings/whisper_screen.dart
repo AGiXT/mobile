@@ -54,6 +54,18 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
   final _remoteModelController = TextEditingController();
   final stt.SpeechToText _speech = stt.SpeechToText();
 
+  void _showSnackBar(String message, {Color? backgroundColor}) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+      ),
+    );
+  }
+
   @override
   void initState() {
     super.initState();
@@ -66,6 +78,9 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       onError: (error) => debugPrint('Speech recognition error: $error'),
       onStatus: (status) => debugPrint('Speech recognition status: $status'),
     );
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _isRecognitionAvailable = available;
     });
@@ -73,6 +88,9 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
 
   Future<void> _loadSelectedModel() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _selectedModel = prefs.getString('whisper_model') ?? 'base';
       _selectedMode = prefs.getString('whisper_mode') ?? 'local';
@@ -106,35 +124,29 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
 
   Future<void> _testSpeechRecognition() async {
     if (!_isRecognitionAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Speech recognition not available on this device')),
-      );
+      _showSnackBar('Speech recognition not available on this device');
       return;
     }
 
     bool success = await _speech.listen(
       onResult: (result) {
         if (result.finalResult) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Recognized: ${result.recognizedWords}')),
-          );
+          _showSnackBar('Recognized: ${result.recognizedWords}');
           _speech.stop();
         }
       },
       listenFor: const Duration(seconds: 10),
       pauseFor: const Duration(seconds: 3),
       localeId: _selectedLanguage,
-      cancelOnError: true,
+      listenOptions: stt.SpeechListenOptions(
+        cancelOnError: true,
+      ),
     );
 
     if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to start speech recognition')),
-      );
+      _showSnackBar('Failed to start speech recognition');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Listening...')),
-      );
+      _showSnackBar('Listening...');
     }
   }
 
@@ -155,13 +167,9 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       await prefs.setString(
           'whisper_remote_model', _remoteModelController.text);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Whisper configuration saved!')),
-      );
+      _showSnackBar('Whisper configuration saved!', backgroundColor: Colors.green);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error ${e.toString()}')),
-      );
+      _showSnackBar('Error ${e.toString()}', backgroundColor: Colors.red);
     }
   }
 

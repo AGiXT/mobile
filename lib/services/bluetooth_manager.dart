@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:android_package_manager/android_package_manager.dart';
 import 'package:agixt/models/agixt/agixt_dashboard.dart';
@@ -249,12 +248,14 @@ class BluetoothManager {
       // Continue execution instead of returning
     }
 
-    if (!await FlutterBluePlus.isAvailable) {
+    if (!await FlutterBluePlus.isSupported) {
       onUpdate('Bluetooth is not available');
       throw Exception('Bluetooth is not available');
     }
 
-    if (!await FlutterBluePlus.isOn) {
+    final BluetoothAdapterState adapterState =
+        await FlutterBluePlus.adapterState.first;
+    if (adapterState != BluetoothAdapterState.on) {
       onUpdate('Bluetooth is turned off');
       throw Exception('Bluetooth is turned off');
     }
@@ -305,8 +306,8 @@ class BluetoothManager {
       _scanSubscription = FlutterBluePlus.scanResults.listen(
         (results) {
           for (ScanResult result in results) {
-            String deviceName = result.device.name;
-            String deviceId = result.device.id.id;
+            String deviceName = result.device.platformName;
+            String deviceId = result.device.remoteId.str;
             debugPrint('Found device: $deviceName ($deviceId)');
 
             if (deviceName.isNotEmpty) {
@@ -335,7 +336,7 @@ class BluetoothManager {
   }
 
   void _handleDeviceFound(ScanResult result, OnUpdate onUpdate) async {
-    String deviceName = result.device.name;
+  String deviceName = result.device.platformName;
     Glass? glass;
     if (deviceName.contains('_L_') && leftGlass == null) {
       debugPrint('Found left glass: $deviceName');
@@ -346,7 +347,11 @@ class BluetoothManager {
       );
       leftGlass = glass;
       onUpdate("Left glass found: ${glass.name}");
-      await _saveLastG1Used(GlassSide.left, glass.name, glass.device.id.id);
+      await _saveLastG1Used(
+        GlassSide.left,
+        glass.name,
+        glass.device.remoteId.str,
+      );
     } else if (deviceName.contains('_R_') && rightGlass == null) {
       debugPrint('Found right glass: $deviceName');
       glass = Glass(
@@ -356,7 +361,11 @@ class BluetoothManager {
       );
       rightGlass = glass;
       onUpdate("Right glass found: ${glass.name}");
-      await _saveLastG1Used(GlassSide.right, glass.name, glass.device.id.id);
+      await _saveLastG1Used(
+        GlassSide.right,
+        glass.name,
+        glass.device.remoteId.str,
+      );
     }
     if (glass != null) {
       try {
@@ -471,9 +480,11 @@ class BluetoothManager {
   Future<void> connectToDevice(BluetoothDevice device,
       {required String side}) async {
     try {
-      debugPrint('Attempting to connect to $side glass: ${device.name}');
+      debugPrint(
+        'Attempting to connect to $side glass: ${device.platformName}',
+      );
       await device.connect(timeout: const Duration(seconds: 15));
-      debugPrint('Connected to $side glass: ${device.name}');
+      debugPrint('Connected to $side glass: ${device.platformName}');
 
       List<BluetoothService> services = await device.discoverServices();
       debugPrint('Discovered ${services.length} services for $side glass');

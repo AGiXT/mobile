@@ -94,6 +94,9 @@ class ChecklistItemsScreenState extends State<ChecklistItemsScreen> {
                 widget.checklist.items.removeAt(index);
                 await _checklistBox.putAt(widget.index, widget.checklist);
                 setState(() {});
+                if (!context.mounted) {
+                  return;
+                }
                 Navigator.of(context).pop();
               },
               child: Text('Delete'),

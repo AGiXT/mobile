@@ -55,6 +55,9 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
 
   void _editItem(int index) async {
     final item = await _agixtStopBox.getAt(index);
+    if (!mounted) {
+      return;
+    }
     if (item != null) {
       showDialog(
         context: context,
@@ -90,10 +93,14 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
             ),
             TextButton(
               onPressed: () async {
+                final navigator = Navigator.of(context);
                 await _agixtStopBox.deleteAt(index);
-                _sortBox();
+                await _sortBox();
+                if (!mounted) {
+                  return;
+                }
                 setState(() {});
-                Navigator.of(context).pop();
+                navigator.pop();
               },
               child: Text('Delete'),
             ),
@@ -208,19 +215,26 @@ class _AddItemDialogState extends State<_AddItemDialog> {
               SizedBox(width: 10),
               IconButton(
                 onPressed: () async {
-                  DateTime? pickedDate = await showDatePicker(
-                    context: context,
+                  final dialogContext = context;
+                  final DateTime? pickedDate = await showDatePicker(
+                    context: dialogContext,
                     initialDate: widget.item?.time ?? DateTime.now(),
                     firstDate: DateTime(2000),
                     lastDate: DateTime(2101),
                   );
+                  if (!mounted || !dialogContext.mounted) {
+                    return;
+                  }
                   if (pickedDate != null) {
-                    TimeOfDay? pickedTime = await showTimePicker(
-                      context: context,
+                    final TimeOfDay? pickedTime = await showTimePicker(
+                      context: dialogContext,
                       initialTime: widget.item != null
                           ? TimeOfDay.fromDateTime(widget.item!.time)
                           : TimeOfDay.now(),
                     );
+                    if (!mounted || !dialogContext.mounted) {
+                      return;
+                    }
                     if (pickedTime != null) {
                       setState(() {
                         time = DateTime(

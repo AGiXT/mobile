@@ -24,17 +24,27 @@ class _TranscribeScreenState extends State<TranscribeScreen> {
   StreamController<Uint8List>? voiceData;
   StreamController<String>? textStream;
 
-  void _startTranscription() async {
-    if (!bluetoothManager.isConnected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Glasses are not connected')),
-      );
+  void _showSnackBar(String message, {Color? backgroundColor}) {
+    if (!mounted) {
       return;
     }
-    if ((await wr.getBaseURL()) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Only remote Whisper is supported')),
-      );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: backgroundColor,
+      ),
+    );
+  }
+
+  void _startTranscription() async {
+    if (!bluetoothManager.isConnected) {
+      _showSnackBar('Glasses are not connected');
+      return;
+    }
+
+    final baseUrl = await wr.getBaseURL();
+    if (baseUrl == null) {
+      _showSnackBar('Only remote Whisper is supported');
       return;
     }
     final tr = Translate(
@@ -68,6 +78,9 @@ class _TranscribeScreenState extends State<TranscribeScreen> {
     await for (String line in textStream!.stream) {
       if (line.length > 220) {
         line = line.substring(line.length - 220);
+      }
+      if (!mounted) {
+        break;
       }
       setState(() {
         _textController.text = line;

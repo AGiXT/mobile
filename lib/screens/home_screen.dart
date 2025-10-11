@@ -52,9 +52,9 @@ class _HomePageState extends State<HomePage> {
         _isLoggedIn = isLoggedIn;
       });
 
-      // For debugging
-      print("User email: $_userEmail");
-      print("Is logged in: $_isLoggedIn");
+  // For debugging
+  debugPrint("User email: $_userEmail");
+  debugPrint("Is logged in: $_isLoggedIn");
 
       // Redirect to login if not logged in
       if (!_isLoggedIn) {
@@ -68,7 +68,7 @@ class _HomePageState extends State<HomePage> {
           });
           // Store the email for future use
           await AuthService.storeEmail(userInfo.email);
-          print("Updated user email from user info: $_userEmail");
+          debugPrint("Updated user email from user info: $_userEmail");
         }
       }
     }

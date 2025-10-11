@@ -77,25 +77,26 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final providers = await WalletAuthService.getProviders();
       final installed = WalletAdapterService.installedProviderIds;
-      final filtered = providers.where((provider) {
-        if (!provider.supportsChain('solana')) {
-          return false;
-        }
-        final canonical = WalletAdapterService.canonicalProviderId(provider.id);
-        if (canonical == null) {
-          return false;
-        }
-        return installed.contains(canonical);
-      }).toList();
+      final filtered =
+          providers.where((provider) {
+            if (!provider.supportsChain('solana')) {
+              return false;
+            }
+            final canonical = WalletAdapterService.canonicalProviderId(
+              provider.id,
+            );
+            if (canonical == null) {
+              return false;
+            }
+            return installed.contains(canonical);
+          }).toList();
 
-      final Set<String> missingInstalled = {
-        ...installed,
-      }..removeWhere(
-          (id) => filtered.any(
-            (provider) =>
-                WalletAdapterService.canonicalProviderId(provider.id) == id,
-          ),
-        );
+      final Set<String> missingInstalled = {...installed}..removeWhere(
+        (id) => filtered.any(
+          (provider) =>
+              WalletAdapterService.canonicalProviderId(provider.id) == id,
+        ),
+      );
 
       if (missingInstalled.contains('solana_mobile_stack')) {
         filtered.add(
@@ -116,9 +117,10 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _walletProviders = filtered;
         _loadingWalletProviders = false;
-        _walletErrorMessage = filtered.isEmpty
-            ? 'No compatible Solana wallets were detected on this device. Install a supported wallet to continue.'
-            : null;
+        _walletErrorMessage =
+            filtered.isEmpty
+                ? 'No compatible Solana wallets were detected on this device. Install a supported wallet to continue.'
+                : null;
       });
     } catch (e) {
       setState(() {
@@ -283,9 +285,10 @@ class _LoginScreenState extends State<LoginScreen> {
         message = message.substring('Bad state: '.length);
       }
       setState(() {
-        _walletErrorMessage = message.isEmpty
-            ? 'Wallet authentication failed. Please try again.'
-            : message;
+        _walletErrorMessage =
+            message.isEmpty
+                ? 'Wallet authentication failed. Please try again.'
+                : message;
       });
     } finally {
       if (mounted) {
@@ -386,9 +389,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: _isLoading
-                        ? const CircularProgressIndicator()
-                        : const Text('Login'),
+                    child:
+                        _isLoading
+                            ? const CircularProgressIndicator()
+                            : const Text('Login'),
                   ),
                 ],
               ),
@@ -458,9 +462,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: OutlinedButton(
-                    onPressed: _walletConnecting
-                        ? null
-                        : () => _loginWithWallet(provider),
+                    onPressed:
+                        _walletConnecting
+                            ? null
+                            : () => _loginWithWallet(provider),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -488,8 +493,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Theme.of(context).primaryColor,
                         fontWeight: FontWeight.bold,
                       ),
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = _openRegistrationPage,
+                      recognizer:
+                          TapGestureRecognizer()..onTap = _openRegistrationPage,
                     ),
                   ],
                 ),

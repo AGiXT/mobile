@@ -79,6 +79,9 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
     // Request permission if turning on
     if (value) {
       final hasPermission = await _locationService.requestLocationPermission();
+      if (!mounted) {
+        return;
+      }
       if (!hasPermission) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Location permission denied')),
@@ -97,6 +100,9 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
       // Get current position and subscribe to updates
       final currentPosition = await _locationService.getCurrentPosition();
       _subscribeToLocationUpdates();
+      if (!mounted) {
+        return;
+      }
       setState(() {
         _currentPosition = currentPosition;
       });
@@ -109,6 +115,9 @@ class _LocationSettingsScreenState extends State<LocationSettingsScreen> {
     // Ensure background service continues to work with location changes
     await _handleBackgroundServiceLocationChange(value);
 
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _isLocationEnabled = value;
       _isLoading = false;

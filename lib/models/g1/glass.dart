@@ -146,9 +146,8 @@ class Glass {
     }
     if (uartRx != null) {
       await uartRx!.setNotifyValue(true);
-      notificationSubscription = uartRx!.value.listen((data) {
-        handleNotification(data);
-      });
+      notificationSubscription =
+          uartRx!.lastValueStream.listen(handleNotification);
       debugPrint('[$side Glass] UART RX set to notify.');
     } else {
       debugPrint('[$side Glass] UART RX Characteristic not found.');

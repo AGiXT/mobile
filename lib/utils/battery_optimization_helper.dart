@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class BatteryOptimizationHelper {
@@ -14,7 +15,7 @@ class BatteryOptimizationHelper {
           await _channel.invokeMethod('isBatteryOptimizationDisabled');
       return result;
     } catch (e) {
-      print('Error checking battery optimization: $e');
+      debugPrint('Error checking battery optimization: $e');
       return false;
     }
   }
@@ -28,7 +29,7 @@ class BatteryOptimizationHelper {
           await _channel.invokeMethod('requestDisableBatteryOptimization');
       return result;
     } catch (e) {
-      print('Error requesting battery optimization disable: $e');
+      debugPrint('Error requesting battery optimization disable: $e');
       return false;
     }
   }

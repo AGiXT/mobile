@@ -94,7 +94,9 @@ class WhisperLocalService implements WhisperService {
         listenFor: Duration(seconds: timeoutInSeconds),
         pauseFor: Duration(seconds: 3),
         localeId: 'en_US', // Use the user's language preference
-        cancelOnError: true,
+        listenOptions: stt.SpeechListenOptions(
+          cancelOnError: true,
+        ),
       );
 
       // Add a timeout

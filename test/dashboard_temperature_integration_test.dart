@@ -10,8 +10,9 @@ void main() {
       TestWidgetsFlutterBinding.ensureInitialized();
 
       // Mock SharedPreferences for testing
-      const MethodChannel('plugins.flutter.io/shared_preferences')
-          .setMockMethodCallHandler((methodCall) async {
+      const channel = MethodChannel('plugins.flutter.io/shared_preferences');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (methodCall) async {
         if (methodCall.method == 'getAll') {
           return <String, dynamic>{}; // Return empty prefs
         }

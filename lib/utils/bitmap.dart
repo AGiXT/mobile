@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -181,7 +182,7 @@ Future<Uint8List?> _loadManeuverIcon(String maneuver) async {
     final data = await rootBundle.load(iconPath);
     return data.buffer.asUint8List();
   } catch (e) {
-    print("Error loading icon: $e");
+  debugPrint("Error loading icon: $e");
     return null;
   }
 }
@@ -193,9 +194,9 @@ Future<void> _saveBitmapToDisk(Uint8List bmpData, String fileName) async {
     final filePath = '${tempDir.path}/$fileName';
     final file = File(filePath);
     await file.writeAsBytes(bmpData);
-    print('Bitmap saved temporarily at $filePath');
+  debugPrint('Bitmap saved temporarily at $filePath');
   } catch (e) {
-    print('Error saving bitmap to disk: $e');
+  debugPrint('Error saving bitmap to disk: $e');
   }
 }
 

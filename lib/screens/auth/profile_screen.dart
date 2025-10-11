@@ -137,6 +137,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _handleSideButtonPress() async {
     // Check if silent mode is enabled
     if (_isSilentModeEnabled) {
+      if (!mounted) {
+        return;
+      }
       // Show a message to the user that silent mode is enabled
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -162,6 +165,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _handleBatteryOptimizationRequest() async {
     final isDisabled =
         await BatteryOptimizationHelper.isBatteryOptimizationDisabled();
+
+    if (!mounted) {
+      return;
+    }
 
     if (isDisabled) {
       // Already disabled, show info dialog
@@ -200,8 +207,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    Navigator.pop(context);
+                    final navigator = Navigator.of(context);
                     await BatteryOptimizationHelper.requestDisableBatteryOptimization();
+                    if (!mounted) {
+                      return;
+                    }
+                    navigator.pop();
                   },
                   child: Text('Open Settings'),
                 ),
