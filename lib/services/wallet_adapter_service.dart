@@ -13,6 +13,19 @@ class WalletAdapterService {
   static bool _initialized = false;
   static bool _assumeSolanaMobileStack = false;
 
+  static const List<String> _solanaMobileFallbackUris = [
+    'solanamobile://wallet',
+    'solanamobile://wallet/v1',
+    'solanamobilewallet://wallet',
+    'solanamobilewallet://wallet/v1',
+    'solanamobilestack://wallet',
+    'solanamobilestack://wallet/v1',
+    'seeker://wallet',
+    'seekerwallet://wallet',
+    'smsvault://wallet',
+    'sms://wallet',
+  ];
+
   /// Canonical provider identifiers mapped to their known aliases.
   static const Map<String, List<String>> _providerAliases = {
     'phantom': ['phantom'],
@@ -30,6 +43,16 @@ class WalletAdapterService {
       'solana_mobile_adapter',
       'solana_mobile_stack_wallet',
       'seeker',
+      'solanamobilewalletapp',
+      'solanamobilewalletadapter',
+      'solana_mobile_wallet_adapter',
+      'com.solanamobile.wallet',
+      'com.solanamobile.walletapp',
+      'com.solanamobile.seeker',
+      'com.solana.mobilewallet',
+      'com.solana.mobile.wallet',
+      'com.solana.seeker.wallet',
+      'smsvault',
     ],
   };
 
@@ -218,20 +241,37 @@ class WalletAdapterService {
         return walletUri;
       }
 
-      if (canonicalProvider == 'solana_mobile_stack' &&
-          walletUri != null &&
-          _looksLikeSolanaMobile(walletUri)) {
-        candidate ??= walletUri;
+      if (canonicalProvider == 'solana_mobile_stack') {
+        if (walletUri != null && _looksLikeSolanaMobile(walletUri)) {
+          candidate ??= walletUri;
+        }
+
+        if (walletUri == null || candidate == null) {
+          final Uri? inferred = _solanaMobileUriFromApp(app);
+          if (inferred != null) {
+            return inferred;
+          }
+        }
       }
     }
 
     candidate ??= adapter.authorizeResult?.walletUriBase;
 
-    if (candidate == null && canonicalProvider == 'solana_mobile_stack') {
-      candidate = _firstWalletUriMatching(adapter, _looksLikeSolanaMobile);
+    if (candidate != null) {
+      final String? canonical = _canonicalFromUri(candidate);
+      if (canonical == canonicalProvider) {
+        return candidate;
+      }
     }
 
-    return candidate ?? _defaultWalletUri(adapter);
+    if (canonicalProvider == 'solana_mobile_stack') {
+      final Uri? fallback = _solanaMobileWalletUri(adapter);
+      if (fallback != null) {
+        return fallback;
+      }
+    }
+
+    return _defaultWalletUri(adapter, canonical: canonicalProvider);
   }
 
   static Account _extractAccount(
@@ -412,16 +452,32 @@ class WalletAdapterService {
     return null;
   }
 
-  static Uri? _defaultWalletUri(SolanaWalletAdapter adapter, {Uri? exclude}) {
+  static Uri? _defaultWalletUri(
+    SolanaWalletAdapter adapter, {
+    Uri? exclude,
+    String? canonical,
+  }) {
     for (final app in adapter.store.apps) {
       final Uri? walletUri = _safeWalletUri(app);
       if (walletUri != null && walletUri != exclude) {
+        if (canonical != null) {
+          final String? resolved = _canonicalFromUri(walletUri);
+          if (resolved != canonical) {
+            continue;
+          }
+        }
         return walletUri;
       }
     }
 
     final Uri? previous = adapter.authorizeResult?.walletUriBase;
-    if (previous != exclude) {
+    if (previous != null && previous != exclude) {
+      if (canonical != null) {
+        final String? resolved = _canonicalFromUri(previous);
+        if (resolved != canonical) {
+          return null;
+        }
+      }
       return previous;
     }
 
@@ -443,7 +499,84 @@ class WalletAdapterService {
 
   static bool _looksLikeSolanaMobile(Uri uri) {
     final String value = uri.toString().toLowerCase();
-    return value.contains('solanamobile') || value.contains('seeker');
+    if (value.contains('solanamobile') ||
+        value.contains('solana_mobile') ||
+        value.contains('solana-mobile') ||
+        value.contains('seeker') ||
+        value.contains('smsvault') ||
+        (value.contains('solana') && value.contains('vault')) ||
+        (value.contains('solana') && value.contains('mobile'))) {
+      return true;
+    }
+    return false;
+  }
+
+  static Uri? _solanaMobileWalletUri(SolanaWalletAdapter adapter) {
+    final Uri? fromStore = _firstWalletUriMatching(
+      adapter,
+      _looksLikeSolanaMobile,
+    );
+    if (fromStore != null) {
+      return fromStore;
+    }
+
+    if (!_assumeSolanaMobileStack) {
+      return null;
+    }
+
+    for (final String uri in _solanaMobileFallbackUris) {
+      final Uri parsed = Uri.parse(uri);
+      if (_canonicalFromUri(parsed) == 'solana_mobile_stack') {
+        return parsed;
+      }
+    }
+
+    return null;
+  }
+
+  static Uri? _solanaMobileUriFromApp(dynamic app) {
+    final List<String?> tokens = [];
+
+    try {
+      final dynamic packageId = app.packageId;
+      if (packageId is String) {
+        tokens.add(packageId);
+      }
+    } catch (_) {}
+
+    try {
+      final dynamic name = app.app?.name;
+      if (name is String) {
+        tokens.add(name);
+      }
+    } catch (_) {}
+
+    try {
+      tokens.add(app.toString());
+    } catch (_) {}
+
+    for (final token in tokens) {
+      if (token == null || token.isEmpty) {
+        continue;
+      }
+
+      final String normalized = token.toLowerCase();
+      if ((normalized.contains('solana') && normalized.contains('vault')) ||
+          normalized.contains('solanamobile') ||
+          normalized.contains('solana_mobile') ||
+          normalized.contains('solana-mobile') ||
+          normalized.contains('smsvault') ||
+          normalized.contains('seeker')) {
+        try {
+          if (normalized.startsWith('com.')) {
+            return Uri.parse('android-app://$token');
+          }
+        } catch (_) {}
+        break;
+      }
+    }
+
+    return null;
   }
 
   static bool _isActivityNotFound(PlatformException error) {
