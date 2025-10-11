@@ -6,8 +6,9 @@ import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/auth/oauth.dart';
 import 'package:agixt/models/agixt/auth/wallet.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:bs58/bs58.dart' as bs58;
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -231,6 +232,28 @@ class _LoginScreenState extends State<LoginScreen> {
       _activeWalletProviderId = provider.id;
     });
 
+    if (!WalletAdapterService.supportsProvider(provider.id)) {
+      final bool launched = await WalletAdapterService.openProviderInstallPage(
+        provider.id,
+      );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _walletConnecting = false;
+        _activeWalletProviderId = null;
+        _walletErrorMessage =
+            'We couldn’t find ${provider.name} on this device. '
+            'Install the wallet app and try again, or choose a different provider.';
+      });
+      if (!launched) {
+        debugPrint(
+          'No install URI available for wallet provider ${provider.id}',
+        );
+      }
+      return;
+    }
+
     try {
       final account = await WalletAdapterService.connect(
         providerId: provider.id,
@@ -276,8 +299,32 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
       }
-    } catch (error) {
-      var message = error.toString();
+    } catch (error, stackTrace) {
+      debugPrint('Wallet login failed for provider ${provider.id}: $error');
+      debugPrint('$stackTrace');
+
+      String message;
+      if (error is StateError) {
+        message = error.message;
+      } else if (error is PlatformException) {
+        message = error.message ?? error.code;
+      } else {
+        message = error.toString();
+      }
+
+      if (WalletAdapterService.isActivityNotFoundError(error)) {
+        final bool launched =
+            await WalletAdapterService.openProviderInstallPage(provider.id);
+        message =
+            'We couldn’t open ${provider.name} because it isn’t installed. '
+            'Install the wallet app and try again, or choose another provider.';
+        if (!launched) {
+          debugPrint(
+            'Unable to launch install page for provider ${provider.id}',
+          );
+        }
+      }
+
       if (message.startsWith('Exception: ')) {
         message = message.substring('Exception: '.length);
       }
