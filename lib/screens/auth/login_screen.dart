@@ -1,8 +1,13 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/auth/oauth.dart';
+import 'package:agixt/models/agixt/auth/wallet.dart';
+import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:bs58/bs58.dart' as bs58;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,11 +25,17 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _errorMessage;
   List<OAuthProvider> _oauthProviders = [];
   bool _loadingProviders = true;
+  List<WalletProvider> _walletProviders = [];
+  bool _loadingWalletProviders = true;
+  String? _walletErrorMessage;
+  bool _walletConnecting = false;
+  String? _activeWalletProviderId;
 
   @override
   void initState() {
     super.initState();
     _loadOAuthProviders();
+    _loadWalletProviders();
   }
 
   @override
@@ -49,6 +60,39 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (e) {
       setState(() {
         _loadingProviders = false;
+      });
+    }
+  }
+
+  Future<void> _loadWalletProviders() async {
+    if (!WalletAdapterService.isAvailable) {
+      setState(() {
+        _walletProviders = [];
+        _loadingWalletProviders = false;
+        _walletErrorMessage = 'Wallet login isn\'t supported on this device.';
+      });
+      return;
+    }
+
+    try {
+      final providers = await WalletAuthService.getProviders();
+      final filtered = providers.where((provider) {
+        return provider.supportsChain('solana') &&
+            WalletAdapterService.supportsProvider(provider.id);
+      }).toList();
+
+      setState(() {
+        _walletProviders = filtered;
+        _loadingWalletProviders = false;
+        _walletErrorMessage = filtered.isEmpty
+            ? 'No compatible Solana wallets were returned from the server.'
+            : null;
+      });
+    } catch (e) {
+      setState(() {
+        _walletProviders = [];
+        _loadingWalletProviders = false;
+        _walletErrorMessage = 'Unable to load wallet providers. Please try again later.';
       });
     }
   }
@@ -110,6 +154,84 @@ class _LoginScreenState extends State<LoginScreen> {
         _errorMessage = 'An error occurred. Please try again.';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _loginWithWallet(WalletProvider provider) async {
+    if (!WalletAdapterService.isAvailable) {
+      setState(() {
+        _walletErrorMessage = 'Wallet authentication is not available on this device.';
+      });
+      return;
+    }
+
+    setState(() {
+      _walletConnecting = true;
+      _walletErrorMessage = null;
+      _activeWalletProviderId = provider.id;
+    });
+
+    try {
+      final account = await WalletAdapterService.connect(providerId: provider.id);
+      final walletAddress = account.toBase58();
+
+      final nonce = await WalletAuthService.requestNonce(
+        walletAddress: walletAddress,
+        chain: provider.primaryChain,
+      );
+
+      final signatureBase64 = await WalletAdapterService.signMessage(
+        nonce.message,
+        account: account,
+        providerId: provider.id,
+      );
+
+      final signatureBytes = base64Decode(signatureBase64);
+      final signatureBase58 = bs58.base58.encode(signatureBytes);
+
+      final result = await WalletAuthService.verifySignature(
+        walletAddress: walletAddress,
+        signature: signatureBase58,
+        message: nonce.message,
+        nonce: nonce.nonce,
+        walletType: provider.id,
+        chain: provider.primaryChain,
+        referrer: AuthService.appUri,
+      );
+
+      final token = result.jwtToken;
+      if (token == null || token.isEmpty) {
+        throw StateError('Wallet authentication did not return a session token.');
+      }
+
+      await AuthService.storeJwt(token);
+      if (result.email != null && result.email!.isNotEmpty) {
+        await AuthService.storeEmail(result.email!);
+      }
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+    } catch (error) {
+      var message = error.toString();
+      if (message.startsWith('Exception: ')) {
+        message = message.substring('Exception: '.length);
+      }
+      if (message.startsWith('Bad state: ')) {
+        message = message.substring('Bad state: '.length);
+      }
+      setState(() {
+        _walletErrorMessage = message.isEmpty
+            ? 'Wallet authentication failed. Please try again.'
+            : message;
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _walletConnecting = false;
+          _activeWalletProviderId = null;
+        });
+      }
     }
   }
 
@@ -240,6 +362,53 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                     child: Text('Continue with ${provider.name.toUpperCase()}'),
+                  ),
+                );
+              }),
+
+            const SizedBox(height: 30),
+            const Divider(),
+
+            Text(
+              'Or connect your Solana wallet',
+              style: Theme.of(context).textTheme.titleMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+
+            if (_walletErrorMessage != null)
+              Container(
+                padding: const EdgeInsets.all(8),
+                color: Colors.orange.shade100,
+                child: Text(
+                  _walletErrorMessage!,
+                  style: TextStyle(color: Colors.orange.shade900),
+                ),
+              ),
+
+            if (_loadingWalletProviders)
+              const Center(child: CircularProgressIndicator())
+            else if (_walletProviders.isEmpty)
+              const Center(
+                  child: Text('Wallet login is currently unavailable.'))
+            else
+              ..._walletProviders.map((provider) {
+                final bool isActive =
+                    _walletConnecting && _activeWalletProviderId == provider.id;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                  child: OutlinedButton(
+                    onPressed: _walletConnecting
+                        ? null
+                        : () => _loginWithWallet(provider),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: Text(
+                      isActive
+                          ? 'Connecting to ${provider.name}...'
+                          : 'Continue with ${provider.name}',
+                    ),
                   ),
                 );
               }),

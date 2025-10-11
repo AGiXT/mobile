@@ -13,6 +13,7 @@ import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/services/permission_manager.dart';
+import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:agixt/utils/ui_perfs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -43,6 +44,15 @@ void main() async {
       appUri: APP_URI,
       appName: APP_NAME,
     );
+
+    try {
+      await WalletAdapterService.initialize(
+        appUri: APP_URI,
+        appName: APP_NAME,
+      );
+    } catch (e) {
+      debugPrint('Failed to initialize wallet adapter service: $e');
+    }
 
     // Initialize notifications with error handling
     try {

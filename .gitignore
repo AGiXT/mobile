@@ -70,3 +70,4 @@ app.*.map.json
 /android/app/release
 
 .cxx/
+pull_request.md

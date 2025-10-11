@@ -1,5 +1,5 @@
 name: agixt
-description: "A life planning tool for the EvenRealities G1"
+description: "Automate everything with AI"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
@@ -55,7 +55,6 @@ dependencies:
   fuzzywuzzy: ^1.2.0
   dart_openai: ^5.1.0
   package_info_plus: ^8.3.1 # Updated to the compatible version
-  web_socket_client: ^0.1.5
   mutex: ^3.1.0
   csv: ^6.0.0
   fast_csv: ^0.2.11
@@ -69,6 +68,10 @@ dependencies:
   flutter_sound: ^9.2.13
   webview_flutter: ^4.11.0
   geolocator: ^11.0.0
+  solana_wallet_adapter: ^0.1.5
+  solana: ^0.31.0
+  bs58: ^1.0.2
+  web_socket_channel: ^2.4.0
 
 dev_dependencies:
   flutter_test:
