@@ -19,7 +19,7 @@ class WalletAdapterService {
   static Future<void> initialize({
     required String appUri,
     required String appName,
-  Cluster? cluster,
+    Cluster? cluster,
   }) async {
     if (_initialized) {
       return;
@@ -31,10 +31,7 @@ class WalletAdapterService {
       await SolanaWalletAdapter.initialize();
       final Uri? identityUri = Uri.tryParse(appUri);
       _adapter = SolanaWalletAdapter(
-        AppIdentity(
-          uri: identityUri,
-          name: appName,
-        ),
+        AppIdentity(uri: identityUri, name: appName),
         cluster: cluster ?? Cluster.mainnet,
       );
     } catch (error, stackTrace) {
@@ -50,7 +47,9 @@ class WalletAdapterService {
   static SolanaWalletAdapter get _safeAdapter {
     final adapter = _adapter;
     if (adapter == null) {
-      throw StateError('Solana wallet adapter is not available on this device.');
+      throw StateError(
+        'Solana wallet adapter is not available on this device.',
+      );
     }
     return adapter;
   }
@@ -64,11 +63,14 @@ class WalletAdapterService {
       walletUriBase: walletUriBase,
     );
 
-    final Account? account = adapter.connectedAccount ??
+    final Account? account =
+        adapter.connectedAccount ??
         (result.accounts.isNotEmpty ? result.accounts.first : null);
 
     if (account == null) {
-      throw StateError('Unable to resolve a wallet account after authorization.');
+      throw StateError(
+        'Unable to resolve a wallet account after authorization.',
+      );
     }
 
     return account;

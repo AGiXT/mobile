@@ -20,7 +20,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _mfaController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  
+
   bool _isLoading = false;
   String? _errorMessage;
   List<OAuthProvider> _oauthProviders = [];
@@ -50,9 +50,9 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _loadingProviders = true;
       });
-      
+
       final providers = await OAuthService.getProviders();
-      
+
       setState(() {
         _oauthProviders = providers;
         _loadingProviders = false;
@@ -76,23 +76,26 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final providers = await WalletAuthService.getProviders();
-      final filtered = providers.where((provider) {
-        return provider.supportsChain('solana') &&
-            WalletAdapterService.supportsProvider(provider.id);
-      }).toList();
+      final filtered =
+          providers.where((provider) {
+            return provider.supportsChain('solana') &&
+                WalletAdapterService.supportsProvider(provider.id);
+          }).toList();
 
       setState(() {
         _walletProviders = filtered;
         _loadingWalletProviders = false;
-        _walletErrorMessage = filtered.isEmpty
-            ? 'No compatible Solana wallets were returned from the server.'
-            : null;
+        _walletErrorMessage =
+            filtered.isEmpty
+                ? 'No compatible Solana wallets were returned from the server.'
+                : null;
       });
     } catch (e) {
       setState(() {
         _walletProviders = [];
         _loadingWalletProviders = false;
-        _walletErrorMessage = 'Unable to load wallet providers. Please try again later.';
+        _walletErrorMessage =
+            'Unable to load wallet providers. Please try again later.';
       });
     }
   }
@@ -140,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final success = await OAuthService.authenticate(provider);
-      
+
       if (success && mounted) {
         Navigator.of(context).pushReplacementNamed('/home');
       } else {
@@ -160,7 +163,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _loginWithWallet(WalletProvider provider) async {
     if (!WalletAdapterService.isAvailable) {
       setState(() {
-        _walletErrorMessage = 'Wallet authentication is not available on this device.';
+        _walletErrorMessage =
+            'Wallet authentication is not available on this device.';
       });
       return;
     }
@@ -172,7 +176,9 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
-      final account = await WalletAdapterService.connect(providerId: provider.id);
+      final account = await WalletAdapterService.connect(
+        providerId: provider.id,
+      );
       final walletAddress = account.toBase58();
 
       final nonce = await WalletAuthService.requestNonce(
@@ -201,7 +207,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
       final token = result.jwtToken;
       if (token == null || token.isEmpty) {
-        throw StateError('Wallet authentication did not return a session token.');
+        throw StateError(
+          'Wallet authentication did not return a session token.',
+        );
       }
 
       await AuthService.storeJwt(token);
@@ -221,9 +229,10 @@ class _LoginScreenState extends State<LoginScreen> {
         message = message.substring('Bad state: '.length);
       }
       setState(() {
-        _walletErrorMessage = message.isEmpty
-            ? 'Wallet authentication failed. Please try again.'
-            : message;
+        _walletErrorMessage =
+            message.isEmpty
+                ? 'Wallet authentication failed. Please try again.'
+                : message;
       });
     } finally {
       if (mounted) {
@@ -245,11 +254,9 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final appName = AuthService.appName;
-    
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Login to $appName'),
-      ),
+      appBar: AppBar(title: Text('Login to $appName')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -267,7 +274,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             const SizedBox(height: 30),
-            
+
             // Error message if login fails
             if (_errorMessage != null)
               Container(
@@ -278,9 +285,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   style: TextStyle(color: Colors.red.shade900),
                 ),
               ),
-              
+
             const SizedBox(height: 20),
-            
+
             // Email & MFA login form
             Form(
               key: _formKey,
@@ -326,17 +333,18 @@ class _LoginScreenState extends State<LoginScreen> {
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
-                    child: _isLoading
-                        ? const CircularProgressIndicator()
-                        : const Text('Login'),
+                    child:
+                        _isLoading
+                            ? const CircularProgressIndicator()
+                            : const Text('Login'),
                   ),
                 ],
               ),
             ),
-            
+
             const SizedBox(height: 30),
             const Divider(),
-            
+
             // OAuth providers section
             Text(
               'Or continue with',
@@ -344,7 +352,7 @@ class _LoginScreenState extends State<LoginScreen> {
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            
+
             if (_loadingProviders)
               const Center(child: CircularProgressIndicator())
             else if (_oauthProviders.isEmpty)
@@ -355,9 +363,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: OutlinedButton(
-                    onPressed: _isLoading
-                        ? null
-                        : () => _loginWithOAuth(provider),
+                    onPressed:
+                        _isLoading ? null : () => _loginWithOAuth(provider),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -390,7 +397,8 @@ class _LoginScreenState extends State<LoginScreen> {
               const Center(child: CircularProgressIndicator())
             else if (_walletProviders.isEmpty)
               const Center(
-                  child: Text('Wallet login is currently unavailable.'))
+                child: Text('Wallet login is currently unavailable.'),
+              )
             else
               ..._walletProviders.map((provider) {
                 final bool isActive =
@@ -398,9 +406,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 return Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: OutlinedButton(
-                    onPressed: _walletConnecting
-                        ? null
-                        : () => _loginWithWallet(provider),
+                    onPressed:
+                        _walletConnecting
+                            ? null
+                            : () => _loginWithWallet(provider),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -412,9 +421,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 );
               }),
-              
+
             const SizedBox(height: 30),
-            
+
             // Registration link
             Center(
               child: RichText(
@@ -428,8 +437,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         color: Theme.of(context).primaryColor,
                         fontWeight: FontWeight.bold,
                       ),
-                      recognizer: TapGestureRecognizer()
-                        ..onTap = _openRegistrationPage,
+                      recognizer:
+                          TapGestureRecognizer()..onTap = _openRegistrationPage,
                     ),
                   ],
                 ),

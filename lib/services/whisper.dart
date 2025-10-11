@@ -245,13 +245,13 @@ class WhisperRemoteService implements WhisperService {
     final audioFile = File(wavPath);
     await audioFile.writeAsBytes(Uint8List.fromList(header));
 
-    OpenAIAudioModel transcription =
-        await OpenAI.instance.audio.createTranscription(
-      file: audioFile,
-      model: await getModel() ?? '',
-      responseFormat: OpenAIAudioResponseFormat.json,
-      language: await getLanguage(),
-    );
+    OpenAIAudioModel transcription = await OpenAI.instance.audio
+        .createTranscription(
+          file: audioFile,
+          model: await getModel() ?? '',
+          responseFormat: OpenAIAudioResponseFormat.json,
+          language: await getLanguage(),
+        );
 
     // delete wav file
     await File(wavPath).delete();
@@ -277,12 +277,15 @@ class WhisperRemoteService implements WhisperService {
   }
 
   Future<void> transcribeLive(
-      Stream<Uint8List> voiceData, StreamController<String> out) async {
+    Stream<Uint8List> voiceData,
+    StreamController<String> out,
+  ) async {
     await init();
     final url = (await getBaseURL())!.replaceFirst("http", "ws");
     final model = await getModel();
-  final WebSocketChannel socket =
-    WebSocketChannel.connect(Uri.parse('$url/v1/audio/transcriptions?model=$model'));
+    final WebSocketChannel socket = WebSocketChannel.connect(
+      Uri.parse('$url/v1/audio/transcriptions?model=$model'),
+    );
 
     // Add wav header
     final int sampleRate = 16000;

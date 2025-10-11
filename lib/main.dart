@@ -27,12 +27,18 @@ final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
 // Environment variables with defaults
-const String APP_NAME =
-    String.fromEnvironment('APP_NAME', defaultValue: 'AGiXT');
-const String AGIXT_SERVER = String.fromEnvironment('AGIXT_SERVER',
-    defaultValue: 'https://api.agixt.dev');
-const String APP_URI =
-    String.fromEnvironment('APP_URI', defaultValue: 'https://agixt.dev');
+const String APP_NAME = String.fromEnvironment(
+  'APP_NAME',
+  defaultValue: 'AGiXT',
+);
+const String AGIXT_SERVER = String.fromEnvironment(
+  'AGIXT_SERVER',
+  defaultValue: 'https://api.agixt.dev',
+);
+const String APP_URI = String.fromEnvironment(
+  'APP_URI',
+  defaultValue: 'https://agixt.dev',
+);
 
 void main() async {
   try {
@@ -46,10 +52,7 @@ void main() async {
     );
 
     try {
-      await WalletAdapterService.initialize(
-        appUri: APP_URI,
-        appName: APP_NAME,
-      );
+      await WalletAdapterService.initialize(appUri: APP_URI, appName: APP_NAME);
     } catch (e) {
       debugPrint('Failed to initialize wallet adapter service: $e');
     }
@@ -125,7 +128,9 @@ void main() async {
         var channel = const MethodChannel('dev.agixt.agixt/background_service');
         var callbackHandle = PluginUtilities.getCallbackHandle(backgroundMain);
         await channel.invokeMethod(
-            'startService', callbackHandle?.toRawHandle());
+          'startService',
+          callbackHandle?.toRawHandle(),
+        );
       } else {
         debugPrint('Background service already running, skipping start');
       }
@@ -143,34 +148,36 @@ void main() async {
     debugPrint('Stack trace: $stackTrace');
 
     // Try to run the app with minimal initialization
-    runApp(MaterialApp(
-      title: 'AGiXT',
-      home: Scaffold(
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
-              const Text(
-                'App initialization failed',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Text('Error: $e'),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () {
-                  // Restart the app
-                  main();
-                },
-                child: const Text('Retry'),
-              ),
-            ],
+    runApp(
+      MaterialApp(
+        title: 'AGiXT',
+        home: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error, size: 64, color: Colors.red),
+                const SizedBox(height: 16),
+                const Text(
+                  'App initialization failed',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Text('Error: $e'),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () {
+                    // Restart the app
+                    main();
+                  },
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 }
 
@@ -183,7 +190,8 @@ void _requestPermissionsAsync() {
           await PermissionManager.initializePermissions();
       if (!permissionsGranted) {
         debugPrint(
-            'Some critical permissions were denied, app may have limited functionality');
+          'Some critical permissions were denied, app may have limited functionality',
+        );
       } else {
         debugPrint('All critical permissions granted successfully');
       }
@@ -329,11 +337,14 @@ class _AGiXTAppState extends State<AGiXTApp> {
 
       // Handle links while app is running
       try {
-        _deepLinkSubscription = _appLinks.uriLinkStream.listen((Uri uri) {
-          _handleDeepLink(uri.toString());
-        }, onError: (error) {
-          debugPrint('Error handling deep link: $error');
-        });
+        _deepLinkSubscription = _appLinks.uriLinkStream.listen(
+          (Uri uri) {
+            _handleDeepLink(uri.toString());
+          },
+          onError: (error) {
+            debugPrint('Error handling deep link: $error');
+          },
+        );
       } catch (e) {
         debugPrint('Error setting up deep link stream: $e');
       }
@@ -349,7 +360,8 @@ class _AGiXTAppState extends State<AGiXTApp> {
 
               if (token != null && token.isNotEmpty) {
                 debugPrint(
-                    'Received JWT token via method channel from native code');
+                  'Received JWT token via method channel from native code',
+                );
                 await _processJwtToken(token);
               }
             } else if (call.method == 'checkPendingToken') {
@@ -504,11 +516,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
   Widget _buildHome() {
     try {
       if (_isLoading) {
-        return const Scaffold(
-          body: Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
       }
 
       return AppRetainWidget(
@@ -601,7 +609,8 @@ const notificationId = 888;
 Future<void> initializeService() async {
   flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin
+      >()
       ?.requestNotificationsPermission();
 
   final service = FlutterBackgroundService();
@@ -615,7 +624,8 @@ Future<void> initializeService() async {
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin
+      >()
       ?.createNotificationChannel(channel);
 
   await service.configure(

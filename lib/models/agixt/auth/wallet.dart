@@ -23,7 +23,8 @@ class WalletProvider {
       chains.map((value) => value.toLowerCase()).contains(chain.toLowerCase());
 
   factory WalletProvider.fromJson(String id, Map<String, dynamic> json) {
-    final List<dynamic> chains = json['chains'] is List ? json['chains'] : const [];
+    final List<dynamic> chains =
+        json['chains'] is List ? json['chains'] : const [];
     return WalletProvider(
       id: id,
       name: json['name'] ?? id,
@@ -46,10 +47,10 @@ class WalletNonce {
   final String? timestamp;
 
   factory WalletNonce.fromJson(Map<String, dynamic> json) => WalletNonce(
-        nonce: json['nonce']?.toString() ?? '',
-        message: json['message']?.toString() ?? '',
-        timestamp: json['timestamp']?.toString(),
-      );
+    nonce: json['nonce']?.toString() ?? '',
+    message: json['message']?.toString() ?? '',
+    timestamp: json['timestamp']?.toString(),
+  );
 }
 
 class WalletAuthResult {
@@ -109,18 +110,22 @@ class WalletAuthResult {
 class WalletAuthService {
   const WalletAuthService._();
 
-  static Uri _buildUri(String path) => Uri.parse('${AuthService.serverUrl}$path');
+  static Uri _buildUri(String path) =>
+      Uri.parse('${AuthService.serverUrl}$path');
 
   static Future<List<WalletProvider>> getProviders() async {
     try {
       final response = await http.get(_buildUri('/v1/wallet/providers'));
       if (response.statusCode != 200) {
-        throw Exception('Failed to load wallet providers (${response.statusCode})');
+        throw Exception(
+          'Failed to load wallet providers (${response.statusCode})',
+        );
       }
 
       final decoded = jsonDecode(response.body);
       final Map<String, dynamic> providersJson =
-          decoded is Map<String, dynamic> && decoded['providers'] is Map<String, dynamic>
+          decoded is Map<String, dynamic> &&
+                  decoded['providers'] is Map<String, dynamic>
               ? decoded['providers'] as Map<String, dynamic>
               : {};
 
@@ -142,14 +147,13 @@ class WalletAuthService {
       final response = await http.post(
         _buildUri('/v1/wallet/nonce'),
         headers: const {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'wallet_address': walletAddress,
-          'chain': chain,
-        }),
+        body: jsonEncode({'wallet_address': walletAddress, 'chain': chain}),
       );
 
       if (response.statusCode != 200) {
-        throw Exception('Failed to fetch wallet nonce (${response.statusCode})');
+        throw Exception(
+          'Failed to fetch wallet nonce (${response.statusCode})',
+        );
       }
 
       final Map<String, dynamic> decoded =
