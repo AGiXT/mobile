@@ -105,13 +105,13 @@ flutter run
 
 AGiXT Mobile now supports authenticating with Solana wallets so it can be listed in the Seeker dApp Store alongside the traditional email/MFA flow.
 
-1. Install a supported Solana wallet on the device (Phantom or Solflare).
+1. Install a supported Solana wallet on the device (Phantom, Solflare, or the built-in Solana Mobile Wallet on Seeker devices).
 2. Launch the wallet at least once so it registers its deep links.
 3. Open AGiXT Mobile and choose **Wallet Login** on the sign-in screen.
 4. Pick your preferred wallet provider when prompted and approve the connection request in the wallet app.
 5. When asked, review and sign the nonce message; AGiXT automatically verifies the signature and stores the issued session token.
 
-If multiple wallets are installed, AGiXT filters the list to providers compatible with the Solana Mobile Wallet Adapter. You can switch back to email login at any time from the same screen.
+If multiple wallets are installed, AGiXT filters the list to providers compatible with the Solana Mobile Wallet Adapter—including the native Solana Mobile Wallet vault shipped with Seeker devices. You can switch back to email login at any time from the same screen.
 
 ### Connecting to Even Realities G1 Glasses
 

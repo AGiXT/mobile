@@ -62,6 +62,7 @@ dependencies:
   flutter_appauth: ^6.0.2
   # Using app_links instead of uni_links for better compatibility
   app_links: ^3.5.0
+  jwt_decoder: ^2.0.1
   # speech_to_text provides native speech recognition functionality
   speech_to_text: ^7.0.2 # Upgrading to latest version that supports Flutter v2 embedding
   # flutter_sound for audio recording (doesn't rely on ffmpeg)

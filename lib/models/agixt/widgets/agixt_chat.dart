@@ -7,6 +7,7 @@ import 'package:agixt/models/agixt/widgets/agixt_widget.dart';
 import 'package:agixt/models/g1/note.dart';
 import 'package:agixt/screens/home_screen.dart'; // Import HomePage
 import 'package:agixt/services/cookie_manager.dart';
+import 'package:agixt/services/session_manager.dart';
 import 'package:agixt/services/location_service.dart'; // Import LocationService
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/material.dart';
@@ -52,7 +53,7 @@ class AGiXTChatWidget implements AGiXTWidget {
         noteNumber: 1,
         name: 'AGiXT Chat',
         text: 'Press the side button to speak with AGiXT AI assistant.',
-      )
+      ),
     ];
   }
 
@@ -74,11 +75,15 @@ class AGiXTChatWidget implements AGiXTWidget {
       // Build context data with timeout to prevent blocking AI responses
       String contextData = '';
       try {
-        contextData = await _buildContextData()
-            .timeout(const Duration(seconds: 3), onTimeout: () {
-          debugPrint('Context building timed out, proceeding without context');
-          return '';
-        });
+        contextData = await _buildContextData().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {
+            debugPrint(
+              'Context building timed out, proceeding without context',
+            );
+            return '';
+          },
+        );
         if (contextData.isNotEmpty) {
           debugPrint('Adding context data to user message');
         }
@@ -93,19 +98,16 @@ class AGiXTChatWidget implements AGiXTWidget {
           {
             "role": "user",
             "content": finalMessage,
-            if (contextData.isNotEmpty) "context": contextData
-          }
+            if (contextData.isNotEmpty) "context": contextData,
+          },
         ],
-        "user": conversationId // Use the conversation ID for the user field
+        "user": conversationId, // Use the conversation ID for the user field
       };
 
       // Send request to AGiXT API
       final response = await http.post(
         Uri.parse('${AuthService.serverUrl}/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': jwt,
-        },
+        headers: {'Content-Type': 'application/json', 'Authorization': jwt},
         body: jsonEncode(requestBody),
       );
 
@@ -124,7 +126,8 @@ class AGiXTChatWidget implements AGiXTWidget {
             final newConversationId = responseId.toString();
             await cookieManager.saveAgixtConversationId(newConversationId);
             debugPrint(
-                'Saved conversation ID from response: $newConversationId');
+              'Saved conversation ID from response: $newConversationId',
+            );
 
             // Only navigate if we get a different ID than "-"
             if (newConversationId != "-") {
@@ -140,7 +143,7 @@ class AGiXTChatWidget implements AGiXTWidget {
         }
       } else if (response.statusCode == 401) {
         // JWT may be expired
-        await AuthService.logout();
+        await SessionManager.clearSession();
         return "Authentication expired. Please login again.";
       }
 
@@ -167,21 +170,15 @@ class AGiXTChatWidget implements AGiXTWidget {
       final Map<String, dynamic> requestBody = {
         "model": await _getAgentName(),
         "messages": [
-          {
-            "role": "user",
-            "content": message,
-          }
+          {"role": "user", "content": message},
         ],
-        "user": conversationId // Use the conversation ID for the user field
+        "user": conversationId, // Use the conversation ID for the user field
       };
 
       // Send request to AGiXT API
       final response = await http.post(
         Uri.parse('${AuthService.serverUrl}/v1/chat/completions'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': jwt,
-        },
+        headers: {'Content-Type': 'application/json', 'Authorization': jwt},
         body: jsonEncode(requestBody),
       );
 
@@ -200,7 +197,8 @@ class AGiXTChatWidget implements AGiXTWidget {
             final newConversationId = responseId.toString();
             await cookieManager.saveAgixtConversationId(newConversationId);
             debugPrint(
-                'Saved conversation ID from direct response: $newConversationId');
+              'Saved conversation ID from direct response: $newConversationId',
+            );
           }
 
           debugPrint('AGiXT Direct Response: $answer');
@@ -218,7 +216,9 @@ class AGiXTChatWidget implements AGiXTWidget {
 
   // Navigate to the conversation in the WebView
   Future<void> _navigateToConversation(
-      String conversationId, String jwt) async {
+    String conversationId,
+    String jwt,
+  ) async {
     try {
       // Get access to the WebViewController from the HomePage static property
       final webViewController = HomePage.webViewController;
@@ -262,8 +262,10 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     // Get today's daily items with timeout
     try {
-      final dailyItems = await _getTodaysDailyItems()
-          .timeout(const Duration(seconds: 1), onTimeout: () => '');
+      final dailyItems = await _getTodaysDailyItems().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => '',
+      );
       if (dailyItems.isNotEmpty) {
         contextSections.add("### Users items for today\n\n$dailyItems");
       }
@@ -273,8 +275,10 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     // Get user's current active checklist tasks with timeout
     try {
-      final currentTasks = await _getCurrentChecklistTasks()
-          .timeout(const Duration(seconds: 1), onTimeout: () => '');
+      final currentTasks = await _getCurrentChecklistTasks().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => '',
+      );
       if (currentTasks.isNotEmpty) {
         contextSections.add("### Users current task\n\n$currentTasks");
       }
@@ -284,11 +288,14 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     // Get today's calendar items with timeout
     try {
-      final calendarItems = await _getTodaysCalendarItems()
-          .timeout(const Duration(seconds: 1), onTimeout: () => '');
+      final calendarItems = await _getTodaysCalendarItems().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => '',
+      );
       if (calendarItems.isNotEmpty) {
-        contextSections
-            .add("### Users calendar items for today\n\n$calendarItems");
+        contextSections.add(
+          "### Users calendar items for today\n\n$calendarItems",
+        );
       }
     } catch (e) {
       debugPrint('Error getting calendar items: $e');
@@ -296,8 +303,10 @@ class AGiXTChatWidget implements AGiXTWidget {
 
     // Get user's location if enabled with timeout
     try {
-      final locationData = await _getUserLocation()
-          .timeout(const Duration(seconds: 1), onTimeout: () => '');
+      final locationData = await _getUserLocation().timeout(
+        const Duration(seconds: 1),
+        onTimeout: () => '',
+      );
       if (locationData.isNotEmpty) {
         contextSections.add("### User's Current Location\n\n$locationData");
       }
@@ -318,13 +327,17 @@ class AGiXTChatWidget implements AGiXTWidget {
       items.sort((a, b) {
         if (a.hour == null || a.minute == null) return 1;
         if (b.hour == null || b.minute == null) return -1;
-        return TimeOfDay(hour: a.hour!, minute: a.minute!)
-            .compareTo(TimeOfDay(hour: b.hour!, minute: b.minute!));
+        return TimeOfDay(
+          hour: a.hour!,
+          minute: a.minute!,
+        ).compareTo(TimeOfDay(hour: b.hour!, minute: b.minute!));
       });
 
       return items
-          .map((item) =>
-              "${item.hour?.toString().padLeft(2, '0') ?? '--'}:${item.minute?.toString().padLeft(2, '0') ?? '--'} ${item.title}")
+          .map(
+            (item) =>
+                "${item.hour?.toString().padLeft(2, '0') ?? '--'}:${item.minute?.toString().padLeft(2, '0') ?? '--'} ${item.title}",
+          )
           .join('\n');
     } catch (e) {
       debugPrint('Error fetching daily items: $e');
@@ -387,12 +400,14 @@ class AGiXTChatWidget implements AGiXTWidget {
             if (event.start != null) {
               final start = event.start!.toLocal();
               final end = event.end?.toLocal();
-              final timeStr = end != null
-                  ? "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')} - ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}"
-                  : "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}";
+              final timeStr =
+                  end != null
+                      ? "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')} - ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}"
+                      : "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}";
 
               calendarEvents.add(
-                  "$timeStr ${event.title ?? 'Untitled event'}${event.location != null && event.location!.isNotEmpty ? ' at ${event.location}' : ''}");
+                "$timeStr ${event.title ?? 'Untitled event'}${event.location != null && event.location!.isNotEmpty ? ' at ${event.location}' : ''}",
+              );
             }
           }
         }
@@ -466,12 +481,14 @@ class AGiXTChatWidget implements AGiXTWidget {
           }
         } else {
           debugPrint(
-              'No conversation ID found in URL pattern - ensuring default ID exists');
+            'No conversation ID found in URL pattern - ensuring default ID exists',
+          );
           await _ensureConversationId();
         }
       } else {
         debugPrint(
-            'URL does not contain /chat/ path - ensuring default ID exists');
+          'URL does not contain /chat/ path - ensuring default ID exists',
+        );
         await _ensureConversationId();
       }
     } catch (e) {
@@ -504,8 +521,10 @@ class AGiXTChatWidget implements AGiXTWidget {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('agixt_last_question', question);
     await prefs.setString('agixt_last_answer', answer);
-    await prefs.setString('agixt_last_timestamp',
-        DateTime.now().millisecondsSinceEpoch.toString());
+    await prefs.setString(
+      'agixt_last_timestamp',
+      DateTime.now().millisecondsSinceEpoch.toString(),
+    );
   }
 
   // Retrieve the last interaction if it exists and is not too old
@@ -520,15 +539,19 @@ class AGiXTChatWidget implements AGiXTWidget {
     }
 
     // Check if the interaction is from the last 24 hours
-    final interactionTime =
-        DateTime.fromMillisecondsSinceEpoch(int.parse(timestamp));
+    final interactionTime = DateTime.fromMillisecondsSinceEpoch(
+      int.parse(timestamp),
+    );
     final now = DateTime.now();
     if (now.difference(interactionTime).inHours > 24) {
       return null; // Interaction is too old
     }
 
     return ChatInteraction(
-        question: question, answer: answer, timestamp: interactionTime);
+      question: question,
+      answer: answer,
+      timestamp: interactionTime,
+    );
   }
 
   // Get user's location if enabled (with timeout for AI responses)
@@ -544,7 +567,8 @@ class AGiXTChatWidget implements AGiXTWidget {
       // Use a very short timeout (2 seconds) to prevent blocking AI responses
       // This is especially important when screen is locked or in background mode
       final currentPosition = await locationService.getCurrentPosition(
-          timeout: const Duration(seconds: 2));
+        timeout: const Duration(seconds: 2),
+      );
       if (currentPosition != null) {
         return _formatLocationData(currentPosition);
       }
@@ -553,7 +577,9 @@ class AGiXTChatWidget implements AGiXTWidget {
       final lastPosition = await locationService.getLastPosition();
       if (lastPosition.isNotEmpty) {
         final formattedCoordinates = LocationService.formatCoordinates(
-            lastPosition['latitude'], lastPosition['longitude']);
+          lastPosition['latitude'],
+          lastPosition['longitude'],
+        );
 
         List<String> locationInfo = [
           "Coordinates: $formattedCoordinates",
@@ -563,7 +589,8 @@ class AGiXTChatWidget implements AGiXTWidget {
 
         if (lastPosition['altitude'] != null) {
           locationInfo.add(
-              "Altitude: ${lastPosition['altitude'].toStringAsFixed(1)} m");
+            "Altitude: ${lastPosition['altitude'].toStringAsFixed(1)} m",
+          );
         }
 
         if (lastPosition['timestamp'] != null) {
@@ -583,7 +610,9 @@ class AGiXTChatWidget implements AGiXTWidget {
   // Format position data into readable text
   String _formatLocationData(Position position) {
     final formattedCoordinates = LocationService.formatCoordinates(
-        position.latitude, position.longitude);
+      position.latitude,
+      position.longitude,
+    );
 
     return [
       "Coordinates: $formattedCoordinates",

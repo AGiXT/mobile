@@ -2,8 +2,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_appauth/flutter_appauth.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'auth.dart';
 
 class OAuthProvider {
@@ -33,6 +33,17 @@ class OAuthProvider {
       iconName: json['name'].toLowerCase(),
     );
   }
+}
+
+enum OAuthFlowStatus { completed, launched, failed }
+
+class OAuthFlowResult {
+  const OAuthFlowResult(this.status, {this.message});
+
+  final OAuthFlowStatus status;
+  final String? message;
+
+  bool get isSuccess => status == OAuthFlowStatus.completed;
 }
 
 class OAuthService {
@@ -65,7 +76,7 @@ class OAuthService {
   }
 
   // Perform OAuth authentication
-  static Future<bool> authenticate(OAuthProvider provider) async {
+  static Future<OAuthFlowResult> authenticate(OAuthProvider provider) async {
     try {
       // Use a web-based redirect URI for the OAuth flow
       final redirectUri = '${AuthService.appUri}/user/mobile/${provider.name}';
@@ -86,23 +97,40 @@ class OAuthService {
 
         if (pkceResponse?.accessToken != null) {
           await AuthService.storeJwt(pkceResponse!.accessToken!);
-          return true;
+          return const OAuthFlowResult(OAuthFlowStatus.completed);
         }
+        return const OAuthFlowResult(
+          OAuthFlowStatus.failed,
+          message: 'PKCE exchange succeeded without an access token.',
+        );
       } else {
         // Launch browser for standard OAuth
         final loginUrl = Uri.parse(
-            '${provider.authorize}?client_id=${provider.clientId}&redirect_uri=${Uri.encodeComponent(redirectUri)}&response_type=code&scope=${Uri.encodeComponent(provider.scopes)}');
+          '${provider.authorize}?client_id=${provider.clientId}&redirect_uri=${Uri.encodeComponent(redirectUri)}&response_type=code&scope=${Uri.encodeComponent(provider.scopes)}',
+        );
 
         if (await canLaunchUrl(loginUrl)) {
-          await launchUrl(loginUrl, mode: LaunchMode.externalApplication);
-          return true;
+          final launched = await launchUrl(
+            loginUrl,
+            mode: LaunchMode.externalApplication,
+          );
+          if (launched) {
+            return const OAuthFlowResult(OAuthFlowStatus.launched);
+          }
+          return const OAuthFlowResult(
+            OAuthFlowStatus.failed,
+            message: 'Unable to open the OAuth provider in a browser.',
+          );
         }
       }
 
-      return false;
+      return const OAuthFlowResult(
+        OAuthFlowStatus.failed,
+        message: 'The OAuth provider URL could not be opened.',
+      );
     } catch (e) {
       debugPrint('OAuth error: $e');
-      return false;
+      return OAuthFlowResult(OAuthFlowStatus.failed, message: e.toString());
     }
   }
 }
