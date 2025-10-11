@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:solana_wallet_adapter/solana_wallet_adapter.dart';
@@ -8,6 +11,7 @@ class WalletAdapterService {
 
   static SolanaWalletAdapter? _adapter;
   static bool _initialized = false;
+  static bool _assumeSolanaMobileStack = false;
 
   /// Canonical provider identifiers mapped to their known aliases.
   static const Map<String, List<String>> _providerAliases = {
@@ -65,10 +69,12 @@ class WalletAdapterService {
         AppIdentity(uri: identityUri, name: appName),
         cluster: cluster ?? Cluster.mainnet,
       );
+      _assumeSolanaMobileStack = await _shouldAssumeSolanaMobileStack();
     } catch (error, stackTrace) {
       debugPrint('Failed to initialise Solana wallet adapter: $error');
       debugPrint('$stackTrace');
       _adapter = null;
+      _assumeSolanaMobileStack = false;
     }
   }
 
@@ -276,7 +282,48 @@ class WalletAdapterService {
       }
     }
 
+    if (_assumeSolanaMobileStack) {
+      installed.add('solana_mobile_stack');
+    }
+
     return installed;
+  }
+
+  static Future<bool> _shouldAssumeSolanaMobileStack() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    try {
+      final DeviceInfoPlugin info = DeviceInfoPlugin();
+      final AndroidDeviceInfo android = await info.androidInfo;
+      final Iterable<String?> tokens = <String?>[
+        android.brand,
+        android.device,
+        android.hardware,
+        android.manufacturer,
+        android.model,
+        android.product,
+        android.display,
+        android.board,
+        android.host,
+      ];
+
+      for (final token in tokens) {
+        if (token == null || token.isEmpty) {
+          continue;
+        }
+
+        final String normalized = token.toLowerCase();
+        if (normalized.contains('solana') || normalized.contains('seeker')) {
+          return true;
+        }
+      }
+    } catch (_) {
+      return false;
+    }
+
+    return false;
   }
 
   static String? _canonicalFromStoreApp(dynamic app) {

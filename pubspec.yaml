@@ -42,6 +42,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   flutter_native_splash: ^2.4.3
   android_package_manager: ^0.7.1
+  device_info_plus: ^10.1.0
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   build_runner: 2.4.13
