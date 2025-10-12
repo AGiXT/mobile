@@ -242,9 +242,16 @@ class _LoginScreenState extends State<LoginScreen> {
       setState(() {
         _walletConnecting = false;
         _activeWalletProviderId = null;
+        final bool isSolanaMobile =
+            WalletAdapterService.canonicalProviderId(provider.id) ==
+            'solana_mobile_stack';
+        final String guidance =
+            isSolanaMobile
+                ? 'If you’re using a Solana Seeker headset, open Seeker settings '
+                    'and ensure the Solana Mobile Stack wallet is enabled.'
+                : 'Install the wallet app from the store and try again, or choose a different provider.';
         _walletErrorMessage =
-            'We couldn’t find ${provider.name} on this device. '
-            'Install the wallet app and try again, or choose a different provider.';
+            'We couldn’t find ${provider.name} on this device. $guidance';
       });
       if (!launched) {
         debugPrint(
@@ -315,9 +322,17 @@ class _LoginScreenState extends State<LoginScreen> {
       if (WalletAdapterService.isActivityNotFoundError(error)) {
         final bool launched =
             await WalletAdapterService.openProviderInstallPage(provider.id);
-        message =
-            'We couldn’t open ${provider.name} because it isn’t installed. '
-            'Install the wallet app and try again, or choose another provider.';
+        if (WalletAdapterService.canonicalProviderId(provider.id) ==
+            'solana_mobile_stack') {
+          message =
+              'We couldn’t open ${provider.name} because its activity isn’t available. '
+              'On Solana Seeker, enable the built-in Solana Mobile Stack wallet from settings, '
+              'or install the latest wallet update and try again.';
+        } else {
+          message =
+              'We couldn’t open ${provider.name} because it isn’t installed. '
+              'Install the wallet app and try again, or choose another provider.';
+        }
         if (!launched) {
           debugPrint(
             'Unable to launch install page for provider ${provider.id}',

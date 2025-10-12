@@ -23,10 +23,14 @@ class WalletAdapterService {
     Uri(scheme: 'https', host: 'sms.solanamobile.com', path: '/wallet'),
   ];
 
-  static final Map<String, Uri> _providerInstallUris = {
-    'solana_mobile_stack': Uri.parse(
-      'https://play.google.com/store/apps/details?id=com.solanamobile.wallet',
-    ),
+  static final Map<String, List<Uri>> _providerInstallUris = {
+    'solana_mobile_stack': [
+      Uri.parse('market://details?id=com.solanamobile.wallet'),
+      Uri.parse(
+        'https://play.google.com/store/apps/details?id=com.solanamobile.wallet',
+      ),
+      Uri.parse('https://solanamobile.com/wallet'),
+    ],
   };
 
   /// Canonical provider identifiers mapped to their known aliases.
@@ -234,16 +238,29 @@ class WalletAdapterService {
       return false;
     }
 
-    Uri? target = _providerInstallUris[canonical];
-    if (target == null && canonical == 'solana_mobile_stack') {
-      target = _solanaMobileHttpsFallback(forToken: canonical);
+    final List<Uri> targets = [
+      ...(_providerInstallUris[canonical] ?? const []),
+    ];
+
+    if (canonical == 'solana_mobile_stack') {
+      final Uri? fallback = _solanaMobileHttpsFallback(forToken: canonical);
+      if (fallback != null) {
+        targets.add(fallback);
+      }
     }
 
-    if (target == null) {
+    if (targets.isEmpty) {
       return false;
     }
 
-    return _launchExternalUri(target);
+    for (final uri in targets) {
+      final bool launched = await _launchExternalUri(uri);
+      if (launched) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /// Determines whether the supplied [error] indicates no activity could handle
@@ -257,11 +274,6 @@ class WalletAdapterService {
 
   static Future<bool> _launchExternalUri(Uri uri) async {
     try {
-      if (!await canLaunchUrl(uri)) {
-        debugPrint('No handler found to launch external URI $uri');
-        return false;
-      }
-
       final bool externalLaunched = await launchUrl(
         uri,
         mode: LaunchMode.externalApplication,
@@ -269,18 +281,21 @@ class WalletAdapterService {
       if (externalLaunched) {
         return true;
       }
+    } catch (error) {
+      debugPrint('Failed external launch for URI $uri: $error');
+    }
 
+    try {
       final bool fallbackLaunched = await launchUrl(uri);
       if (fallbackLaunched) {
         return true;
       }
-
-      debugPrint('Attempted to launch $uri but no activity handled it.');
-      return false;
     } catch (error) {
-      debugPrint('Failed to open external URI $uri: $error');
-      return false;
+      debugPrint('Failed default launch for URI $uri: $error');
     }
+
+    debugPrint('Attempted to launch $uri but no activity handled it.');
+    return false;
   }
 
   static Uri? _walletUriForProvider(
@@ -683,7 +698,11 @@ class WalletAdapterService {
       return uri;
     }
 
-    if (uri.scheme == 'https') {
+    if (uri.scheme.isEmpty) {
+      return _solanaMobileHttpsFallback(forToken: uri.toString(), hint: hint);
+    }
+
+    if (_looksLikeSolanaMobile(uri)) {
       return uri;
     }
 
@@ -691,11 +710,7 @@ class WalletAdapterService {
       return uri.replace(scheme: 'https');
     }
 
-    final Uri? inferred = _solanaMobileHttpsFallback(
-      forToken: uri.toString(),
-      hint: hint,
-    );
-    return inferred;
+    return uri;
   }
 
   static Uri? _solanaMobileHttpsFallback({String? forToken, dynamic hint}) {
