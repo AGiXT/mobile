@@ -1,5 +1,6 @@
 import 'dart:io' show Platform;
 
+import 'package:android_package_manager/android_package_manager.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -14,7 +15,19 @@ class WalletAdapterService {
   static bool _initialized = false;
   static bool _assumeSolanaMobileStack = false;
 
+  static const Set<String> _solanaMobilePackageIds = {
+    'com.solanamobile.wallet',
+    'com.solanamobile.walletapp',
+    'com.solanamobile.seeker',
+    'com.solana.mobilewallet',
+    'com.solana.mobile.wallet',
+    'com.solana.seeker.wallet',
+  };
+
   static final List<Uri> _solanaMobileFallbackUris = [
+    Uri.parse('sms://wallet-adapter'),
+    Uri.parse('solanamobilesdk://wallet-adapter'),
+    Uri.parse('solana-mobile://wallet-adapter'),
     Uri(scheme: 'https', host: 'solanamobile.com', path: '/wallet'),
     Uri(scheme: 'https', host: 'www.solanamobile.com', path: '/wallet'),
     Uri(scheme: 'https', host: 'wallet.solanamobile.com', path: '/'),
@@ -78,6 +91,29 @@ class WalletAdapterService {
     }
     final installed = _resolveInstalledProviders();
     return installed.contains(canonical);
+  }
+
+  static Future<bool> _hasSolanaMobilePackage() async {
+    if (!Platform.isAndroid) {
+      return false;
+    }
+
+    try {
+      final applications =
+          await AndroidPackageManager().getInstalledApplications() ?? const [];
+      for (final app in applications) {
+        final packageName = app.packageName?.toLowerCase();
+        if (packageName != null &&
+            _solanaMobilePackageIds.contains(packageName)) {
+          return true;
+        }
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Failed to query installed packages: $error');
+      debugPrint('$stackTrace');
+    }
+
+    return false;
   }
 
   /// Initialize the adapter once during application start.
@@ -238,15 +274,31 @@ class WalletAdapterService {
       return false;
     }
 
-    final List<Uri> targets = [
-      ...(_providerInstallUris[canonical] ?? const []),
-    ];
+    final List<Uri> targets = [];
+    final Set<String> seen = {};
+
+    void addCandidate(Uri? uri) {
+      if (uri == null) {
+        return;
+      }
+      final String key = uri.toString();
+      if (seen.add(key)) {
+        targets.add(uri);
+      }
+    }
 
     if (canonical == 'solana_mobile_stack') {
-      final Uri? fallback = _solanaMobileHttpsFallback(forToken: canonical);
-      if (fallback != null) {
-        targets.add(fallback);
+      for (final uri in _solanaMobileFallbackUris) {
+        addCandidate(uri);
       }
+    }
+
+    for (final uri in _providerInstallUris[canonical] ?? const <Uri>[]) {
+      addCandidate(uri);
+    }
+
+    if (canonical == 'solana_mobile_stack') {
+      addCandidate(_solanaMobileHttpsFallback(forToken: canonical));
     }
 
     if (targets.isEmpty) {
@@ -426,6 +478,10 @@ class WalletAdapterService {
   static Future<bool> _shouldAssumeSolanaMobileStack() async {
     if (!Platform.isAndroid) {
       return false;
+    }
+
+    if (await _hasSolanaMobilePackage()) {
+      return true;
     }
 
     try {
