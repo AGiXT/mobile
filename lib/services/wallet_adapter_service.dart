@@ -29,19 +29,19 @@ class WalletAdapterService {
     Uri.parse('sms://wallet-adapter'),
     Uri.parse('solanamobilesdk://wallet-adapter'),
     Uri.parse('solana-mobile://wallet-adapter'),
-    Uri.parse('https://vault.solanamobile.com/'),
-    Uri.parse('https://wallet.solanamobile.com/'),
-    Uri.parse('https://seeker.solanamobile.com/'),
-    Uri.parse('https://www.solanamobile.com/wallet'),
-    Uri.parse('https://solanamobile.com/wallet'),
+    Uri.parse('https://vault.solanamobile.com/mobilewalletadapter'),
+    Uri.parse('https://wallet.solanamobile.com/mobilewalletadapter'),
+    Uri.parse('https://seeker.solanamobile.com/mobilewalletadapter'),
+    Uri.parse('https://www.solanamobile.com/mobilewalletadapter'),
+    Uri.parse('https://solanamobile.com/mobilewalletadapter'),
   ];
 
   static final List<Uri> _solanaMobileHttpsUris = [
-    Uri.parse('https://vault.solanamobile.com/'),
-    Uri.parse('https://wallet.solanamobile.com/'),
-    Uri.parse('https://seeker.solanamobile.com/'),
-    Uri.parse('https://www.solanamobile.com/wallet'),
-    Uri.parse('https://solanamobile.com/wallet'),
+    Uri.parse('https://vault.solanamobile.com/mobilewalletadapter'),
+    Uri.parse('https://wallet.solanamobile.com/mobilewalletadapter'),
+    Uri.parse('https://seeker.solanamobile.com/mobilewalletadapter'),
+    Uri.parse('https://www.solanamobile.com/mobilewalletadapter'),
+    Uri.parse('https://solanamobile.com/mobilewalletadapter'),
   ];
 
   static final Map<String, List<Uri>> _providerInstallUris = {
