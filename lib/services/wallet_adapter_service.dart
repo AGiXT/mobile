@@ -37,6 +37,10 @@ class WalletAdapterService {
     Uri(scheme: 'https', host: 'sms.solanamobile.com', path: '/wallet'),
   ];
 
+  static final List<Uri> _solanaMobileHttpsUris = _solanaMobileFallbackUris
+      .where((uri) => uri.scheme == 'https')
+      .toList(growable: false);
+
   static final Map<String, List<Uri>> _providerInstallUris = {
     'solana_mobile_stack': [
       Uri.parse('market://details?id=com.solanamobile.wallet'),
@@ -685,7 +689,14 @@ class WalletAdapterService {
       _looksLikeSolanaMobile,
     );
     if (fromStore != null) {
-      return fromStore;
+      final Uri? normalized = _normalizeWalletUriForProvider(
+        fromStore,
+        'solana_mobile_stack',
+        hint: fromStore,
+      );
+      if (normalized != null) {
+        return normalized;
+      }
     }
 
     if (!_assumeSolanaMobileStack) {
@@ -693,8 +704,13 @@ class WalletAdapterService {
     }
 
     for (final Uri uri in _solanaMobileFallbackUris) {
-      if (_canonicalFromUri(uri) == 'solana_mobile_stack') {
-        return uri;
+      final Uri? normalized = _normalizeWalletUriForProvider(
+        uri,
+        'solana_mobile_stack',
+        hint: uri,
+      );
+      if (normalized != null) {
+        return normalized;
       }
     }
 
@@ -755,11 +771,7 @@ class WalletAdapterService {
       return uri;
     }
 
-    if (uri.scheme.isEmpty) {
-      return _solanaMobileHttpsFallback(forToken: uri.toString(), hint: hint);
-    }
-
-    if (_looksLikeSolanaMobile(uri)) {
+    if (uri.scheme == 'https') {
       return uri;
     }
 
@@ -767,29 +779,44 @@ class WalletAdapterService {
       return uri.replace(scheme: 'https');
     }
 
-    return uri;
+    final Uri? httpsFallback = _solanaMobileHttpsFallback(
+      forToken: uri.toString(),
+      hint: hint,
+    );
+
+    if (httpsFallback != null) {
+      return httpsFallback;
+    }
+
+    return null;
   }
 
   static Uri? _solanaMobileHttpsFallback({String? forToken, dynamic hint}) {
+    if (_solanaMobileHttpsUris.isEmpty) {
+      return null;
+    }
+
     final String token = (forToken ?? hint?.toString() ?? '').toLowerCase();
+
+    Uri? selectMatching(String keyword) {
+      for (final uri in _solanaMobileHttpsUris) {
+        if (uri.toString().toLowerCase().contains(keyword)) {
+          return uri;
+        }
+      }
+      return null;
+    }
 
     Uri? match;
     if (token.contains('seeker')) {
-      match = _solanaMobileFallbackUris.firstWhere(
-        (uri) => uri.toString().toLowerCase().contains('seeker'),
-        orElse: () => _solanaMobileFallbackUris.first,
-      );
+      match = selectMatching('seeker');
     } else if (token.contains('sms')) {
-      match = _solanaMobileFallbackUris.firstWhere(
-        (uri) => uri.toString().toLowerCase().contains('sms'),
-        orElse: () => _solanaMobileFallbackUris.first,
-      );
+      match = selectMatching('sms');
+    } else if (token.contains('vault')) {
+      match = selectMatching('vault');
     }
 
-    return match ??
-        (_solanaMobileFallbackUris.isNotEmpty
-            ? _solanaMobileFallbackUris.first
-            : null);
+    return match ?? _solanaMobileHttpsUris.first;
   }
 
   static bool _isActivityNotFound(PlatformException error) {
