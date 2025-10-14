@@ -419,7 +419,10 @@ class WalletAdapterService {
     }
 
     if (canonicalKey == 'solana_mobile_stack') {
-      final Uri? fallback = _solanaMobileWalletUri(adapter);
+      final Uri? fallback = _solanaMobileWalletUri(
+        adapter,
+        exclude: candidate,
+      );
       if (fallback != null) {
         return fallback;
       }
@@ -654,6 +657,16 @@ class WalletAdapterService {
       return previous;
     }
 
+    if (canonical == 'solana_mobile_stack') {
+      final Uri? fallback = _solanaMobileWalletUri(
+        adapter,
+        exclude: exclude,
+      );
+      if (fallback != null) {
+        return fallback;
+      }
+    }
+
     return null;
   }
 
@@ -684,7 +697,10 @@ class WalletAdapterService {
     return false;
   }
 
-  static Uri? _solanaMobileWalletUri(SolanaWalletAdapter adapter) {
+  static Uri? _solanaMobileWalletUri(
+    SolanaWalletAdapter adapter, {
+    Uri? exclude,
+  }) {
     final Uri? fromStore = _firstWalletUriMatching(
       adapter,
       _looksLikeSolanaMobile,
@@ -695,7 +711,7 @@ class WalletAdapterService {
         'solana_mobile_stack',
         hint: fromStore,
       );
-      if (normalized != null) {
+      if (normalized != null && normalized != exclude) {
         return normalized;
       }
     }
@@ -710,7 +726,7 @@ class WalletAdapterService {
         'solana_mobile_stack',
         hint: uri,
       );
-      if (normalized != null) {
+      if (normalized != null && normalized != exclude) {
         return normalized;
       }
     }
@@ -774,11 +790,17 @@ class WalletAdapterService {
 
     Uri working = uri;
 
-    if (working.scheme == 'http') {
-      working = working.replace(scheme: 'https');
+    final String scheme = working.scheme.toLowerCase();
+
+    if (scheme == 'solana-wallet') {
+      return working;
     }
 
-    if (working.scheme == 'https') {
+    if (scheme == 'http' || scheme == 'https') {
+      if (scheme == 'http') {
+        working = working.replace(scheme: 'https');
+      }
+
       final List<String> segments = List<String>.from(working.pathSegments);
       if (segments.isEmpty) {
         working = working.replace(pathSegments: const ['mobilewalletadapter']);
@@ -790,16 +812,7 @@ class WalletAdapterService {
       return working;
     }
 
-    final Uri? httpsFallback = _solanaMobileHttpsFallback(
-      forToken: uri.toString(),
-      hint: hint,
-    );
-
-    if (httpsFallback != null) {
-      return httpsFallback;
-    }
-
-    return null;
+    return uri;
   }
 
   static Uri? _solanaMobileHttpsFallback({String? forToken, dynamic hint}) {
