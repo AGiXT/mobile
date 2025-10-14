@@ -29,17 +29,20 @@ class WalletAdapterService {
     Uri.parse('sms://wallet-adapter'),
     Uri.parse('solanamobilesdk://wallet-adapter'),
     Uri.parse('solana-mobile://wallet-adapter'),
-    Uri(scheme: 'https', host: 'solanamobile.com', path: '/wallet'),
-    Uri(scheme: 'https', host: 'www.solanamobile.com', path: '/wallet'),
-    Uri(scheme: 'https', host: 'wallet.solanamobile.com', path: '/'),
-    Uri(scheme: 'https', host: 'vault.solanamobile.com', path: '/'),
-    Uri(scheme: 'https', host: 'seeker.solanamobile.com', path: '/wallet'),
-    Uri(scheme: 'https', host: 'sms.solanamobile.com', path: '/wallet'),
+    Uri.parse('https://vault.solanamobile.com/'),
+    Uri.parse('https://wallet.solanamobile.com/'),
+    Uri.parse('https://seeker.solanamobile.com/'),
+    Uri.parse('https://www.solanamobile.com/wallet'),
+    Uri.parse('https://solanamobile.com/wallet'),
   ];
 
-  static final List<Uri> _solanaMobileHttpsUris = _solanaMobileFallbackUris
-      .where((uri) => uri.scheme == 'https')
-      .toList(growable: false);
+  static final List<Uri> _solanaMobileHttpsUris = [
+    Uri.parse('https://vault.solanamobile.com/'),
+    Uri.parse('https://wallet.solanamobile.com/'),
+    Uri.parse('https://seeker.solanamobile.com/'),
+    Uri.parse('https://www.solanamobile.com/wallet'),
+    Uri.parse('https://solanamobile.com/wallet'),
+  ];
 
   static final Map<String, List<Uri>> _providerInstallUris = {
     'solana_mobile_stack': [
@@ -429,8 +432,7 @@ class WalletAdapterService {
     SolanaWalletAdapter adapter,
     AuthorizeResult result,
   ) {
-    final Account? account =
-        adapter.connectedAccount ??
+    final Account? account = adapter.connectedAccount ??
         (result.accounts.isNotEmpty ? result.accounts.first : null);
 
     if (account == null) {
@@ -622,10 +624,9 @@ class WalletAdapterService {
           }
         }
         final Uri baseUri = walletUri;
-        final Uri? normalized =
-            canonical != null
-                ? _normalizeWalletUriForProvider(baseUri, canonical, hint: app)
-                : null;
+        final Uri? normalized = canonical != null
+            ? _normalizeWalletUriForProvider(baseUri, canonical, hint: app)
+            : null;
         if (normalized != null) {
           return normalized;
         }
@@ -808,12 +809,12 @@ class WalletAdapterService {
     }
 
     Uri? match;
-    if (token.contains('seeker')) {
-      match = selectMatching('seeker');
-    } else if (token.contains('sms')) {
-      match = selectMatching('sms');
-    } else if (token.contains('vault')) {
+    if (token.contains('vault')) {
       match = selectMatching('vault');
+    } else if (token.contains('wallet')) {
+      match = selectMatching('wallet');
+    } else if (token.contains('seeker')) {
+      match = selectMatching('seeker');
     }
 
     return match ?? _solanaMobileHttpsUris.first;
