@@ -772,12 +772,22 @@ class WalletAdapterService {
       return uri;
     }
 
-    if (uri.scheme == 'https') {
-      return uri;
+    Uri working = uri;
+
+    if (working.scheme == 'http') {
+      working = working.replace(scheme: 'https');
     }
 
-    if (uri.scheme == 'http') {
-      return uri.replace(scheme: 'https');
+    if (working.scheme == 'https') {
+      final List<String> segments = List<String>.from(working.pathSegments);
+      if (segments.isEmpty) {
+        working = working.replace(pathSegments: const ['mobilewalletadapter']);
+      } else if (segments.first != 'mobilewalletadapter') {
+        working = working.replace(
+          pathSegments: ['mobilewalletadapter', ...segments],
+        );
+      }
+      return working;
     }
 
     final Uri? httpsFallback = _solanaMobileHttpsFallback(
