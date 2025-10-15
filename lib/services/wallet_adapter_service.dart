@@ -976,6 +976,14 @@ class WalletAdapterService {
 
     if (!nullAdded) {
       candidates.add(null);
+      nullAdded = true;
+    }
+
+    final int nullIndex = candidates.indexOf(null);
+    if (nullIndex > 0) {
+      candidates
+        ..removeAt(nullIndex)
+        ..insert(0, null);
     }
 
     return candidates;
@@ -990,6 +998,10 @@ class WalletAdapterService {
     final List<Uri> baseCandidates = [];
 
     final String scheme = uri.scheme.toLowerCase();
+
+    if (_isSolanaMobileScheme(scheme)) {
+      _addSolanaMobileSchemeVariants(uri, seen, results);
+    }
 
     if (scheme == 'http' || scheme == 'https') {
       final Uri httpsUri =
@@ -1093,6 +1105,22 @@ class WalletAdapterService {
     return results;
   }
 
+  static bool _isSolanaMobileScheme(String? scheme) {
+    if (scheme == null || scheme.isEmpty) {
+      return false;
+    }
+    switch (scheme.toLowerCase()) {
+      case 'solana-wallet':
+      case 'solanamobilesdk':
+      case 'solana-mobile':
+      case 'solanamobile':
+      case 'sms':
+        return true;
+      default:
+        return false;
+    }
+  }
+
   static void _addSolanaMobileUriVariants(
     Uri base,
     Set<String> seen,
@@ -1126,6 +1154,41 @@ class WalletAdapterService {
       final Uri root = candidateBase.replace(pathSegments: const []);
       push(root);
     } else {
+      for (final List<String> variant in _solanaMobilePathVariants) {
+        final Uri candidate = candidateBase.replace(pathSegments: variant);
+        push(candidate);
+      }
+    }
+  }
+
+  static void _addSolanaMobileSchemeVariants(
+    Uri base,
+    Set<String> seen,
+    List<Uri> target,
+  ) {
+    void push(Uri value) {
+      final String key = value.toString();
+      if (seen.add(key)) {
+        target.add(value);
+      }
+    }
+
+    Uri candidateBase = base;
+    if (!_isSolanaMobileScheme(candidateBase.scheme)) {
+      return;
+    }
+
+    push(candidateBase);
+
+    final String path = candidateBase.path;
+    if (!path.endsWith('/')) {
+      final Uri withSlash = candidateBase.replace(
+        path: path.isEmpty ? '/' : '$path/',
+      );
+      push(withSlash);
+    }
+
+    if (candidateBase.pathSegments.isEmpty) {
       for (final List<String> variant in _solanaMobilePathVariants) {
         final Uri candidate = candidateBase.replace(pathSegments: variant);
         push(candidate);

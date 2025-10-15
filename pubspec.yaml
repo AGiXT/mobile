@@ -75,6 +75,14 @@ dependencies:
   bs58: ^1.0.2
   web_socket_channel: ^2.4.0
 
+dependency_overrides:
+  solana_wallet_adapter:
+    path: vendor/solana_wallet_adapter
+  solana_wallet_adapter_platform_interface:
+    path: vendor/solana_wallet_adapter_platform_interface
+  solana_wallet_adapter_android:
+    path: vendor/solana_wallet_adapter_android
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

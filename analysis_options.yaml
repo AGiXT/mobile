@@ -10,6 +10,8 @@
 analyzer:
   errors:
     constant_identifier_names: ignore
+  exclude:
+    - vendor/**
 include: package:flutter_lints/flutter.yaml
 
 linter:

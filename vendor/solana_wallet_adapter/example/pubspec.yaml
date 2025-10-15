@@ -1,0 +1,25 @@
+name: solana_wallet_adapter_example
+description: Solana Wallet Adapter Example Application.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=2.19.2 <3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Add packages
+  solana_wallet_adapter:
+    path: ../
+  solana_web3: #^0.1.2
+    path: ../../solana_web3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
