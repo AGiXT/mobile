@@ -792,10 +792,6 @@ class WalletAdapterService {
 
     final String scheme = working.scheme.toLowerCase();
 
-    if (scheme == 'solana-wallet') {
-      return working;
-    }
-
     if (scheme == 'http' || scheme == 'https') {
       if (scheme == 'http') {
         working = working.replace(scheme: 'https');
@@ -812,7 +808,12 @@ class WalletAdapterService {
       return working;
     }
 
-    return uri;
+    final Uri? httpsFallback = _solanaMobileHttpsFallback(
+      forToken: uri.toString(),
+      hint: hint,
+    );
+
+    return httpsFallback;
   }
 
   static Uri? _solanaMobileHttpsFallback({String? forToken, dynamic hint}) {
