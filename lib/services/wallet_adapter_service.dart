@@ -44,6 +44,15 @@ class WalletAdapterService {
     Uri.parse('https://solanamobile.com/mobilewalletadapter'),
   ];
 
+  static const List<List<String>> _solanaMobilePathVariants = [
+    <String>['mobilewalletadapter'],
+    <String>['mobilewalletadapter', ''],
+    <String>['walletadapter'],
+    <String>['walletadapter', ''],
+    <String>['mobile-wallet-adapter'],
+    <String>['mobile-wallet-adapter', ''],
+  ];
+
   static final Map<String, List<Uri>> _providerInstallUris = {
     'solana_mobile_stack': [
       Uri.parse('market://details?id=com.solanamobile.wallet'),
@@ -170,7 +179,7 @@ class WalletAdapterService {
     final adapter = _safeAdapter;
     final String? canonicalProvider =
         providerId != null ? _canonicalProviderId(providerId) : null;
-    final Uri? walletUriBase = _walletUriForProvider(
+    final List<Uri?> walletUriBases = _walletUriCandidates(
       adapter,
       providerId,
       canonicalProvider: canonicalProvider,
@@ -184,45 +193,66 @@ class WalletAdapterService {
       );
     }
 
-    try {
-      final AuthorizeResult result = await adapter.reauthorizeOrAuthorize(
-        walletUriBase: walletUriBase,
-      );
+    final List<String> attempted = [];
+    PlatformException? lastActivityNotFound;
+    PlatformException? lastHttpsRequirement;
+    AuthorizeResult? authorizeResult;
 
-      return _extractAccount(adapter, result);
-    } on PlatformException catch (error) {
-      if (_isActivityNotFound(error)) {
-        final Uri? fallbackUri = _defaultWalletUri(
-          adapter,
-          exclude: walletUriBase,
+    for (final Uri? candidate in walletUriBases) {
+      attempted.add(candidate?.toString() ?? '<default>');
+      try {
+        final AuthorizeResult result = await adapter.reauthorizeOrAuthorize(
+          walletUriBase: candidate,
         );
-        if (fallbackUri != null) {
-          try {
-            final AuthorizeResult fallbackResult = await adapter
-                .reauthorizeOrAuthorize(walletUriBase: fallbackUri);
-            return _extractAccount(adapter, fallbackResult);
-          } on PlatformException catch (fallbackError) {
-            if (_isActivityNotFound(fallbackError)) {
-              throw StateError(
-                canonicalProvider == 'solana_mobile_stack'
-                    ? 'No compatible Solana Mobile wallet was found. '
-                        'Install the Solana Mobile Vault or choose another provider.'
-                    : 'No wallet application was found to handle the selected provider. '
-                        'Install the wallet app or choose another provider.',
-              );
-            }
-            rethrow;
-          }
+        authorizeResult = result;
+        break;
+      } on PlatformException catch (error) {
+        if (_isActivityNotFound(error)) {
+          lastActivityNotFound = error;
+          debugPrint(
+            'Wallet authorize fallback: no activity handled ${candidate ?? '(default)'}',
+          );
+          continue;
         }
+        if (_requiresHttpsWalletBase(error)) {
+          lastHttpsRequirement = error;
+          debugPrint(
+            'Wallet authorize fallback: candidate ${candidate ?? '(default)'} rejected for non-HTTPS base.',
+          );
+          continue;
+        }
+        rethrow;
+      }
+    }
 
+    if (authorizeResult == null) {
+      if (lastActivityNotFound != null) {
+        debugPrint(
+          'Wallet authorize failed after trying: ${attempted.join(', ')}',
+        );
         throw StateError(
-          'No wallet application was found to handle the selected provider. '
-          'Install the wallet app or choose another provider.',
+          canonicalProvider == 'solana_mobile_stack'
+              ? 'No compatible Solana Mobile wallet responded to the HTTPS app link. '
+                  'Install or update the Solana Mobile Vault and try again.'
+              : 'No wallet application was found to handle the selected provider. '
+                  'Install the wallet app or choose another provider.',
         );
       }
 
-      rethrow;
+      if (lastHttpsRequirement != null) {
+        throw StateError(
+          'The wallet rejected each provided HTTPS app link. Ensure the wallet is up to date '
+          'and supports Solana Mobile app-to-app connections.',
+        );
+      }
+
+      throw StateError(
+        'Unable to determine a wallet app link for the selected provider. '
+        'Install the wallet app or choose another provider.',
+      );
     }
+
+    return _extractAccount(adapter, authorizeResult);
   }
 
   /// Request the wallet to sign the supplied [message] using [account].
@@ -241,23 +271,70 @@ class WalletAdapterService {
     final String encodedAccount = adapter.encodeAccount(account);
     final String? canonical =
         providerId != null ? _canonicalProviderId(providerId) : null;
-    final Uri? walletUriBase = _walletUriForProvider(
+    final List<Uri?> walletUriBases = _walletUriCandidates(
       adapter,
       providerId,
       canonicalProvider: canonical,
     );
 
-    final SignMessagesResult result = await adapter.signMessages(
-      [encodedMessage],
-      addresses: [encodedAccount],
-      walletUriBase: walletUriBase,
-    );
+    SignMessagesResult? signingResult;
+    PlatformException? lastActivityNotFound;
+    PlatformException? lastHttpsRequirement;
 
-    if (result.signedPayloads.isEmpty) {
+    for (final Uri? candidate in walletUriBases) {
+      try {
+        final SignMessagesResult result = await adapter.signMessages(
+          [encodedMessage],
+          addresses: [encodedAccount],
+          walletUriBase: candidate,
+        );
+        signingResult = result;
+        break;
+      } on PlatformException catch (error) {
+        if (_isActivityNotFound(error)) {
+          lastActivityNotFound = error;
+          debugPrint(
+            'Wallet signMessages fallback: no activity handled ${candidate ?? '(default)'}',
+          );
+          continue;
+        }
+        if (_requiresHttpsWalletBase(error)) {
+          lastHttpsRequirement = error;
+          debugPrint(
+            'Wallet signMessages fallback: candidate ${candidate ?? '(default)'} rejected for non-HTTPS base.',
+          );
+          continue;
+        }
+        rethrow;
+      }
+    }
+
+    if (signingResult == null) {
+      if (lastActivityNotFound != null) {
+        throw StateError(
+          canonical == 'solana_mobile_stack'
+              ? 'No compatible Solana Mobile wallet responded to the HTTPS app link during signing. '
+                  'Install or update the Solana Mobile Vault and try again.'
+              : 'No wallet application was found to handle the selected provider. '
+                  'Install the wallet app or choose another provider.',
+        );
+      }
+
+      if (lastHttpsRequirement != null) {
+        throw StateError(
+          'The wallet rejected each provided HTTPS app link for signing. Ensure the wallet is up to date '
+          'and supports Solana Mobile app-to-app connections.',
+        );
+      }
+
       throw StateError('The wallet did not return a signed payload.');
     }
 
-    return result.signedPayloads.first;
+    if (signingResult.signedPayloads.isEmpty) {
+      throw StateError('The wallet did not return a signed payload.');
+    }
+
+    return signingResult.signedPayloads.first;
   }
 
   /// Disconnect the current wallet session.
@@ -706,13 +783,15 @@ class WalletAdapterService {
       _looksLikeSolanaMobile,
     );
     if (fromStore != null) {
-      final Uri? normalized = _normalizeWalletUriForProvider(
+      final Iterable<Uri> normalizedCandidates =
+          _solanaMobileNormalizeCandidates(
         fromStore,
-        'solana_mobile_stack',
         hint: fromStore,
       );
-      if (normalized != null && normalized != exclude) {
-        return normalized;
+      for (final Uri candidate in normalizedCandidates) {
+        if (candidate != exclude) {
+          return candidate;
+        }
       }
     }
 
@@ -721,13 +800,15 @@ class WalletAdapterService {
     }
 
     for (final Uri uri in _solanaMobileFallbackUris) {
-      final Uri? normalized = _normalizeWalletUriForProvider(
+      final Iterable<Uri> normalizedCandidates =
+          _solanaMobileNormalizeCandidates(
         uri,
-        'solana_mobile_stack',
         hint: uri,
       );
-      if (normalized != null && normalized != exclude) {
-        return normalized;
+      for (final Uri candidate in normalizedCandidates) {
+        if (candidate != exclude) {
+          return candidate;
+        }
       }
     }
 
@@ -796,24 +877,260 @@ class WalletAdapterService {
       if (scheme == 'http') {
         working = working.replace(scheme: 'https');
       }
-
-      final List<String> segments = List<String>.from(working.pathSegments);
-      if (segments.isEmpty) {
-        working = working.replace(pathSegments: const ['mobilewalletadapter']);
-      } else if (segments.first != 'mobilewalletadapter') {
-        working = working.replace(
-          pathSegments: ['mobilewalletadapter', ...segments],
-        );
-      }
       return working;
     }
 
-    final Uri? httpsFallback = _solanaMobileHttpsFallback(
+    final List<Uri> httpsFallbacks = _solanaMobileHttpsFallbacks(
       forToken: uri.toString(),
       hint: hint,
     );
 
-    return httpsFallback;
+    if (httpsFallbacks.isNotEmpty) {
+      return httpsFallbacks.first;
+    }
+
+    return null;
+  }
+
+  static List<Uri?> _walletUriCandidates(
+    SolanaWalletAdapter adapter,
+    String? providerId, {
+    String? canonicalProvider,
+  }) {
+    final List<Uri?> candidates = [];
+    final Set<String> seen = {};
+    bool nullAdded = false;
+
+    void add(Uri? uri, {dynamic hint}) {
+      if (uri == null) {
+        if (!nullAdded) {
+          candidates.add(null);
+          nullAdded = true;
+        }
+        return;
+      }
+
+      Iterable<Uri> normalized;
+      if (canonicalProvider == 'solana_mobile_stack') {
+        normalized = _solanaMobileNormalizeCandidates(uri, hint: hint);
+        if (normalized.isEmpty) {
+          normalized = _solanaMobileHttpsFallbacks(
+            forToken: uri.toString(),
+            hint: hint,
+          );
+        }
+      } else {
+        normalized = <Uri>[uri];
+      }
+
+      for (final Uri candidate in normalized) {
+        final String key = candidate.toString();
+        if (seen.add(key)) {
+          candidates.add(candidate);
+        }
+      }
+    }
+
+    final Uri? initial = _walletUriForProvider(
+      adapter,
+      providerId,
+      canonicalProvider: canonicalProvider,
+    );
+    add(initial);
+
+    if (canonicalProvider != null) {
+      final Uri? fallback = _defaultWalletUri(
+        adapter,
+        exclude: initial,
+        canonical: canonicalProvider,
+      );
+      add(fallback);
+    } else {
+      final Uri? fallback = _defaultWalletUri(
+        adapter,
+        exclude: initial,
+      );
+      add(fallback);
+    }
+
+    if (canonicalProvider == 'solana_mobile_stack') {
+      for (final app in adapter.store.apps) {
+        final Uri? walletUri = _safeWalletUri(app);
+        add(walletUri, hint: app);
+      }
+
+      final Uri? previous = adapter.authorizeResult?.walletUriBase;
+      add(previous);
+
+      for (final Uri uri in _solanaMobileFallbackUris) {
+        add(uri);
+      }
+
+      for (final Uri uri in _solanaMobileHttpsUris) {
+        add(uri);
+      }
+    } else {
+      final Uri? previous = adapter.authorizeResult?.walletUriBase;
+      add(previous);
+    }
+
+    if (!nullAdded) {
+      candidates.add(null);
+    }
+
+    return candidates;
+  }
+
+  static Iterable<Uri> _solanaMobileNormalizeCandidates(
+    Uri uri, {
+    dynamic hint,
+  }) {
+    final Set<String> seen = {};
+    final List<Uri> results = [];
+    final List<Uri> baseCandidates = [];
+
+    final String scheme = uri.scheme.toLowerCase();
+
+    if (scheme == 'http' || scheme == 'https') {
+      final Uri httpsUri =
+          scheme == 'http' ? uri.replace(scheme: 'https') : uri;
+      baseCandidates.add(httpsUri);
+    } else {
+      baseCandidates.addAll(
+        _solanaMobileHttpsFallbacks(
+          forToken: uri.toString(),
+          hint: hint,
+        ),
+      );
+    }
+
+    if (hint is Uri) {
+      baseCandidates.addAll(
+        _solanaMobileHttpsFallbacks(
+          forToken: hint.toString(),
+          hint: hint,
+        ),
+      );
+    } else if (hint != null) {
+      baseCandidates.addAll(
+        _solanaMobileHttpsFallbacks(
+          forToken: hint.toString(),
+          hint: hint,
+        ),
+      );
+    }
+
+    if (baseCandidates.isEmpty) {
+      baseCandidates.addAll(_solanaMobileHttpsFallbacks());
+    }
+
+    for (final Uri baseCandidate in baseCandidates) {
+      _addSolanaMobileUriVariants(baseCandidate, seen, results);
+    }
+
+    return results;
+  }
+
+  static List<Uri> _solanaMobileHttpsFallbacks({
+    String? forToken,
+    dynamic hint,
+  }) {
+    final List<Uri> results = [];
+    final Set<String> seen = {};
+
+    void push(Uri? uri) {
+      if (uri == null) {
+        return;
+      }
+      final String key = uri.toString();
+      if (seen.add(key)) {
+        results.add(uri);
+      }
+    }
+
+    push(_solanaMobileHttpsFallback(forToken: forToken, hint: hint));
+
+    final String token = (forToken ?? hint?.toString() ?? '').toLowerCase();
+    final List<String> keywords = [];
+    if (token.contains('vault')) {
+      keywords.add('vault');
+    }
+    if (token.contains('wallet')) {
+      keywords.add('wallet');
+    }
+    if (token.contains('seeker')) {
+      keywords.add('seeker');
+    }
+
+    for (final String keyword in keywords) {
+      for (final Uri uri in _solanaMobileHttpsUris) {
+        if (uri.toString().toLowerCase().contains(keyword)) {
+          push(uri);
+        }
+      }
+    }
+
+    if (hint is Uri && hint.hasAuthority) {
+      Uri candidate = hint;
+      if (candidate.scheme.isEmpty || candidate.scheme == 'http') {
+        candidate = candidate.replace(scheme: 'https');
+      } else if (candidate.scheme != 'https') {
+        candidate = Uri(
+          scheme: 'https',
+          host: candidate.host.isNotEmpty ? candidate.host : candidate.path,
+          pathSegments: candidate.pathSegments,
+        );
+      }
+      if (candidate.hasAuthority) {
+        push(candidate);
+      }
+    }
+
+    for (final Uri uri in _solanaMobileHttpsUris) {
+      push(uri);
+    }
+
+    return results;
+  }
+
+  static void _addSolanaMobileUriVariants(
+    Uri base,
+    Set<String> seen,
+    List<Uri> target,
+  ) {
+    void push(Uri value) {
+      final String key = value.toString();
+      if (seen.add(key)) {
+        target.add(value);
+      }
+    }
+
+    Uri candidateBase = base;
+    if (candidateBase.scheme != 'https') {
+      candidateBase = candidateBase.scheme.isEmpty
+          ? candidateBase.replace(scheme: 'https')
+          : candidateBase.replace(scheme: 'https');
+    }
+
+    push(candidateBase);
+
+    final String path = candidateBase.path;
+    if (!path.endsWith('/')) {
+      final Uri withSlash = candidateBase.replace(
+        path: path.isEmpty ? '/' : '$path/',
+      );
+      push(withSlash);
+    }
+
+    if (candidateBase.pathSegments.isNotEmpty) {
+      final Uri root = candidateBase.replace(pathSegments: const []);
+      push(root);
+    } else {
+      for (final List<String> variant in _solanaMobilePathVariants) {
+        final Uri candidate = candidateBase.replace(pathSegments: variant);
+        push(candidate);
+      }
+    }
   }
 
   static Uri? _solanaMobileHttpsFallback({String? forToken, dynamic hint}) {
@@ -842,6 +1159,16 @@ class WalletAdapterService {
     }
 
     return match ?? _solanaMobileHttpsUris.first;
+  }
+
+  static bool _requiresHttpsWalletBase(PlatformException error) {
+    final String message = (error.message ?? '').toLowerCase();
+    if (message.contains('wallet base uri prefix must start with https://')) {
+      return true;
+    }
+
+    final String details = (error.details ?? '').toString().toLowerCase();
+    return details.contains('wallet base uri prefix must start with https://');
   }
 
   static bool _isActivityNotFound(PlatformException error) {
