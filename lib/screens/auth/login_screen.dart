@@ -131,16 +131,63 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  List<int> _decodeWalletSignature(String signature) {
+  Uint8List _decodeWalletSignedPayload(String payload) {
     try {
-      return base64Decode(signature);
+      return Uint8List.fromList(base64Decode(payload));
     } on FormatException {
       try {
-        return base64Url.decode(base64Url.normalize(signature));
+        return Uint8List.fromList(
+            base64Url.decode(base64Url.normalize(payload)));
       } on FormatException {
         throw StateError('Wallet returned an invalid signature payload.');
       }
     }
+  }
+
+  Uint8List _extractSignatureFromPayload(
+    Uint8List signedPayload,
+    String originalMessage,
+  ) {
+    const int signatureLength = 64;
+    if (signedPayload.length == signatureLength) {
+      return signedPayload;
+    }
+
+    final List<int> messageBytes = utf8.encode(originalMessage);
+    if (signedPayload.length < signatureLength) {
+      throw StateError(
+          'Wallet returned an unexpectedly short signature payload.');
+    }
+
+    if (messageBytes.isNotEmpty &&
+        _endsWithBytes(signedPayload, messageBytes)) {
+      final int signatureEnd = signedPayload.length - messageBytes.length;
+      if (signatureEnd >= signatureLength) {
+        return signedPayload.sublist(0, signatureLength);
+      }
+    }
+
+    if (signedPayload.length > signatureLength) {
+      return signedPayload.sublist(0, signatureLength);
+    }
+
+    throw StateError('Wallet returned an unexpected signed payload format.');
+  }
+
+  bool _endsWithBytes(Uint8List data, List<int> suffix) {
+    if (suffix.isEmpty) {
+      return true;
+    }
+    if (data.length < suffix.length) {
+      return false;
+    }
+    final int offset = data.length - suffix.length;
+    for (int index = 0; index < suffix.length; index += 1) {
+      if (data[offset + index] != suffix[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> _login() async {
@@ -287,9 +334,10 @@ class _LoginScreenState extends State<LoginScreen> {
         providerId: provider.id,
       );
 
-      final signatureBytes = _decodeWalletSignature(signatureBase64);
-      final signatureBase58 =
-          bs58.base58.encode(Uint8List.fromList(signatureBytes));
+      final signedPayload = _decodeWalletSignedPayload(signatureBase64);
+      final signatureBytes =
+          _extractSignatureFromPayload(signedPayload, nonce.message);
+      final signatureBase58 = bs58.base58.encode(signatureBytes);
 
       final result = await WalletAuthService.verifySignature(
         walletAddress: walletAddress,
