@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:android_package_manager/android_package_manager.dart';
 import 'package:agixt/models/agixt/agixt_dashboard.dart';
@@ -111,7 +110,9 @@ class BluetoothManager {
     final pref = await SharedPreferences.getInstance();
     await pref.setString(side == GlassSide.left ? 'left' : 'right', uid);
     await pref.setString(
-        side == GlassSide.left ? 'leftName' : 'rightName', name);
+      side == GlassSide.left ? 'leftName' : 'rightName',
+      name,
+    );
   }
 
   Future<void> initialize() async {
@@ -170,21 +171,24 @@ class BluetoothManager {
     }
 
     try {
-      Map<Permission, PermissionStatus> statuses = await [
-        Permission.bluetoothScan,
-        Permission.bluetoothConnect,
-        Permission.location,
-        Permission.ignoreBatteryOptimizations,
-      ].request();
+      Map<Permission, PermissionStatus> statuses =
+          await [
+            Permission.bluetoothScan,
+            Permission.bluetoothConnect,
+            Permission.location,
+            Permission.ignoreBatteryOptimizations,
+          ].request();
 
       // Don't throw exceptions for denied permissions, just log them
       if (statuses.values.any((status) => status.isDenied)) {
         debugPrint(
-            'Some Bluetooth permissions were denied. App functionality may be limited.');
+          'Some Bluetooth permissions were denied. App functionality may be limited.',
+        );
 
         if (statuses.values.any((status) => status.isPermanentlyDenied)) {
           debugPrint(
-              'Some permissions are permanently denied. User should enable them in settings.');
+            'Some permissions are permanently denied. User should enable them in settings.',
+          );
         }
       } else {
         debugPrint('All Bluetooth permissions granted successfully');
@@ -229,9 +233,7 @@ class BluetoothManager {
     }
   }
 
-  Future<void> startScanAndConnect({
-    required OnUpdate onUpdate,
-  }) async {
+  Future<void> startScanAndConnect({required OnUpdate onUpdate}) async {
     // Prevent multiple simultaneous scans
     if (_isScanning) {
       debugPrint('Scan already in progress, ignoring new scan request');
@@ -245,16 +247,19 @@ class BluetoothManager {
     } catch (e) {
       debugPrint('Permission request failed: $e');
       onUpdate(
-          'Permission request failed, continuing with limited functionality');
+        'Permission request failed, continuing with limited functionality',
+      );
       // Continue execution instead of returning
     }
 
-    if (!await FlutterBluePlus.isAvailable) {
+    if (!await FlutterBluePlus.isSupported) {
       onUpdate('Bluetooth is not available');
       throw Exception('Bluetooth is not available');
     }
 
-    if (!await FlutterBluePlus.isOn) {
+    final BluetoothAdapterState adapterState =
+        await FlutterBluePlus.adapterState.first;
+    if (adapterState != BluetoothAdapterState.on) {
       onUpdate('Bluetooth is turned off');
       throw Exception('Bluetooth is turned off');
     }
@@ -272,7 +277,8 @@ class BluetoothManager {
     rightGlass = null;
 
     await Future.delayed(
-        const Duration(milliseconds: 500)); // Give BT stack time to clean up
+      const Duration(milliseconds: 500),
+    ); // Give BT stack time to clean up
     await _startScan(onUpdate);
   }
 
@@ -305,8 +311,8 @@ class BluetoothManager {
       _scanSubscription = FlutterBluePlus.scanResults.listen(
         (results) {
           for (ScanResult result in results) {
-            String deviceName = result.device.name;
-            String deviceId = result.device.id.id;
+            String deviceName = result.device.platformName;
+            String deviceId = result.device.remoteId.str;
             debugPrint('Found device: $deviceName ($deviceId)');
 
             if (deviceName.isNotEmpty) {
@@ -335,7 +341,7 @@ class BluetoothManager {
   }
 
   void _handleDeviceFound(ScanResult result, OnUpdate onUpdate) async {
-    String deviceName = result.device.name;
+    String deviceName = result.device.platformName;
     Glass? glass;
     if (deviceName.contains('_L_') && leftGlass == null) {
       debugPrint('Found left glass: $deviceName');
@@ -346,7 +352,11 @@ class BluetoothManager {
       );
       leftGlass = glass;
       onUpdate("Left glass found: ${glass.name}");
-      await _saveLastG1Used(GlassSide.left, glass.name, glass.device.id.id);
+      await _saveLastG1Used(
+        GlassSide.left,
+        glass.name,
+        glass.device.remoteId.str,
+      );
     } else if (deviceName.contains('_R_') && rightGlass == null) {
       debugPrint('Found right glass: $deviceName');
       glass = Glass(
@@ -356,7 +366,11 @@ class BluetoothManager {
       );
       rightGlass = glass;
       onUpdate("Right glass found: ${glass.name}");
-      await _saveLastG1Used(GlassSide.right, glass.name, glass.device.id.id);
+      await _saveLastG1Used(
+        GlassSide.right,
+        glass.name,
+        glass.device.remoteId.str,
+      );
     }
     if (glass != null) {
       try {
@@ -391,7 +405,8 @@ class BluetoothManager {
             _isScanning = false;
             stopScanning();
             await Future.delayed(
-                const Duration(seconds: 2)); // Increased delay for stability
+              const Duration(seconds: 2),
+            ); // Increased delay for stability
             await _sync();
           }
         }
@@ -422,7 +437,8 @@ class BluetoothManager {
           debugPrint('Immediate battery request sent to ${glass.side} glass');
         } catch (e) {
           debugPrint(
-              'Error requesting immediate battery info from ${glass.side} glass: $e');
+            'Error requesting immediate battery info from ${glass.side} glass: $e',
+          );
         }
       }
     });
@@ -435,7 +451,8 @@ class BluetoothManager {
           debugPrint('Follow-up battery request sent to ${glass.side} glass');
         } catch (e) {
           debugPrint(
-              'Error in follow-up battery request from ${glass.side} glass: $e');
+            'Error in follow-up battery request from ${glass.side} glass: $e',
+          );
         }
       }
     });
@@ -456,9 +473,11 @@ class BluetoothManager {
     } else {
       _isScanning = false;
       stopScanning();
-      onUpdate(leftGlass == null && rightGlass == null
-          ? 'No glasses found'
-          : 'Scan completed');
+      onUpdate(
+        leftGlass == null && rightGlass == null
+            ? 'No glasses found'
+            : 'Scan completed',
+      );
     }
   }
 
@@ -468,12 +487,16 @@ class BluetoothManager {
     }
   }
 
-  Future<void> connectToDevice(BluetoothDevice device,
-      {required String side}) async {
+  Future<void> connectToDevice(
+    BluetoothDevice device, {
+    required String side,
+  }) async {
     try {
-      debugPrint('Attempting to connect to $side glass: ${device.name}');
+      debugPrint(
+        'Attempting to connect to $side glass: ${device.platformName}',
+      );
       await device.connect(timeout: const Duration(seconds: 15));
-      debugPrint('Connected to $side glass: ${device.name}');
+      debugPrint('Connected to $side glass: ${device.platformName}');
 
       List<BluetoothService> services = await device.discoverServices();
       debugPrint('Discovered ${services.length} services for $side glass');
@@ -503,12 +526,14 @@ class BluetoothManager {
 
   void stopScanning() {
     _scanTimer?.cancel();
-    FlutterBluePlus.stopScan().then((_) {
-      debugPrint('Stopped scanning');
-      _isScanning = false;
-    }).catchError((error) {
-      debugPrint('Error stopping scan: $error');
-    });
+    FlutterBluePlus.stopScan()
+        .then((_) {
+          debugPrint('Stopped scanning');
+          _isScanning = false;
+        })
+        .catchError((error) {
+          debugPrint('Error stopping scan: $error');
+        });
   }
 
   Future<void> sendCommandToGlasses(List<int> command) async {
@@ -522,13 +547,16 @@ class BluetoothManager {
     }
   }
 
-  Future<void> sendText(String text,
-      {Duration delay = const Duration(seconds: 5)}) async {
+  Future<void> sendText(
+    String text, {
+    Duration delay = const Duration(seconds: 5),
+  }) async {
     // Check if display is enabled in settings
     bool isDisplayEnabled = await _isGlassesDisplayEnabled();
     if (!isDisplayEnabled) {
       debugPrint(
-          'Glasses display is disabled in settings. Text not displayed: $text');
+        'Glasses display is disabled in settings. Text not displayed: $text',
+      );
       return;
     }
 
@@ -537,8 +565,10 @@ class BluetoothManager {
 
   /// Send text directly to glasses without display preference checks
   /// Used for AI responses and system messages
-  Future<void> _sendTextDirect(String text,
-      {Duration delay = const Duration(seconds: 5)}) async {
+  Future<void> _sendTextDirect(
+    String text, {
+    Duration delay = const Duration(seconds: 5),
+  }) async {
     final textMsg = TextMessage(text);
     List<List<int>> packets = textMsg.constructSendText();
 
@@ -555,8 +585,10 @@ class BluetoothManager {
 
   /// Send AI response text directly to glasses, bypassing display preference checks
   /// This ensures AI responses are always displayed regardless of location settings
-  Future<void> sendAIResponse(String text,
-      {Duration delay = const Duration(seconds: 5)}) async {
+  Future<void> sendAIResponse(
+    String text, {
+    Duration delay = const Duration(seconds: 5),
+  }) async {
     debugPrint('Sending AI response to glasses: $text');
     await _sendTextDirect(text, delay: delay);
   }
@@ -566,7 +598,8 @@ class BluetoothManager {
     bool isDisplayEnabled = await _isGlassesDisplayEnabled();
     if (!isDisplayEnabled) {
       debugPrint(
-          'Glasses display is disabled in settings. Dashboard layout not changed.');
+        'Glasses display is disabled in settings. Dashboard layout not changed.',
+      );
       return;
     }
 
@@ -630,7 +663,8 @@ class BluetoothManager {
     bool isDisplayEnabled = await _isGlassesDisplayEnabled();
     if (!isDisplayEnabled) {
       debugPrint(
-          'Glasses display is disabled in settings. Notification not sent: ${notification.title}');
+        'Glasses display is disabled in settings. Notification not sent: ${notification.title}',
+      );
       return;
     }
 
@@ -640,7 +674,8 @@ class BluetoothManager {
     for (Uint8List chunk in notificationChunks) {
       await sendCommandToGlasses(chunk);
       await Future.delayed(
-          Duration(milliseconds: 50)); // Small delay between chunks
+        Duration(milliseconds: 50),
+      ); // Small delay between chunks
     }
   }
 
@@ -653,7 +688,8 @@ class BluetoothManager {
 
   void _handleAndroidNotification(ServiceNotificationEvent notification) async {
     debugPrint(
-        'Received notification: ${notification.toString()} from ${notification.packageName}');
+      'Received notification: ${notification.toString()} from ${notification.packageName}',
+    );
     if (isConnected) {
       NCSNotification ncsNotification = NCSNotification(
         msgId: (notification.id ?? 1) + DateTime.now().millisecondsSinceEpoch,
@@ -674,10 +710,7 @@ class BluetoothManager {
     required Uint8List dataChunk,
     int seq = 0,
   }) async {
-    BmpPacket result = BmpPacket(
-      seq: seq,
-      data: dataChunk,
-    );
+    BmpPacket result = BmpPacket(seq: seq, data: dataChunk);
 
     List<int> bmpCommand = result.build();
 
@@ -700,9 +733,7 @@ class BluetoothManager {
     return crc.close();
   }
 
-  Future<List<int>?> _sendCRCPacket({
-    required Uint8List packets,
-  }) async {
+  Future<List<int>?> _sendCRCPacket({required Uint8List packets}) async {
     Uint8List crcData = Uint8List.fromList([...packets]);
 
     int crc32Checksum = _crc32(crcData) & 0xFFFFFFFF;
@@ -712,9 +743,7 @@ class BluetoothManager {
     crc32Bytes[2] = (crc32Checksum >> 8) & 0xFF;
     crc32Bytes[3] = crc32Checksum & 0xFF;
 
-    CrcPacket result = CrcPacket(
-      data: crc32Bytes,
-    );
+    CrcPacket result = CrcPacket(data: crc32Bytes);
 
     List<int> crcCommand = result.build();
 
@@ -772,11 +801,7 @@ class BluetoothManager {
     // so old notes are not shown
     if (notes.length < 4) {
       for (int i = notes.length; i < 4; i++) {
-        final note = Note(
-          noteNumber: i + 1,
-          name: 'Empty',
-          text: '',
-        );
+        final note = Note(noteNumber: i + 1, name: 'Empty', text: '');
         await sendCommandToGlasses(note.buildDeleteCommand());
       }
     }

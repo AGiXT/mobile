@@ -1,0 +1,14 @@
+export 'base/activity_info.dart';
+export 'base/application_info.dart';
+export 'base/component_name.dart';
+export 'base/configuration_info.dart';
+export 'base/feature_info.dart';
+export 'base/flags.dart';
+export 'base/install_source_info.dart';
+export 'base/instrumentation_info.dart';
+export 'base/package_info.dart';
+export 'base/package_item_info.dart';
+export 'base/permission_info.dart';
+export 'base/provider_info.dart';
+export 'base/service_info.dart';
+export 'base/signing_info.dart';

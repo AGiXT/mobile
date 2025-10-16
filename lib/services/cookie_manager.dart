@@ -48,6 +48,16 @@ class CookieManager {
     }
   }
 
+  Future<void> clearAgixtAgentCookie() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_agixtAgentKey);
+      debugPrint('Cleared agixt-agent cookie');
+    } catch (e) {
+      debugPrint('Error clearing agixt-agent cookie: $e');
+    }
+  }
+
   // Save the agixt-agent cookie
   Future<void> saveAgixtAgentCookie(String cookieValue) async {
     try {
@@ -64,12 +74,12 @@ class CookieManager {
     try {
       final prefs = await SharedPreferences.getInstance();
       final storedCookie = prefs.getString(_agixtAgentKey);
-      
+
       // If cookie exists, return it
       if (storedCookie != null && storedCookie.isNotEmpty) {
         return storedCookie;
       }
-      
+
       // If no cookie, try to get the primary agent name
       final primaryAgentName = await AuthService.getPrimaryAgentName();
       if (primaryAgentName != null && primaryAgentName.isNotEmpty) {
@@ -78,7 +88,7 @@ class CookieManager {
         debugPrint('Using primary agent as default: $primaryAgentName');
         return primaryAgentName;
       }
-      
+
       // Fall back to default if nothing else available
       return null;
     } catch (e) {
@@ -86,19 +96,21 @@ class CookieManager {
       return null;
     }
   }
-  
+
   // Initialize agent cookie with primary agent if no cookie is set
   Future<void> initializeAgentCookie() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final storedCookie = prefs.getString(_agixtAgentKey);
-      
+
       // Only fetch primary agent if no cookie is set
       if (storedCookie == null || storedCookie.isEmpty) {
         final primaryAgentName = await AuthService.getPrimaryAgentName();
         if (primaryAgentName != null && primaryAgentName.isNotEmpty) {
           await saveAgixtAgentCookie(primaryAgentName);
-          debugPrint('Initialized agent cookie with primary agent: $primaryAgentName');
+          debugPrint(
+            'Initialized agent cookie with primary agent: $primaryAgentName',
+          );
         }
       }
     } catch (e) {

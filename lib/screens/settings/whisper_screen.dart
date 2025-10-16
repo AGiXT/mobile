@@ -41,7 +41,7 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
     'tr',
     'fa',
     'he',
-    'sw'
+    'sw',
   ];
 
   String? _selectedModel;
@@ -53,6 +53,15 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
   final _apiKeyController = TextEditingController();
   final _remoteModelController = TextEditingController();
   final stt.SpeechToText _speech = stt.SpeechToText();
+
+  void _showSnackBar(String message, {Color? backgroundColor}) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: backgroundColor),
+    );
+  }
 
   @override
   void initState() {
@@ -66,6 +75,9 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       onError: (error) => debugPrint('Speech recognition error: $error'),
       onStatus: (status) => debugPrint('Speech recognition status: $status'),
     );
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _isRecognitionAvailable = available;
     });
@@ -73,6 +85,9 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
 
   Future<void> _loadSelectedModel() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _selectedModel = prefs.getString('whisper_model') ?? 'base';
       _selectedMode = prefs.getString('whisper_mode') ?? 'local';
@@ -106,35 +121,27 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
 
   Future<void> _testSpeechRecognition() async {
     if (!_isRecognitionAvailable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Speech recognition not available on this device')),
-      );
+      _showSnackBar('Speech recognition not available on this device');
       return;
     }
 
     bool success = await _speech.listen(
       onResult: (result) {
         if (result.finalResult) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Recognized: ${result.recognizedWords}')),
-          );
+          _showSnackBar('Recognized: ${result.recognizedWords}');
           _speech.stop();
         }
       },
       listenFor: const Duration(seconds: 10),
       pauseFor: const Duration(seconds: 3),
       localeId: _selectedLanguage,
-      cancelOnError: true,
+      listenOptions: stt.SpeechListenOptions(cancelOnError: true),
     );
 
     if (!success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to start speech recognition')),
-      );
+      _showSnackBar('Failed to start speech recognition');
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Listening...')),
-      );
+      _showSnackBar('Listening...');
     }
   }
 
@@ -153,15 +160,16 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       await prefs.setString('whisper_api_url', _apiUrlController.text);
       await prefs.setString('whisper_api_key', _apiKeyController.text);
       await prefs.setString(
-          'whisper_remote_model', _remoteModelController.text);
+        'whisper_remote_model',
+        _remoteModelController.text,
+      );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Whisper configuration saved!')),
+      _showSnackBar(
+        'Whisper configuration saved!',
+        backgroundColor: Colors.green,
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error ${e.toString()}')),
-      );
+      _showSnackBar('Error ${e.toString()}', backgroundColor: Colors.red);
     }
   }
 
@@ -179,12 +187,10 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
           });
           _saveSelectedModel(newValue!);
         },
-        items: _models.map<DropdownMenuItem<String>>((String model) {
-          return DropdownMenuItem<String>(
-            value: model,
-            child: Text(model),
-          );
-        }).toList(),
+        items:
+            _models.map<DropdownMenuItem<String>>((String model) {
+              return DropdownMenuItem<String>(value: model, child: Text(model));
+            }).toList(),
       ),
       const SizedBox(height: 20),
       ElevatedButton(
@@ -197,13 +203,13 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       const SizedBox(height: 10),
       _isRecognitionAvailable
           ? const Text(
-              'Speech recognition is available on this device',
-              style: TextStyle(color: Colors.green),
-            )
+            'Speech recognition is available on this device',
+            style: TextStyle(color: Colors.green),
+          )
           : const Text(
-              'Speech recognition is NOT available on this device',
-              style: TextStyle(color: Colors.red),
-            ),
+            'Speech recognition is NOT available on this device',
+            style: TextStyle(color: Colors.red),
+          ),
     ];
     final remoteOpts = [
       const Text('Whisper server details:', style: TextStyle(fontSize: 18)),
@@ -232,47 +238,43 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       ),
     ];
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Speech Recognition Settings'),
-      ),
+      appBar: AppBar(title: const Text('Speech Recognition Settings')),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('Select Mode:', style: TextStyle(fontSize: 18)),
-            const SizedBox(height: 10),
-            DropdownButton(
-              value: _selectedMode,
-              onChanged: (String? newValue) => _saveSelectedMode(newValue!),
-              isExpanded: true,
-              items: const [
-                DropdownMenuItem(
-                  value: "local",
-                  child: Text("Local"),
-                ),
-                DropdownMenuItem(
-                  value: "remote",
-                  child: Text("Remote"),
-                )
-              ],
-            ),
-            const SizedBox(height: 20),
-            const Text('Select Language:', style: TextStyle(fontSize: 18)),
-            const SizedBox(height: 10),
-            DropdownButton(
-                value: _selectedLanguage,
-                onChanged: (String? newValue) =>
-                    _saveSelectedLanguage(newValue!),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Select Mode:', style: TextStyle(fontSize: 18)),
+              const SizedBox(height: 10),
+              DropdownButton(
+                value: _selectedMode,
+                onChanged: (String? newValue) => _saveSelectedMode(newValue!),
                 isExpanded: true,
-                items: _languages.map<DropdownMenuItem<String>>((String lang) {
-                  return DropdownMenuItem<String>(
-                    value: lang,
-                    child: Text(lang),
-                  );
-                }).toList()),
-            ...(_selectedMode == "local" ? localOpts : remoteOpts),
-          ]),
+                items: const [
+                  DropdownMenuItem(value: "local", child: Text("Local")),
+                  DropdownMenuItem(value: "remote", child: Text("Remote")),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text('Select Language:', style: TextStyle(fontSize: 18)),
+              const SizedBox(height: 10),
+              DropdownButton(
+                value: _selectedLanguage,
+                onChanged:
+                    (String? newValue) => _saveSelectedLanguage(newValue!),
+                isExpanded: true,
+                items:
+                    _languages.map<DropdownMenuItem<String>>((String lang) {
+                      return DropdownMenuItem<String>(
+                        value: lang,
+                        child: Text(lang),
+                      );
+                    }).toList(),
+              ),
+              ...(_selectedMode == "local" ? localOpts : remoteOpts),
+            ],
+          ),
         ),
       ),
     );

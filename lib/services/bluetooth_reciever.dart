@@ -30,14 +30,15 @@ class BluetoothReciever {
   String _lastWords = '';
   // ---
 
-  final rightVoiceCommands = VoiceCommandHelper(commands: [
-    VoiceCommand(
+  final rightVoiceCommands = VoiceCommandHelper(
+    commands: [
+      VoiceCommand(
         command: "open checklist",
         phrases: [
           "checklist",
           "check list",
           "open checklist",
-          "open check list"
+          "open check list",
         ],
         fn: (String listName) {
           final list = AGiXTChecklist.displayChecklistFor(listName);
@@ -47,14 +48,15 @@ class BluetoothReciever {
           } else {
             bt.sendText('No checklist found for "$listName"');
           }
-        }),
-    VoiceCommand(
+        },
+      ),
+      VoiceCommand(
         command: "close checklist",
         phrases: [
           "close checklist",
           "close check list",
           "closed checklist",
-          "closed check list"
+          "closed check list",
         ],
         fn: (String listName) {
           final list = AGiXTChecklist.hideChecklistFor(listName);
@@ -64,8 +66,10 @@ class BluetoothReciever {
           } else {
             bt.sendText('No checklist found for "$listName"');
           }
-        })
-  ]);
+        },
+      ),
+    ],
+  );
 
   int _syncId = 0;
 
@@ -200,7 +204,8 @@ class BluetoothReciever {
         // Battery responses are handled directly in the Glass class
         // This case is here for completeness and potential future use
         debugPrint(
-            '[$side] Battery response received in receiver: ${data.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+          '[$side] Battery response received in receiver: ${data.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}',
+        );
         break;
       case Commands.QUICK_NOTE:
         handleQuickNoteCommand(side, data);
@@ -224,7 +229,9 @@ class BluetoothReciever {
         voiceCollectorAI.reset();
         break;
       case 1:
-        debugPrint('[$side] Page ${side == 'left' ? 'up' : 'down'} control');
+        debugPrint(
+          '[$side] Page ${side == GlassSide.left ? 'up' : 'down'} control',
+        );
         await bt.setMicrophone(false);
         voiceCollectorAI.isRecording = false;
         break;
@@ -272,28 +279,33 @@ class BluetoothReciever {
             return;
           }
           debugPrint(
-              '[$side] Voice data collected for remote: ${completeVoiceData.length} bytes');
+            '[$side] Voice data collected for remote: ${completeVoiceData.length} bytes',
+          );
 
-          final pcm =
-              await LC3.decodeLC3(Uint8List.fromList(completeVoiceData));
+          final pcm = await LC3.decodeLC3(
+            Uint8List.fromList(completeVoiceData),
+          );
           debugPrint(
-              '[$side] Voice data decoded for remote: ${pcm.length} bytes');
+            '[$side] Voice data decoded for remote: ${pcm.length} bytes',
+          );
 
           if (pcm.isEmpty) {
             debugPrint(
-                '[$side] Decoded PCM data is empty, skipping transcription.');
+              '[$side] Decoded PCM data is empty, skipping transcription.',
+            );
             return;
           }
 
           final startTime = DateTime.now();
           try {
-            final transcription =
-                await (await WhisperService.service()).transcribe(pcm);
+            final transcription = await (await WhisperService.service())
+                .transcribe(pcm);
             final endTime = DateTime.now();
 
             debugPrint('[$side] Remote Transcription: $transcription');
             debugPrint(
-                '[$side] Remote Transcription took: ${endTime.difference(startTime).inSeconds} seconds');
+              '[$side] Remote Transcription took: ${endTime.difference(startTime).inSeconds} seconds',
+            );
 
             // Use appropriate AIService method based on background mode
             if (transcription.isNotEmpty) {
@@ -321,7 +333,8 @@ class BluetoothReciever {
   void handleMicResponse(GlassSide side, int status, int enable) {
     if (status == RESPONSE_SUCCESS) {
       debugPrint(
-          '[$side] Mic ${enable == 1 ? "enabled" : "disabled"} successfully');
+        '[$side] Mic ${enable == 1 ? "enabled" : "disabled"} successfully',
+      );
     } else if (status == RESPONSE_FAILURE) {
       debugPrint('[$side] Failed to ${enable == 1 ? "enable" : "disable"} mic');
       final bt = BluetoothManager();
@@ -331,9 +344,13 @@ class BluetoothReciever {
 
   // Make this function async
   Future<void> handleVoiceData(
-      GlassSide side, int seq, List<int> voiceData) async {
+    GlassSide side,
+    int seq,
+    List<int> voiceData,
+  ) async {
     debugPrint(
-        '[$side] Received voice data chunk: seq=$seq, length=${voiceData.length}');
+      '[$side] Received voice data chunk: seq=$seq, length=${voiceData.length}',
+    );
     // Only add to buffer if using remote whisper (i.e., local is NOT enabled)
     if (!await _isLocalTranscriptionEnabled() && voiceCollectorAI.isRecording) {
       voiceCollectorAI.addChunk(seq, voiceData);
@@ -356,7 +373,8 @@ class BluetoothReciever {
       debugPrint('Voice note notification: ${notif.entries.length} entries');
       for (VoiceNote entry in notif.entries) {
         debugPrint(
-            'Voice note: index=${entry.index}, timestamp=${entry.timestamp}');
+          'Voice note: index=${entry.index}, timestamp=${entry.timestamp}',
+        );
       }
       if (notif.entries.isNotEmpty) {
         // fetch newest note
@@ -398,8 +416,10 @@ class BluetoothReciever {
     int index = data[9] - 1;
     List<int> voiceData = data.sublist(10);
 
-    debugPrint('[$side] Note Audio data packet: seq=$seq, total=$totalPackets, '
-        'current=$currentPacket, length=${voiceData.length}');
+    debugPrint(
+      '[$side] Note Audio data packet: seq=$seq, total=$totalPackets, '
+      'current=$currentPacket, length=${voiceData.length}',
+    );
     voiceCollectorNote.addChunk(seq, voiceData);
 
     if (currentPacket + 2 == totalPackets) {
@@ -412,17 +432,20 @@ class BluetoothReciever {
 
       voiceCollectorNote.reset();
       final bt = BluetoothManager();
-      await bt.rightGlass!
-          .sendData(VoiceNote(index: index + 1).buildDeleteCommand(_syncId++));
+      await bt.rightGlass!.sendData(
+        VoiceNote(index: index + 1).buildDeleteCommand(_syncId++),
+      );
 
       final startTime = DateTime.now();
-      final transcription =
-          await (await WhisperService.service()).transcribe(pcm);
+      final transcription = await (await WhisperService.service()).transcribe(
+        pcm,
+      );
       final endTime = DateTime.now();
 
       debugPrint('[$side] Transcription: $transcription');
       debugPrint(
-          '[$side] Transcription took: ${endTime.difference(startTime).inSeconds} seconds');
+        '[$side] Transcription took: ${endTime.difference(startTime).inSeconds} seconds',
+      );
       try {
         rightVoiceCommands.parseCommand(transcription);
       } catch (e) {

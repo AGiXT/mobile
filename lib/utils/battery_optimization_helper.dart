@@ -1,20 +1,23 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class BatteryOptimizationHelper {
-  static const MethodChannel _channel =
-      MethodChannel('dev.agixt.agixt/battery_optimization');
+  static const MethodChannel _channel = MethodChannel(
+    'dev.agixt.agixt/battery_optimization',
+  );
 
   /// Check if battery optimization is disabled for this app
   static Future<bool> isBatteryOptimizationDisabled() async {
     if (!Platform.isAndroid) return true;
 
     try {
-      final bool result =
-          await _channel.invokeMethod('isBatteryOptimizationDisabled');
+      final bool result = await _channel.invokeMethod(
+        'isBatteryOptimizationDisabled',
+      );
       return result;
     } catch (e) {
-      print('Error checking battery optimization: $e');
+      debugPrint('Error checking battery optimization: $e');
       return false;
     }
   }
@@ -24,11 +27,12 @@ class BatteryOptimizationHelper {
     if (!Platform.isAndroid) return true;
 
     try {
-      final bool result =
-          await _channel.invokeMethod('requestDisableBatteryOptimization');
+      final bool result = await _channel.invokeMethod(
+        'requestDisableBatteryOptimization',
+      );
       return result;
     } catch (e) {
-      print('Error requesting battery optimization disable: $e');
+      debugPrint('Error requesting battery optimization disable: $e');
       return false;
     }
   }

@@ -55,6 +55,9 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
 
   void _editItem(int index) async {
     final item = await _agixtStopBox.getAt(index);
+    if (!mounted) {
+      return;
+    }
     if (item != null) {
       showDialog(
         context: context,
@@ -62,8 +65,11 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
           return _AddItemDialog(
             item: item,
             onAdd: (title, time) async {
-              final newItem =
-                  AGiXTStopItem(title: title, time: time, uuid: item.uuid);
+              final newItem = AGiXTStopItem(
+                title: title,
+                time: time,
+                uuid: item.uuid,
+              );
               await _agixtStopBox.putAt(index, newItem);
               await _sortBox();
               setState(() {});
@@ -90,10 +96,14 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
             ),
             TextButton(
               onPressed: () async {
+                final navigator = Navigator.of(context);
                 await _agixtStopBox.deleteAt(index);
-                _sortBox();
+                await _sortBox();
+                if (!mounted) {
+                  return;
+                }
                 setState(() {});
-                Navigator.of(context).pop();
+                navigator.pop();
               },
               child: Text('Delete'),
             ),
@@ -119,12 +129,7 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text('AGiXT Stops'),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add),
-            onPressed: _addItem,
-          ),
-        ],
+        actions: [IconButton(icon: Icon(Icons.add), onPressed: _addItem)],
       ),
       body: FutureBuilder<List<AGiXTStopItem>>(
         future: _getItems(),
@@ -144,7 +149,8 @@ class AGiXTStopPageState extends State<AGiXTStopPage> {
                 return ListTile(
                   title: Text(item.title),
                   subtitle: Text(
-                      '${item.time.year}-${item.time.month.toString().padLeft(2, '0')}-${item.time.day.toString().padLeft(2, '0')} ${item.time.hour.toString().padLeft(2, '0')}:${item.time.minute.toString().padLeft(2, '0')}'),
+                    '${item.time.year}-${item.time.month.toString().padLeft(2, '0')}-${item.time.day.toString().padLeft(2, '0')} ${item.time.hour.toString().padLeft(2, '0')}:${item.time.minute.toString().padLeft(2, '0')}',
+                  ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -204,23 +210,32 @@ class _AddItemDialogState extends State<_AddItemDialog> {
           Row(
             children: [
               Text(
-                  'Time: ${DateFormat('yyyy-MM-dd HH:mm').format(time.toLocal())}'),
+                'Time: ${DateFormat('yyyy-MM-dd HH:mm').format(time.toLocal())}',
+              ),
               SizedBox(width: 10),
               IconButton(
                 onPressed: () async {
-                  DateTime? pickedDate = await showDatePicker(
-                    context: context,
+                  final dialogContext = context;
+                  final DateTime? pickedDate = await showDatePicker(
+                    context: dialogContext,
                     initialDate: widget.item?.time ?? DateTime.now(),
                     firstDate: DateTime(2000),
                     lastDate: DateTime(2101),
                   );
+                  if (!mounted || !dialogContext.mounted) {
+                    return;
+                  }
                   if (pickedDate != null) {
-                    TimeOfDay? pickedTime = await showTimePicker(
-                      context: context,
-                      initialTime: widget.item != null
-                          ? TimeOfDay.fromDateTime(widget.item!.time)
-                          : TimeOfDay.now(),
+                    final TimeOfDay? pickedTime = await showTimePicker(
+                      context: dialogContext,
+                      initialTime:
+                          widget.item != null
+                              ? TimeOfDay.fromDateTime(widget.item!.time)
+                              : TimeOfDay.now(),
                     );
+                    if (!mounted || !dialogContext.mounted) {
+                      return;
+                    }
                     if (pickedTime != null) {
                       setState(() {
                         time = DateTime(

@@ -10,13 +10,14 @@ void main() {
       TestWidgetsFlutterBinding.ensureInitialized();
 
       // Mock SharedPreferences for testing
-      const MethodChannel('plugins.flutter.io/shared_preferences')
-          .setMockMethodCallHandler((methodCall) async {
-        if (methodCall.method == 'getAll') {
-          return <String, dynamic>{}; // Return empty prefs
-        }
-        return null;
-      });
+      const channel = MethodChannel('plugins.flutter.io/shared_preferences');
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (methodCall) async {
+            if (methodCall.method == 'getAll') {
+              return <String, dynamic>{}; // Return empty prefs
+            }
+            return null;
+          });
     });
 
     setUp(() {
@@ -47,15 +48,16 @@ void main() {
 
       // Ensure the values are distinct
       expect(
-          TemperatureUnit.CELSIUS, isNot(equals(TemperatureUnit.FAHRENHEIT)));
+        TemperatureUnit.CELSIUS,
+        isNot(equals(TemperatureUnit.FAHRENHEIT)),
+      );
 
       // Test enum index values (important for serialization)
       expect(TemperatureUnit.CELSIUS.index, equals(0));
       expect(TemperatureUnit.FAHRENHEIT.index, equals(1));
     });
 
-    test('should maintain temperature in Celsius while changing display unit',
-        () {
+    test('should maintain temperature in Celsius while changing display unit', () {
       // Create test weather data
       final weatherData = WeatherData(
         temperature: 20.0, // 20°C = 68°F
@@ -121,8 +123,7 @@ void main() {
       expect(TemperatureUnit.FAHRENHEIT.index, equals(1));
     });
 
-    test('should verify weather service returns Celsius temperatures',
-        () async {
+    test('should verify weather service returns Celsius temperatures', () async {
       // Test that Open-Meteo API returns Celsius by default
       // (The API defaults to metric units when no unit parameter is specified)
 

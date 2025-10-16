@@ -6,8 +6,11 @@ class ChecklistItemsScreen extends StatefulWidget {
   final int index;
   final AGiXTChecklist checklist;
 
-  const ChecklistItemsScreen(
-      {super.key, required this.index, required this.checklist});
+  const ChecklistItemsScreen({
+    super.key,
+    required this.index,
+    required this.checklist,
+  });
 
   @override
   ChecklistItemsScreenState createState() => ChecklistItemsScreenState();
@@ -94,6 +97,9 @@ class ChecklistItemsScreenState extends State<ChecklistItemsScreen> {
                 widget.checklist.items.removeAt(index);
                 await _checklistBox.putAt(widget.index, widget.checklist);
                 setState(() {});
+                if (!context.mounted) {
+                  return;
+                }
                 Navigator.of(context).pop();
               },
               child: Text('Delete'),
@@ -121,12 +127,7 @@ class ChecklistItemsScreenState extends State<ChecklistItemsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.checklist.name),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.add),
-            onPressed: _addItem,
-          ),
-        ],
+        actions: [IconButton(icon: Icon(Icons.add), onPressed: _addItem)],
       ),
       body: ReorderableListView(
         onReorder: _onReorder,

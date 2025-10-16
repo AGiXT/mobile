@@ -9,7 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_sound/flutter_sound.dart';
-import 'package:web_socket_client/web_socket_client.dart';
+import 'package:web_socket_channel/web_socket_channel.dart';
 
 abstract class WhisperService {
   static Future<WhisperService> service() async {
@@ -94,7 +94,7 @@ class WhisperLocalService implements WhisperService {
         listenFor: Duration(seconds: timeoutInSeconds),
         pauseFor: Duration(seconds: 3),
         localeId: 'en_US', // Use the user's language preference
-        cancelOnError: true,
+        listenOptions: stt.SpeechListenOptions(cancelOnError: true),
       );
 
       // Add a timeout
@@ -245,13 +245,13 @@ class WhisperRemoteService implements WhisperService {
     final audioFile = File(wavPath);
     await audioFile.writeAsBytes(Uint8List.fromList(header));
 
-    OpenAIAudioModel transcription =
-        await OpenAI.instance.audio.createTranscription(
-      file: audioFile,
-      model: await getModel() ?? '',
-      responseFormat: OpenAIAudioResponseFormat.json,
-      language: await getLanguage(),
-    );
+    OpenAIAudioModel transcription = await OpenAI.instance.audio
+        .createTranscription(
+          file: audioFile,
+          model: await getModel() ?? '',
+          responseFormat: OpenAIAudioResponseFormat.json,
+          language: await getLanguage(),
+        );
 
     // delete wav file
     await File(wavPath).delete();
@@ -277,12 +277,15 @@ class WhisperRemoteService implements WhisperService {
   }
 
   Future<void> transcribeLive(
-      Stream<Uint8List> voiceData, StreamController<String> out) async {
+    Stream<Uint8List> voiceData,
+    StreamController<String> out,
+  ) async {
     await init();
     final url = (await getBaseURL())!.replaceFirst("http", "ws");
     final model = await getModel();
-    final socket =
-        WebSocket(Uri.parse('$url/v1/audio/transcriptions?model=$model'));
+    final WebSocketChannel socket = WebSocketChannel.connect(
+      Uri.parse('$url/v1/audio/transcriptions?model=$model'),
+    );
 
     // Add wav header
     final int sampleRate = 16000;
@@ -325,19 +328,27 @@ class WhisperRemoteService implements WhisperService {
       (dataSize >> 24) & 0xff,
     ];
 
-    socket.send(header);
+    socket.sink.add(header);
 
     // Listen to messages from the server.
-    socket.messages.listen((message) {
-      final resp = LiveResponse.fromJson(jsonDecode(message));
+    socket.stream.listen((message) {
+      final String payload;
+      if (message is List<int>) {
+        payload = utf8.decode(message);
+      } else if (message is String) {
+        payload = message;
+      } else {
+        return;
+      }
+      final resp = LiveResponse.fromJson(jsonDecode(payload));
       out.add(resp.text ?? '');
     });
 
     await for (final data in voiceData) {
-      socket.send(data);
+      socket.sink.add(data);
     }
 
-    socket.close();
+    await socket.sink.close();
   }
 }
 

@@ -13,7 +13,8 @@ class PermissionManager {
 
   static const List<Permission> _optionalPermissions = [
     Permission.microphone,
-    Permission.calendar,
+    Permission.calendarFullAccess,
+    Permission.calendarWriteOnly,
     Permission.storage,
   ];
 
@@ -23,7 +24,8 @@ class PermissionManager {
   static Future<bool> initializePermissions() async {
     if (_isInitializing) {
       debugPrint(
-          'PermissionManager: Already initializing permissions, skipping');
+        'PermissionManager: Already initializing permissions, skipping',
+      );
       return true;
     }
 
@@ -32,7 +34,8 @@ class PermissionManager {
     try {
       if (!Platform.isAndroid && !Platform.isIOS) {
         debugPrint(
-            'PermissionManager: Platform does not require runtime permissions');
+          'PermissionManager: Platform does not require runtime permissions',
+        );
         return true;
       }
 
@@ -40,7 +43,8 @@ class PermissionManager {
       return await _requestPermissionsGradually();
     } catch (e) {
       debugPrint(
-          'PermissionManager: Error during permission initialization: $e');
+        'PermissionManager: Error during permission initialization: $e',
+      );
       return false;
     } finally {
       _isInitializing = false;
@@ -55,13 +59,14 @@ class PermissionManager {
     final Map<Permission, PermissionStatus> currentStatuses = {};
     for (Permission permission in [
       ..._requiredPermissions,
-      ..._optionalPermissions
+      ..._optionalPermissions,
     ]) {
       try {
         currentStatuses[permission] = await permission.status;
       } catch (e) {
         debugPrint(
-            'PermissionManager: Error checking status for ${permission.toString()}: $e');
+          'PermissionManager: Error checking status for ${permission.toString()}: $e',
+        );
       }
     }
 
@@ -71,12 +76,14 @@ class PermissionManager {
         final currentStatus = currentStatuses[permission];
         if (currentStatus?.isGranted == true) {
           debugPrint(
-              'PermissionManager: Permission ${permission.toString()} already granted');
+            'PermissionManager: Permission ${permission.toString()} already granted',
+          );
           continue;
         }
 
         debugPrint(
-            'PermissionManager: Requesting permission: ${permission.toString()}');
+          'PermissionManager: Requesting permission: ${permission.toString()}',
+        );
 
         // Add a small delay to prevent UI freezing
         await Future.delayed(const Duration(milliseconds: 100));
@@ -85,18 +92,21 @@ class PermissionManager {
 
         if (status.isDenied || status.isPermanentlyDenied) {
           debugPrint(
-              'PermissionManager: Critical permission ${permission.toString()} denied');
+            'PermissionManager: Critical permission ${permission.toString()} denied',
+          );
           allCriticalGranted = false;
         } else {
           debugPrint(
-              'PermissionManager: Permission ${permission.toString()} granted');
+            'PermissionManager: Permission ${permission.toString()} granted',
+          );
         }
 
         // Add a delay between permission requests to prevent system overload
         await Future.delayed(const Duration(milliseconds: 200));
       } catch (e) {
         debugPrint(
-            'PermissionManager: Error requesting permission ${permission.toString()}: $e');
+          'PermissionManager: Error requesting permission ${permission.toString()}: $e',
+        );
         allCriticalGranted = false;
 
         // Continue with other permissions even if one fails
@@ -112,18 +122,21 @@ class PermissionManager {
 
   /// Request optional permissions separately to avoid blocking critical ones
   static Future<void> _requestOptionalPermissions(
-      Map<Permission, PermissionStatus> currentStatuses) async {
+    Map<Permission, PermissionStatus> currentStatuses,
+  ) async {
     for (Permission permission in _optionalPermissions) {
       try {
         final currentStatus = currentStatuses[permission];
         if (currentStatus?.isGranted == true) {
           debugPrint(
-              'PermissionManager: Optional permission ${permission.toString()} already granted');
+            'PermissionManager: Optional permission ${permission.toString()} already granted',
+          );
           continue;
         }
 
         debugPrint(
-            'PermissionManager: Requesting optional permission: ${permission.toString()}');
+          'PermissionManager: Requesting optional permission: ${permission.toString()}',
+        );
 
         // Longer delay for optional permissions to avoid overwhelming the user
         await Future.delayed(const Duration(milliseconds: 300));
@@ -132,17 +145,20 @@ class PermissionManager {
 
         if (status.isGranted) {
           debugPrint(
-              'PermissionManager: Optional permission ${permission.toString()} granted');
+            'PermissionManager: Optional permission ${permission.toString()} granted',
+          );
         } else {
           debugPrint(
-              'PermissionManager: Optional permission ${permission.toString()} denied (non-critical)');
+            'PermissionManager: Optional permission ${permission.toString()} denied (non-critical)',
+          );
         }
 
         // Longer delay between optional permission requests
         await Future.delayed(const Duration(milliseconds: 500));
       } catch (e) {
         debugPrint(
-            'PermissionManager: Error requesting optional permission ${permission.toString()}: $e');
+          'PermissionManager: Error requesting optional permission ${permission.toString()}: $e',
+        );
 
         // Continue with other permissions even if one fails
         await Future.delayed(const Duration(milliseconds: 200));
@@ -165,7 +181,8 @@ class PermissionManager {
           }
         } catch (e) {
           debugPrint(
-              'PermissionManager: Error checking permission ${permission.toString()}: $e');
+            'PermissionManager: Error checking permission ${permission.toString()}: $e',
+          );
           return false;
         }
       }
@@ -187,7 +204,8 @@ class PermissionManager {
       return status.isGranted;
     } catch (e) {
       debugPrint(
-          'PermissionManager: Error requesting permission ${permission.toString()}: $e');
+        'PermissionManager: Error requesting permission ${permission.toString()}: $e',
+      );
       return false;
     }
   }
@@ -203,7 +221,8 @@ class PermissionManager {
       return status.isGranted;
     } catch (e) {
       debugPrint(
-          'PermissionManager: Error checking permission ${permission.toString()}: $e');
+        'PermissionManager: Error checking permission ${permission.toString()}: $e',
+      );
       return false;
     }
   }

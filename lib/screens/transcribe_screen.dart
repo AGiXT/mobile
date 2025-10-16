@@ -24,25 +24,34 @@ class _TranscribeScreenState extends State<TranscribeScreen> {
   StreamController<Uint8List>? voiceData;
   StreamController<String>? textStream;
 
-  void _startTranscription() async {
-    if (!bluetoothManager.isConnected) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Glasses are not connected')),
-      );
+  void _showSnackBar(String message, {Color? backgroundColor}) {
+    if (!mounted) {
       return;
     }
-    if ((await wr.getBaseURL()) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Only remote Whisper is supported')),
-      );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: backgroundColor),
+    );
+  }
+
+  void _startTranscription() async {
+    if (!bluetoothManager.isConnected) {
+      _showSnackBar('Glasses are not connected');
+      return;
+    }
+
+    final baseUrl = await wr.getBaseURL();
+    if (baseUrl == null) {
+      _showSnackBar('Only remote Whisper is supported');
       return;
     }
     final tr = Translate(
-        fromLanguage: TranslateLanguages.FRENCH,
-        toLanguage: TranslateLanguages.ENGLISH);
+      fromLanguage: TranslateLanguages.FRENCH,
+      toLanguage: TranslateLanguages.ENGLISH,
+    );
     await bluetoothManager.sendCommandToGlasses(tr.buildSetupCommand());
-    await bluetoothManager.rightGlass!
-        .sendData(tr.buildRightGlassStartCommand());
+    await bluetoothManager.rightGlass!.sendData(
+      tr.buildRightGlassStartCommand(),
+    );
     for (var cmd in tr.buildInitalScreenLoad()) {
       await bluetoothManager.sendCommandToGlasses(cmd);
     }
@@ -69,14 +78,19 @@ class _TranscribeScreenState extends State<TranscribeScreen> {
       if (line.length > 220) {
         line = line.substring(line.length - 220);
       }
+      if (!mounted) {
+        break;
+      }
       setState(() {
         _textController.text = line;
       });
 
-      await bluetoothManager
-          .sendCommandToGlasses(tr.buildTranslatedCommand(line));
-      await bluetoothManager
-          .sendCommandToGlasses(tr.buildOriginalCommand(line));
+      await bluetoothManager.sendCommandToGlasses(
+        tr.buildTranslatedCommand(line),
+      );
+      await bluetoothManager.sendCommandToGlasses(
+        tr.buildOriginalCommand(line),
+      );
     }
   }
 
@@ -94,9 +108,7 @@ class _TranscribeScreenState extends State<TranscribeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Transcribe and Translate'),
-      ),
+      appBar: AppBar(title: const Text('Transcribe and Translate')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -113,9 +125,7 @@ class _TranscribeScreenState extends State<TranscribeScreen> {
             const SizedBox(height: 20),
             TextField(
               controller: _textController,
-              decoration: const InputDecoration(
-                labelText: 'Transcribed Text',
-              ),
+              decoration: const InputDecoration(labelText: 'Transcribed Text'),
               readOnly: true,
               maxLines: null,
               minLines: 3,

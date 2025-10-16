@@ -41,11 +41,7 @@ class Glass {
 
   BluetoothReciever reciever = BluetoothReciever.singleton;
 
-  Glass({
-    required this.name,
-    required this.device,
-    required this.side,
-  }) {
+  Glass({required this.name, required this.device, required this.side}) {
     // Bind side button press to AGiXT chat completion
     onSideButtonPress = () async {
       await AIService.singleton.handleSideButtonPress();
@@ -58,14 +54,16 @@ class Glass {
       await disconnect();
 
       // Set up connection state monitoring first
-      connectionStateSubscription =
-          device.connectionState.listen((BluetoothConnectionState state) {
+      connectionStateSubscription = device.connectionState.listen((
+        BluetoothConnectionState state,
+      ) {
         debugPrint('[$side Glass] Connection state: $state');
         if (state == BluetoothConnectionState.disconnected &&
             _connectRetries < maxConnectRetries) {
           _connectRetries++;
           debugPrint(
-              '[$side Glass] Auto-reconnect attempt $_connectRetries/$maxConnectRetries');
+            '[$side Glass] Auto-reconnect attempt $_connectRetries/$maxConnectRetries',
+          );
           _connectWithRetry();
         }
       });
@@ -88,18 +86,21 @@ class Glass {
         while (!connected && _connectRetries < maxConnectRetries) {
           try {
             debugPrint(
-                '[$side Glass] Trying to connect (attempt ${_connectRetries + 1})');
+              '[$side Glass] Trying to connect (attempt ${_connectRetries + 1})',
+            );
             await device.connect(timeout: const Duration(seconds: 15));
             connected = true;
           } catch (e) {
             _connectRetries++;
             debugPrint(
-                '[$side Glass] Connection attempt $_connectRetries failed: $e');
+              '[$side Glass] Connection attempt $_connectRetries failed: $e',
+            );
             if (_connectRetries < maxConnectRetries) {
               await Future.delayed(const Duration(seconds: 1));
             } else {
               throw Exception(
-                  'Failed to connect after $maxConnectRetries attempts');
+                'Failed to connect after $maxConnectRetries attempts',
+              );
             }
           }
         }
@@ -112,10 +113,12 @@ class Glass {
       await device.requestMtu(251);
       debugPrint('[$side Glass] Setting connection priority...');
       await device.requestConnectionPriority(
-          connectionPriorityRequest: ConnectionPriority.high);
+        connectionPriorityRequest: ConnectionPriority.high,
+      );
       startHeartbeat();
       debugPrint(
-          '[$side Glass] Setup complete - connection established successfully');
+        '[$side Glass] Setup complete - connection established successfully',
+      );
     } catch (e) {
       debugPrint('[$side Glass] Connection process failed: $e');
       rethrow; // Let the caller handle this error
@@ -135,7 +138,8 @@ class Glass {
               debugPrint('[$side Glass] UART TX Characteristic is writable.');
             } else {
               debugPrint(
-                  '[$side Glass] UART TX Characteristic is not writable.');
+                '[$side Glass] UART TX Characteristic is not writable.',
+              );
             }
           } else if (c.uuid.toString().toUpperCase() ==
               BluetoothConstants.UART_RX_CHAR_UUID) {
@@ -146,9 +150,9 @@ class Glass {
     }
     if (uartRx != null) {
       await uartRx!.setNotifyValue(true);
-      notificationSubscription = uartRx!.value.listen((data) {
-        handleNotification(data);
-      });
+      notificationSubscription = uartRx!.lastValueStream.listen(
+        handleNotification,
+      );
       debugPrint('[$side Glass] UART RX set to notify.');
     } else {
       debugPrint('[$side Glass] UART RX Characteristic not found.');
@@ -178,7 +182,8 @@ class Glass {
     // Check for battery response (0x2C command)
     if (data.length >= 3 && data[0] == Commands.GET_BATTERY) {
       debugPrint(
-          '[$side Glass] Battery response received: ${data.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+        '[$side Glass] Battery response received: ${data.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}',
+      );
 
       // Parse battery info using the protocol parser
       final batteryInfo = G1BatteryInfo.fromResponse(data, side);
@@ -311,7 +316,8 @@ class Glass {
       // Construct battery request command: [0x2C, 0x01]
       List<int> batteryCommand = [Commands.GET_BATTERY, 0x01];
       debugPrint(
-          '[$side Glass] Requesting battery info: ${batteryCommand.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}');
+        '[$side Glass] Requesting battery info: ${batteryCommand.map((e) => '0x${e.toRadixString(16).padLeft(2, '0')}').join(' ')}',
+      );
       await sendData(batteryCommand);
     } catch (e) {
       debugPrint('[$side Glass] Error requesting battery info: $e');

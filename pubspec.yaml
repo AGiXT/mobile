@@ -1,5 +1,5 @@
 name: agixt
-description: "A life planning tool for the EvenRealities G1"
+description: "Automate everything with AI"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: "none" # Remove this line if you wish to publish to pub.dev
@@ -42,6 +42,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   flutter_native_splash: ^2.4.3
   android_package_manager: ^0.7.1
+  device_info_plus: ^10.1.0
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   build_runner: 2.4.13
@@ -55,7 +56,6 @@ dependencies:
   fuzzywuzzy: ^1.2.0
   dart_openai: ^5.1.0
   package_info_plus: ^8.3.1 # Updated to the compatible version
-  web_socket_client: ^0.1.5
   mutex: ^3.1.0
   csv: ^6.0.0
   fast_csv: ^0.2.11
@@ -63,12 +63,25 @@ dependencies:
   flutter_appauth: ^6.0.2
   # Using app_links instead of uni_links for better compatibility
   app_links: ^3.5.0
+  jwt_decoder: ^2.0.1
   # speech_to_text provides native speech recognition functionality
   speech_to_text: ^7.0.2 # Upgrading to latest version that supports Flutter v2 embedding
   # flutter_sound for audio recording (doesn't rely on ffmpeg)
   flutter_sound: ^9.2.13
   webview_flutter: ^4.11.0
   geolocator: ^11.0.0
+  solana_wallet_adapter: ^0.1.5
+  solana: ^0.31.0
+  bs58: ^1.0.2
+  web_socket_channel: ^2.4.0
+
+dependency_overrides:
+  solana_wallet_adapter:
+    path: vendor/solana_wallet_adapter
+  solana_wallet_adapter_platform_interface:
+    path: vendor/solana_wallet_adapter_platform_interface
+  solana_wallet_adapter_android:
+    path: vendor/solana_wallet_adapter_android
 
 dev_dependencies:
   flutter_test:
