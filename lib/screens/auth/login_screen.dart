@@ -1,9 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/auth/oauth.dart';
 import 'package:agixt/models/agixt/auth/wallet.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
+import 'package:bs58/bs58.dart' as bs58;
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -125,6 +128,18 @@ class _LoginScreenState extends State<LoginScreen> {
         _walletErrorMessage =
             'Unable to load wallet providers. Please try again later.';
       });
+    }
+  }
+
+  List<int> _decodeWalletSignature(String signature) {
+    try {
+      return base64Decode(signature);
+    } on FormatException {
+      try {
+        return base64Url.decode(base64Url.normalize(signature));
+      } on FormatException {
+        throw StateError('Wallet returned an invalid signature payload.');
+      }
     }
   }
 
@@ -272,9 +287,13 @@ class _LoginScreenState extends State<LoginScreen> {
         providerId: provider.id,
       );
 
+      final signatureBytes = _decodeWalletSignature(signatureBase64);
+      final signatureBase58 =
+          bs58.base58.encode(Uint8List.fromList(signatureBytes));
+
       final result = await WalletAuthService.verifySignature(
         walletAddress: walletAddress,
-        signature: signatureBase64,
+        signature: signatureBase58,
         message: nonce.message,
         nonce: nonce.nonce,
         walletType: provider.id,
