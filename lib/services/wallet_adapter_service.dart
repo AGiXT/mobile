@@ -980,18 +980,10 @@ class WalletAdapterService {
     }
 
     final int nullIndex = candidates.indexOf(null);
-    if (nullIndex >= 0) {
-      if (canonicalProvider == null) {
-        if (nullIndex > 0) {
-          candidates
-            ..removeAt(nullIndex)
-            ..insert(0, null);
-        }
-      } else if (nullIndex != candidates.length - 1) {
-        candidates
-          ..removeAt(nullIndex)
-          ..add(null);
-      }
+    if (nullIndex > 0) {
+      candidates
+        ..removeAt(nullIndex)
+        ..insert(0, null);
     }
 
     return candidates;
