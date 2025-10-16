@@ -7,6 +7,7 @@ import 'package:agixt/models/agixt/auth/oauth.dart';
 import 'package:agixt/models/agixt/auth/wallet.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:bs58/bs58.dart' as bs58;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -190,6 +191,53 @@ class _LoginScreenState extends State<LoginScreen> {
     return true;
   }
 
+  void _debugWalletSignature({
+    required String walletAddress,
+    required String message,
+    required Uint8List signedPayload,
+    required Uint8List signatureBytes,
+    required String signatureBase58,
+  }) {
+    if (!kDebugMode) {
+      return;
+    }
+
+    final bool containsCarriageReturns = message.contains('\r\n');
+    final int messageLength = message.length;
+    final String messagePreview =
+        messageLength <= 80 ? message : '${message.substring(0, 80)}…';
+
+    final int payloadLength = signedPayload.length;
+    final int signatureLength = signatureBytes.length;
+    final bool payloadIncludesMessage = payloadLength != signatureLength;
+
+    final String signaturePreview = signatureBase58.length <= 16
+        ? signatureBase58
+        : '${signatureBase58.substring(0, 16)}…';
+    final String signatureBase64 = base64Url.encode(signatureBytes);
+    final String signatureBase64Preview = signatureBase64.length <= 24
+        ? signatureBase64
+        : '${signatureBase64.substring(0, 24)}…';
+
+    debugPrint('Wallet signature debug → address=$walletAddress');
+    debugPrint(
+      '  messageLength=$messageLength containsCRLF=$containsCarriageReturns',
+    );
+    debugPrint('  messagePreview="$messagePreview"');
+    debugPrint(
+      '  payloadLength=$payloadLength signatureLength=$signatureLength '
+      'payloadIncludesMessage=$payloadIncludesMessage',
+    );
+    debugPrint(
+      '  signatureBase58Length=${signatureBase58.length} '
+      'signaturePreview=$signaturePreview',
+    );
+    debugPrint(
+      '  signatureBase64Preview=$signatureBase64Preview '
+      'signatureBase64Length=${signatureBase64.length}',
+    );
+  }
+
   Future<void> _login() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -338,6 +386,14 @@ class _LoginScreenState extends State<LoginScreen> {
       final signatureBytes =
           _extractSignatureFromPayload(signedPayload, nonce.message);
       final signatureBase58 = bs58.base58.encode(signatureBytes);
+
+      _debugWalletSignature(
+        walletAddress: walletAddress,
+        message: nonce.message,
+        signedPayload: signedPayload,
+        signatureBytes: signatureBytes,
+        signatureBase58: signatureBase58,
+      );
 
       final result = await WalletAuthService.verifySignature(
         walletAddress: walletAddress,
