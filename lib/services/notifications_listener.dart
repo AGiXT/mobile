@@ -8,22 +8,32 @@ class AndroidNotificationsListener {
 
   AndroidNotificationsListener({required this.onData});
 
-  void startListening() async {
-    /// check if notification permession is enebaled
+  Future<void> startListening({bool requestIfDenied = false}) async {
     final bool hasPermission =
         await NotificationListenerService.isPermissionGranted();
 
     if (!hasPermission) {
-      /// request notification permission
-      /// it will open the notifications settings page and return `true` once the permission granted.
+      if (!requestIfDenied) {
+        return;
+      }
+
       await NotificationListenerService.requestPermission();
+
+      final bool grantedNow =
+          await NotificationListenerService.isPermissionGranted();
+      if (!grantedNow) {
+        return;
+      }
     }
 
-    /// stream the incoming notification events
     NotificationListenerService.notificationsStream.listen((event) {
       if (event.hasRemoved == null || event.hasRemoved == false) {
         onData(event);
       }
     });
+  }
+
+  Future<void> requestPermission() async {
+    await NotificationListenerService.requestPermission();
   }
 }

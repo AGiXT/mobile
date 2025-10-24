@@ -12,7 +12,6 @@ import 'package:agixt/screens/auth/profile_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
-import 'package:agixt/services/permission_manager.dart';
 import 'package:agixt/services/session_manager.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:agixt/utils/ui_perfs.dart';
@@ -140,11 +139,8 @@ void main() async {
       debugPrint('Failed to start background service: $e');
     }
 
-    // Start the app first, then request permissions asynchronously
+    // Start the app
     runApp(const AGiXTApp());
-
-    // Request permissions after the app has started to avoid freezing
-    _requestPermissionsAsync();
   } catch (e, stackTrace) {
     debugPrint('Fatal error during app initialization: $e');
     debugPrint('Stack trace: $stackTrace');
@@ -181,26 +177,6 @@ void main() async {
       ),
     );
   }
-}
-
-/// Request permissions asynchronously after app startup to prevent UI freezing
-void _requestPermissionsAsync() {
-  Future.delayed(const Duration(milliseconds: 1000), () async {
-    try {
-      debugPrint('Starting async permission requests...');
-      final permissionsGranted =
-          await PermissionManager.initializePermissions();
-      if (!permissionsGranted) {
-        debugPrint(
-          'Some critical permissions were denied, app may have limited functionality',
-        );
-      } else {
-        debugPrint('All critical permissions granted successfully');
-      }
-    } catch (e) {
-      debugPrint('Failed to initialize permissions asynchronously: $e');
-    }
-  });
 }
 
 void backgroundMain() {
@@ -279,9 +255,6 @@ class _AGiXTAppState extends State<AGiXTApp> {
     try {
       await _checkLoginStatus();
       await _initDeepLinkHandling();
-
-      // Request permissions after a delay to ensure UI is ready
-      _schedulePermissionRequest();
     } catch (e) {
       debugPrint('Error during app state initialization: $e');
       // Set safe defaults
@@ -290,25 +263,6 @@ class _AGiXTAppState extends State<AGiXTApp> {
         _isLoading = false;
       });
     }
-  }
-
-  void _schedulePermissionRequest() {
-    // Schedule permission request after UI is fully loaded
-    Future.delayed(const Duration(milliseconds: 2000), () async {
-      if (mounted) {
-        try {
-          debugPrint('Requesting permissions after UI initialization...');
-          final permissionsGranted =
-              await PermissionManager.initializePermissions();
-          if (!permissionsGranted) {
-            debugPrint('Some critical permissions were denied');
-            // Could show a snackbar or dialog here to inform the user
-          }
-        } catch (e) {
-          debugPrint('Error requesting permissions: $e');
-        }
-      }
-    });
   }
 
   void _handleAuthStateChange(bool isLoggedIn) {
@@ -702,8 +656,7 @@ const notificationId = 888;
 Future<void> initializeService() async {
   flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.requestNotificationsPermission();
 
   final service = FlutterBackgroundService();
@@ -717,8 +670,7 @@ Future<void> initializeService() async {
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 
   await service.configure(

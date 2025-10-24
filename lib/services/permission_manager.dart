@@ -2,237 +2,251 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+/// Logical groups of permissions that map to user-facing features.
+enum AppPermission {
+  bluetooth,
+  location,
+  notifications,
+  calendar,
+  microphone,
+  storage,
+  batteryOptimization,
+}
+
+/// Metadata describing a logical permission group.
+class PermissionDefinition {
+  const PermissionDefinition({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.permissions,
+    this.requiredForCoreFlow = false,
+    this.androidOnly = false,
+    this.iosOnly = false,
+  });
+
+  final AppPermission id;
+  final String title;
+  final String description;
+  final List<Permission> permissions;
+  final bool requiredForCoreFlow;
+  final bool androidOnly;
+  final bool iosOnly;
+}
+
+/// Snapshot of the current status for a permission group.
+class PermissionSummary {
+  PermissionSummary({
+    required this.definition,
+    required this.statuses,
+  });
+
+  final PermissionDefinition definition;
+  final Map<Permission, PermissionStatus> statuses;
+
+  bool get allGranted {
+    if (statuses.isEmpty) {
+      return true;
+    }
+    return statuses.values.every((status) => status.isGranted);
+  }
+
+  bool get anyPermanentlyDenied =>
+      statuses.values.any((status) => status.isPermanentlyDenied);
+
+  bool get anyDenied =>
+      statuses.values.any((status) => status.isDenied || status.isRestricted);
+}
+
 class PermissionManager {
-  static const List<Permission> _requiredPermissions = [
-    Permission.bluetoothScan,
-    Permission.bluetoothConnect,
-    Permission.location,
-    Permission.ignoreBatteryOptimizations,
-    Permission.notification,
+  static final List<PermissionDefinition> _definitions = [
+    const PermissionDefinition(
+      id: AppPermission.bluetooth,
+      title: 'Glasses & Nearby Devices',
+      description:
+          'Needed to scan, pair, and stay connected with your Even Realities G1 glasses.',
+      permissions: [
+        Permission.bluetooth,
+        Permission.bluetoothScan,
+        Permission.bluetoothConnect,
+      ],
+      requiredForCoreFlow: true,
+      androidOnly: true,
+    ),
+    const PermissionDefinition(
+      id: AppPermission.location,
+      title: 'Location',
+      description:
+          'Lets the app deliver local weather and location-aware AI responses when you ask for them.',
+      permissions: [
+        Permission.location,
+      ],
+      requiredForCoreFlow: false,
+    ),
+    const PermissionDefinition(
+      id: AppPermission.notifications,
+      title: 'Notifications',
+      description:
+          'Allows alerts and messages to show on your phone and glasses at the right moment.',
+      permissions: [
+        Permission.notification,
+      ],
+      requiredForCoreFlow: false,
+    ),
+    const PermissionDefinition(
+      id: AppPermission.calendar,
+      title: 'Calendar',
+      description:
+          'Used when you connect calendars so events and reminders appear across devices.',
+      permissions: [
+        Permission.calendarFullAccess,
+        Permission.calendarWriteOnly,
+      ],
+      requiredForCoreFlow: false,
+    ),
+    const PermissionDefinition(
+      id: AppPermission.microphone,
+      title: 'Microphone',
+      description:
+          'Enable when you want hands-free voice notes or voice-controlled features.',
+      permissions: [
+        Permission.microphone,
+      ],
+      requiredForCoreFlow: false,
+    ),
+    const PermissionDefinition(
+      id: AppPermission.storage,
+      title: 'Media & Files',
+      description:
+          'Allows saving exports and working with shared images, audio, or documents.',
+      permissions: [
+        Permission.storage,
+      ],
+      requiredForCoreFlow: false,
+      androidOnly: true,
+    ),
+    const PermissionDefinition(
+      id: AppPermission.batteryOptimization,
+      title: 'Battery Optimization',
+      description:
+          'Needed only if you want the background Bluetooth service to stay active without interruption.',
+      permissions: [
+        Permission.ignoreBatteryOptimizations,
+      ],
+      requiredForCoreFlow: false,
+      androidOnly: true,
+    ),
   ];
 
-  static const List<Permission> _optionalPermissions = [
-    Permission.microphone,
-    Permission.calendarFullAccess,
-    Permission.calendarWriteOnly,
-    Permission.storage,
-  ];
-
-  static bool _isInitializing = false;
-
-  /// Initialize permissions safely without blocking the UI
-  static Future<bool> initializePermissions() async {
-    if (_isInitializing) {
-      debugPrint(
-        'PermissionManager: Already initializing permissions, skipping',
-      );
-      return true;
+  static List<PermissionDefinition> get availableDefinitions {
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      return const [];
     }
 
-    _isInitializing = true;
-
-    try {
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        debugPrint(
-          'PermissionManager: Platform does not require runtime permissions',
-        );
-        return true;
+    return _definitions.where((definition) {
+      if (definition.androidOnly && !Platform.isAndroid) {
+        return false;
       }
-
-      // Use a more gradual approach to avoid freezing
-      return await _requestPermissionsGradually();
-    } catch (e) {
-      debugPrint(
-        'PermissionManager: Error during permission initialization: $e',
-      );
-      return false;
-    } finally {
-      _isInitializing = false;
-    }
+      if (definition.iosOnly && !Platform.isIOS) {
+        return false;
+      }
+      return true;
+    }).toList(growable: false);
   }
 
-  /// Request permissions gradually to avoid UI freezing
-  static Future<bool> _requestPermissionsGradually() async {
-    bool allCriticalGranted = true;
+  static PermissionDefinition definitionOf(AppPermission id) {
+    return _definitions.firstWhere((definition) => definition.id == id);
+  }
 
-    // First, check what permissions are already granted
-    final Map<Permission, PermissionStatus> currentStatuses = {};
-    for (Permission permission in [
-      ..._requiredPermissions,
-      ..._optionalPermissions,
-    ]) {
+  static Future<PermissionSummary> getSummary(AppPermission id) async {
+    final definition = definitionOf(id);
+    final Map<Permission, PermissionStatus> statuses = {};
+
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      return PermissionSummary(definition: definition, statuses: {});
+    }
+
+    if (definition.androidOnly && !Platform.isAndroid) {
+      return PermissionSummary(definition: definition, statuses: {});
+    }
+
+    if (definition.iosOnly && !Platform.isIOS) {
+      return PermissionSummary(definition: definition, statuses: {});
+    }
+
+    for (final permission in definition.permissions) {
       try {
-        currentStatuses[permission] = await permission.status;
-      } catch (e) {
+        final status = await permission.status;
+        statuses[permission] = status;
+      } catch (error) {
         debugPrint(
-          'PermissionManager: Error checking status for ${permission.toString()}: $e',
+          'PermissionManager: Failed to fetch status for ${permission.toString()}: $error',
         );
       }
     }
 
-    // Request required permissions one by one with delays
-    for (Permission permission in _requiredPermissions) {
+    return PermissionSummary(definition: definition, statuses: statuses);
+  }
+
+  static Future<PermissionSummary> requestPermissions(AppPermission id) async {
+    final definition = definitionOf(id);
+    final Map<Permission, PermissionStatus> statuses = {};
+
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      return PermissionSummary(definition: definition, statuses: {});
+    }
+
+    if (definition.androidOnly && !Platform.isAndroid) {
+      return PermissionSummary(definition: definition, statuses: {});
+    }
+
+    if (definition.iosOnly && !Platform.isIOS) {
+      return PermissionSummary(definition: definition, statuses: {});
+    }
+
+    for (final permission in definition.permissions) {
       try {
-        final currentStatus = currentStatuses[permission];
-        if (currentStatus?.isGranted == true) {
-          debugPrint(
-            'PermissionManager: Permission ${permission.toString()} already granted',
-          );
+        final currentStatus = await permission.status;
+        if (currentStatus.isGranted) {
+          statuses[permission] = currentStatus;
           continue;
         }
 
+        final requestedStatus = await permission.request();
+        statuses[permission] = requestedStatus;
+      } catch (error) {
         debugPrint(
-          'PermissionManager: Requesting permission: ${permission.toString()}',
+          'PermissionManager: Request failed for ${permission.toString()}: $error',
         );
-
-        // Add a small delay to prevent UI freezing
-        await Future.delayed(const Duration(milliseconds: 100));
-
-        final status = await permission.request();
-
-        if (status.isDenied || status.isPermanentlyDenied) {
-          debugPrint(
-            'PermissionManager: Critical permission ${permission.toString()} denied',
-          );
-          allCriticalGranted = false;
-        } else {
-          debugPrint(
-            'PermissionManager: Permission ${permission.toString()} granted',
-          );
-        }
-
-        // Add a delay between permission requests to prevent system overload
-        await Future.delayed(const Duration(milliseconds: 200));
-      } catch (e) {
-        debugPrint(
-          'PermissionManager: Error requesting permission ${permission.toString()}: $e',
-        );
-        allCriticalGranted = false;
-
-        // Continue with other permissions even if one fails
-        await Future.delayed(const Duration(milliseconds: 100));
       }
     }
 
-    // Request optional permissions (more gradually and with better error handling)
-    await _requestOptionalPermissions(currentStatuses);
-
-    return allCriticalGranted;
+    return PermissionSummary(definition: definition, statuses: statuses);
   }
 
-  /// Request optional permissions separately to avoid blocking critical ones
-  static Future<void> _requestOptionalPermissions(
-    Map<Permission, PermissionStatus> currentStatuses,
-  ) async {
-    for (Permission permission in _optionalPermissions) {
-      try {
-        final currentStatus = currentStatuses[permission];
-        if (currentStatus?.isGranted == true) {
-          debugPrint(
-            'PermissionManager: Optional permission ${permission.toString()} already granted',
-          );
-          continue;
-        }
-
-        debugPrint(
-          'PermissionManager: Requesting optional permission: ${permission.toString()}',
-        );
-
-        // Longer delay for optional permissions to avoid overwhelming the user
-        await Future.delayed(const Duration(milliseconds: 300));
-
-        final status = await permission.request();
-
-        if (status.isGranted) {
-          debugPrint(
-            'PermissionManager: Optional permission ${permission.toString()} granted',
-          );
-        } else {
-          debugPrint(
-            'PermissionManager: Optional permission ${permission.toString()} denied (non-critical)',
-          );
-        }
-
-        // Longer delay between optional permission requests
-        await Future.delayed(const Duration(milliseconds: 500));
-      } catch (e) {
-        debugPrint(
-          'PermissionManager: Error requesting optional permission ${permission.toString()}: $e',
-        );
-
-        // Continue with other permissions even if one fails
-        await Future.delayed(const Duration(milliseconds: 200));
-      }
-    }
-  }
-
-  /// Check if all required permissions are granted
-  static Future<bool> areRequiredPermissionsGranted() async {
-    try {
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        return true;
-      }
-
-      for (Permission permission in _requiredPermissions) {
-        try {
-          final status = await permission.status;
-          if (!status.isGranted) {
-            return false;
-          }
-        } catch (e) {
-          debugPrint(
-            'PermissionManager: Error checking permission ${permission.toString()}: $e',
-          );
-          return false;
-        }
-      }
+  static Future<bool> ensureGranted(AppPermission id) async {
+    final summary = await getSummary(id);
+    if (summary.allGranted) {
       return true;
-    } catch (e) {
-      debugPrint('PermissionManager: Error checking required permissions: $e');
-      return false;
     }
+
+    final requested = await requestPermissions(id);
+    return requested.allGranted;
   }
 
-  /// Request a specific permission safely
-  static Future<bool> requestPermission(Permission permission) async {
-    try {
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        return true;
-      }
-
-      final status = await permission.request();
-      return status.isGranted;
-    } catch (e) {
-      debugPrint(
-        'PermissionManager: Error requesting permission ${permission.toString()}: $e',
-      );
-      return false;
-    }
+  static Future<bool> isGroupGranted(AppPermission id) async {
+    final summary = await getSummary(id);
+    return summary.allGranted;
   }
 
-  /// Check if a specific permission is granted
-  static Future<bool> isPermissionGranted(Permission permission) async {
-    try {
-      if (!Platform.isAndroid && !Platform.isIOS) {
-        return true;
-      }
-
-      final status = await permission.status;
-      return status.isGranted;
-    } catch (e) {
-      debugPrint(
-        'PermissionManager: Error checking permission ${permission.toString()}: $e',
-      );
-      return false;
-    }
-  }
-
-  /// Open app settings for manual permission management
   static Future<bool> openSettings() async {
     try {
+      if (!Platform.isAndroid && !Platform.isIOS) {
+        return false;
+      }
       return await openAppSettings();
-    } catch (e) {
-      debugPrint('PermissionManager: Error opening app settings: $e');
+    } catch (error) {
+      debugPrint('PermissionManager: Error opening settings: $error');
       return false;
     }
   }
