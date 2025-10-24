@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:android_package_manager/android_package_manager.dart';
@@ -20,13 +21,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'; // Add this import for MethodChannel
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:notification_listener_service/notification_event.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
-import 'dart:async';
 import '../utils/constants.dart';
 import '../models/g1/glass.dart';
 import 'time_sync.dart';
+import 'permission_manager.dart';
 
 /* Bluetooth Magnager is the heart of the application
   * It is responsible for scanning for the glasses and connecting to them
@@ -171,27 +171,17 @@ class BluetoothManager {
     }
 
     try {
-      Map<Permission, PermissionStatus> statuses =
-          await [
-            Permission.bluetoothScan,
-            Permission.bluetoothConnect,
-            Permission.location,
-            Permission.ignoreBatteryOptimizations,
-          ].request();
+      final bluetoothGranted =
+          await PermissionManager.ensureGranted(AppPermission.bluetooth);
+      final locationGranted =
+          await PermissionManager.ensureGranted(AppPermission.location);
 
-      // Don't throw exceptions for denied permissions, just log them
-      if (statuses.values.any((status) => status.isDenied)) {
+      if (!bluetoothGranted || !locationGranted) {
         debugPrint(
-          'Some Bluetooth permissions were denied. App functionality may be limited.',
+          'BluetoothManager: Missing permissions may limit scanning or connections.',
         );
-
-        if (statuses.values.any((status) => status.isPermanentlyDenied)) {
-          debugPrint(
-            'Some permissions are permanently denied. User should enable them in settings.',
-          );
-        }
       } else {
-        debugPrint('All Bluetooth permissions granted successfully');
+        debugPrint('BluetoothManager: Bluetooth permissions ready.');
       }
     } catch (e) {
       debugPrint('Error requesting Bluetooth permissions: $e');
@@ -526,14 +516,12 @@ class BluetoothManager {
 
   void stopScanning() {
     _scanTimer?.cancel();
-    FlutterBluePlus.stopScan()
-        .then((_) {
-          debugPrint('Stopped scanning');
-          _isScanning = false;
-        })
-        .catchError((error) {
-          debugPrint('Error stopping scan: $error');
-        });
+    FlutterBluePlus.stopScan().then((_) {
+      debugPrint('Stopped scanning');
+      _isScanning = false;
+    }).catchError((error) {
+      debugPrint('Error stopping scan: $error');
+    });
   }
 
   Future<void> sendCommandToGlasses(List<int> command) async {
