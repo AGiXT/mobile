@@ -2,6 +2,7 @@ import 'package:agixt/widgets/glass_status.dart';
 import 'package:agixt/screens/settings/dashboard_screen.dart';
 import 'package:agixt/screens/settings/location_screen.dart';
 import 'package:agixt/screens/settings/notifications_screen.dart';
+import 'package:agixt/screens/settings/permissions_screen.dart';
 import 'package:agixt/widgets/gravatar_image.dart';
 import 'package:agixt/widgets/g1_battery_widget.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
@@ -177,6 +178,26 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
 
           const Divider(),
+
+          ListTile(
+            title: Row(
+              children: [
+                Icon(Icons.verified_user),
+                SizedBox(width: 10),
+                Text('Permissions'),
+              ],
+            ),
+            subtitle: Text('Review and enable app permissions on your terms'),
+            trailing: Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const PermissionsSettingsPage(),
+                ),
+              );
+            },
+          ),
 
           ListTile(
             title: Row(
