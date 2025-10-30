@@ -289,6 +289,23 @@ class _SettingsPageState extends State<SettingsPage> {
               },
             ),
           ),
+
+          const Divider(),
+
+          ListTile(
+            title: Row(
+              children: [
+                Icon(Icons.privacy_tip_outlined),
+                SizedBox(width: 10),
+                Text('Privacy Policy'),
+              ],
+            ),
+            subtitle: Text('Review how AGiXT collects, uses, and retains data'),
+            trailing: Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.pushNamed(context, '/privacy-policy');
+            },
+          ),
         ],
       ),
     );
