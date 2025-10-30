@@ -9,10 +9,13 @@ import 'package:agixt/models/agixt/daily.dart';
 import 'package:agixt/models/agixt/stop.dart';
 import 'package:agixt/screens/auth/login_screen.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
+import 'package:agixt/screens/privacy/privacy_consent_screen.dart';
+import 'package:agixt/screens/privacy/privacy_policy_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/services/session_manager.dart';
+import 'package:agixt/services/privacy_consent_service.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:agixt/utils/ui_perfs.dart';
 import 'package:flutter/material.dart';
@@ -234,6 +237,8 @@ class AGiXTApp extends StatefulWidget {
 class _AGiXTAppState extends State<AGiXTApp> {
   bool _isLoggedIn = false;
   bool _isLoading = true;
+  bool _hasAcceptedPrivacy = false;
+  DateTime? _privacyAcceptedAt;
   StreamSubscription? _deepLinkSubscription;
   StreamSubscription<bool>? _authStateSubscription;
   Timer? _tokenExpiryTimer;
@@ -253,6 +258,16 @@ class _AGiXTAppState extends State<AGiXTApp> {
 
   Future<void> _safeInitialization() async {
     try {
+      final hasAccepted = await PrivacyConsentService.hasAcceptedLatestPolicy();
+      final acceptedAt = await PrivacyConsentService.acceptedAt();
+
+      if (mounted) {
+        setState(() {
+          _hasAcceptedPrivacy = hasAccepted;
+          _privacyAcceptedAt = acceptedAt;
+        });
+      }
+
       await _checkLoginStatus();
       await _initDeepLinkHandling();
     } catch (e) {
@@ -262,6 +277,32 @@ class _AGiXTAppState extends State<AGiXTApp> {
         _isLoggedIn = false;
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _handlePrivacyAccepted() async {
+    try {
+      await PrivacyConsentService.recordAcceptance();
+      final acceptedAt = await PrivacyConsentService.acceptedAt();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _hasAcceptedPrivacy = true;
+        _privacyAcceptedAt = acceptedAt;
+      });
+    } catch (e) {
+      debugPrint('Error recording privacy acceptance: $e');
+      final messenger = AGiXTApp.navigatorKey.currentContext;
+      if (messenger != null) {
+        ScaffoldMessenger.of(messenger).showSnackBar(
+          const SnackBar(
+            content: Text('We could not save your consent. Please try again.'),
+          ),
+        );
+      }
     }
   }
 
@@ -531,6 +572,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
           '/home': (context) => const HomePage(),
           '/login': (context) => const LoginScreen(),
           '/profile': (context) => const ProfileScreen(),
+          '/privacy-policy': (context) => const PrivacyPolicyScreen(),
         },
       );
     } catch (e) {
@@ -564,6 +606,17 @@ class _AGiXTAppState extends State<AGiXTApp> {
     try {
       if (_isLoading) {
         return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      }
+
+      if (!_hasAcceptedPrivacy) {
+        return PrivacyConsentScreen(
+          policyVersion: PrivacyConsentService.policyVersion,
+          acceptedAt: _privacyAcceptedAt,
+          onViewPolicy: () {
+            AGiXTApp.navigatorKey.currentState?.pushNamed('/privacy-policy');
+          },
+          onAccept: _handlePrivacyAccepted,
+        );
       }
 
       return AppRetainWidget(
@@ -640,6 +693,14 @@ Future<void> _initHive() async {
       }
     } catch (e) {
       debugPrint('Failed to open agixtChecklistBox: $e');
+    }
+
+    try {
+      if (!Hive.isBoxOpen('agixtAppPrefs')) {
+        await Hive.openBox('agixtAppPrefs');
+      }
+    } catch (e) {
+      debugPrint('Failed to open agixtAppPrefs: $e');
     }
   } catch (e) {
     debugPrint('Critical error initializing Hive: $e');
@@ -730,6 +791,14 @@ Future<void> onStart(ServiceInstance service) async {
         }
       } catch (e) {
         debugPrint('Failed to open agixtStopBox in background service: $e');
+      }
+
+      try {
+        if (!Hive.isBoxOpen('agixtAppPrefs')) {
+          await Hive.openBox('agixtAppPrefs');
+        }
+      } catch (e) {
+        debugPrint('Failed to open agixtAppPrefs in background service: $e');
       }
     } catch (e) {
       debugPrint('Failed to initialize Hive in background service: $e');
