@@ -14,7 +14,6 @@ import 'package:agixt/screens/privacy/privacy_policy_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
-import 'package:agixt/services/session_manager.dart';
 import 'package:agixt/services/privacy_consent_service.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:agixt/utils/ui_perfs.dart';
@@ -24,7 +23,6 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:app_links/app_links.dart';
-import 'package:jwt_decoder/jwt_decoder.dart';
 import 'screens/home_screen.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -240,18 +238,11 @@ class _AGiXTAppState extends State<AGiXTApp> {
   bool _hasAcceptedPrivacy = false;
   DateTime? _privacyAcceptedAt;
   StreamSubscription? _deepLinkSubscription;
-  StreamSubscription<bool>? _authStateSubscription;
-  Timer? _tokenExpiryTimer;
   final _appLinks = AppLinks();
 
   @override
   void initState() {
     super.initState();
-
-    _authStateSubscription = AuthService.authStateChanges.listen(
-      _handleAuthStateChange,
-    );
-
     // Initialize with proper error handling
     _safeInitialization();
   }
@@ -306,88 +297,9 @@ class _AGiXTAppState extends State<AGiXTApp> {
     }
   }
 
-  void _handleAuthStateChange(bool isLoggedIn) {
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _isLoggedIn = isLoggedIn;
-      if (!isLoggedIn) {
-        _isLoading = false;
-      }
-    });
-
-    if (isLoggedIn) {
-      _scheduleTokenExpiryCheck();
-    } else {
-      _cancelTokenExpiryTimer();
-      final navigator = AGiXTApp.navigatorKey.currentState;
-      navigator?.pushNamedAndRemoveUntil('/login', (route) => false);
-    }
-  }
-
-  Future<void> _scheduleTokenExpiryCheck() async {
-    final token = await AuthService.getJwt(enforceValidity: true);
-
-    if (!mounted) {
-      return;
-    }
-
-    if (token == null || token.isEmpty) {
-      _cancelTokenExpiryTimer();
-      return;
-    }
-
-    try {
-      final expiration = JwtDecoder.getExpirationDate(token);
-      final triggerTime = expiration.subtract(const Duration(seconds: 30));
-      final now = DateTime.now();
-      final delay = triggerTime.difference(now);
-
-      if (delay.isNegative) {
-        await _handleTokenExpired();
-        return;
-      }
-
-      _tokenExpiryTimer?.cancel();
-      _tokenExpiryTimer = Timer(delay, () {
-        _handleTokenExpired();
-      });
-    } catch (e) {
-      debugPrint('Failed to schedule token expiry check: $e');
-    }
-  }
-
-  void _cancelTokenExpiryTimer() {
-    _tokenExpiryTimer?.cancel();
-    _tokenExpiryTimer = null;
-  }
-
-  Future<void> _handleTokenExpired() async {
-    _cancelTokenExpiryTimer();
-    debugPrint('JWT token expired. Clearing session.');
-
-    final messengerContext = AGiXTApp.navigatorKey.currentContext;
-
-    await SessionManager.clearSession();
-
-    if (messengerContext != null) {
-      // ignore: use_build_context_synchronously
-      ScaffoldMessenger.of(messengerContext).showSnackBar(
-        const SnackBar(
-          content: Text('Your session expired. Please sign in again.'),
-          duration: Duration(seconds: 4),
-        ),
-      );
-    }
-  }
-
   @override
   void dispose() {
     _deepLinkSubscription?.cancel();
-    _authStateSubscription?.cancel();
-    _cancelTokenExpiryTimer();
 
     // Clean up all singletons and services with error handling
     try {
@@ -403,6 +315,69 @@ class _AGiXTAppState extends State<AGiXTApp> {
     }
 
     super.dispose();
+  }
+
+  void _handleDeepLink(String link) {
+    debugPrint('Received deep link: $link');
+
+    if (!link.startsWith('agixt://callback')) {
+      return;
+    }
+
+    final uri = Uri.parse(link);
+    final token = uri.queryParameters['token'];
+
+    if (token != null && token.isNotEmpty) {
+      debugPrint('Received JWT token from deep link');
+      _processJwtToken(token);
+    }
+  }
+
+  Future<void> _processJwtToken(String token) async {
+    try {
+      await AuthService.storeJwt(token);
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _isLoggedIn = true;
+        _isLoading = false;
+      });
+
+      if (Navigator.of(context).canPop()) {
+        Navigator.of(context).pushReplacementNamed('/home');
+      }
+    } catch (e) {
+      debugPrint('Error processing JWT token: $e');
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = false;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _checkLoginStatus() async {
+    try {
+      final isLoggedIn = await AuthService.isLoggedIn();
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = isLoggedIn;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking login status: $e');
+      if (mounted) {
+        setState(() {
+          _isLoggedIn = false;
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   Future<void> _initDeepLinkHandling() async {
@@ -474,79 +449,6 @@ class _AGiXTAppState extends State<AGiXTApp> {
       }
     } catch (e) {
       debugPrint('Error initializing deep link handling: $e');
-    }
-  }
-
-  void _handleDeepLink(String link) {
-    debugPrint('Received deep link: $link');
-
-    // Handle the agixt://callback URL format with token
-    if (link.startsWith('agixt://callback')) {
-      Uri uri = Uri.parse(link);
-      String? token = uri.queryParameters['token'];
-
-      if (token != null && token.isNotEmpty) {
-        debugPrint('Received JWT token from deep link');
-        _processJwtToken(token);
-      }
-    }
-  }
-
-  Future<void> _processJwtToken(String token) async {
-    try {
-      // Validate the token if necessary
-      bool isTokenValid = true; // Replace with actual validation if needed
-
-      if (isTokenValid) {
-        // Store JWT token and update login state
-        await AuthService.storeJwt(token);
-        await _scheduleTokenExpiryCheck();
-
-        if (mounted) {
-          setState(() {
-            _isLoggedIn = true;
-            _isLoading = false;
-          });
-
-          // If we're already showing the login screen, navigate to home
-          if (Navigator.of(context).canPop()) {
-            Navigator.of(context).pushReplacementNamed('/home');
-          }
-        }
-      }
-    } catch (e) {
-      debugPrint('Error processing JWT token: $e');
-      if (mounted) {
-        setState(() {
-          _isLoggedIn = false;
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _checkLoginStatus() async {
-    try {
-      final isLoggedIn = await AuthService.isLoggedIn();
-      if (mounted) {
-        setState(() {
-          _isLoggedIn = isLoggedIn;
-          _isLoading = false;
-        });
-      }
-      if (isLoggedIn) {
-        await _scheduleTokenExpiryCheck();
-      } else {
-        _cancelTokenExpiryTimer();
-      }
-    } catch (e) {
-      debugPrint('Error checking login status: $e');
-      if (mounted) {
-        setState(() {
-          _isLoggedIn = false;
-          _isLoading = false;
-        });
-      }
     }
   }
 

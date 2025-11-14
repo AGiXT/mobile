@@ -1,7 +1,11 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'package:agixt/services/secure_storage_service.dart';
 
 class LocationService {
   // Singleton pattern
@@ -16,11 +20,14 @@ class LocationService {
 
   // Keys for shared preferences
   static const String _locationEnabledKey = 'location_enabled';
-  static const String _lastLatitudeKey = 'last_latitude';
-  static const String _lastLongitudeKey = 'last_longitude';
-  static const String _lastAltitudeKey = 'last_altitude';
-  static const String _lastAccuracyKey = 'last_accuracy';
-  static const String _lastTimestampKey = 'last_timestamp';
+  static const String _lastLocationKey = 'last_location_payload_v1';
+  static const String _legacyLastLatitudeKey = 'last_latitude';
+  static const String _legacyLastLongitudeKey = 'last_longitude';
+  static const String _legacyLastAltitudeKey = 'last_altitude';
+  static const String _legacyLastAccuracyKey = 'last_accuracy';
+  static const String _legacyLastTimestampKey = 'last_timestamp';
+
+  static final SecureStorageService _secureStorage = SecureStorageService();
 
   // Check if location is enabled
   Future<bool> isLocationEnabled() async {
@@ -94,60 +101,132 @@ class LocationService {
 
   // Save last known position
   Future<void> saveLastPosition(Position position) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_lastLatitudeKey, position.latitude);
-    await prefs.setDouble(_lastLongitudeKey, position.longitude);
-    await prefs.setDouble(_lastAltitudeKey, position.altitude);
-    await prefs.setDouble(_lastAccuracyKey, position.accuracy);
-    await prefs.setInt(
-        _lastTimestampKey, position.timestamp.millisecondsSinceEpoch);
+    try {
+      final DateTime? timestampCandidate = position.timestamp;
+      final timestamp = timestampCandidate ?? DateTime.now();
+      final payload = jsonEncode({
+        'latitude': position.latitude,
+        'longitude': position.longitude,
+        'altitude': position.altitude,
+        'accuracy': position.accuracy,
+        'timestamp': timestamp.millisecondsSinceEpoch,
+      });
+
+      await _secureStorage.write(key: _lastLocationKey, value: payload);
+
+      // Remove legacy plaintext keys once we successfully persisted the secure payload.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_legacyLastLatitudeKey);
+      await prefs.remove(_legacyLastLongitudeKey);
+      await prefs.remove(_legacyLastAltitudeKey);
+      await prefs.remove(_legacyLastAccuracyKey);
+      await prefs.remove(_legacyLastTimestampKey);
+    } catch (e) {
+      debugPrint('Error saving last position: $e');
+    }
   }
 
   // Get last known position
   Future<Map<String, dynamic>> getLastPosition() async {
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      final stored = await _secureStorage.read(key: _lastLocationKey);
+      Map<String, dynamic>? data;
 
-    final latitude = prefs.getDouble(_lastLatitudeKey);
-    final longitude = prefs.getDouble(_lastLongitudeKey);
-    final altitude = prefs.getDouble(_lastAltitudeKey);
-    final accuracy = prefs.getDouble(_lastAccuracyKey);
-    final timestamp = prefs.getInt(_lastTimestampKey);
+      if (stored != null && stored.isNotEmpty) {
+        data = jsonDecode(stored) as Map<String, dynamic>;
+      } else {
+        // Migrate legacy plaintext records if present.
+        final prefs = await SharedPreferences.getInstance();
+        final latitude = prefs.getDouble(_legacyLastLatitudeKey);
+        final longitude = prefs.getDouble(_legacyLastLongitudeKey);
+        if (latitude != null && longitude != null) {
+          data = {
+            'latitude': latitude,
+            'longitude': longitude,
+            'altitude': prefs.getDouble(_legacyLastAltitudeKey),
+            'accuracy': prefs.getDouble(_legacyLastAccuracyKey),
+            'timestamp': prefs.getInt(_legacyLastTimestampKey),
+          };
 
-    if (latitude == null || longitude == null) {
+          await _secureStorage.write(
+            key: _lastLocationKey,
+            value: jsonEncode(data),
+          );
+
+          await prefs.remove(_legacyLastLatitudeKey);
+          await prefs.remove(_legacyLastLongitudeKey);
+          await prefs.remove(_legacyLastAltitudeKey);
+          await prefs.remove(_legacyLastAccuracyKey);
+          await prefs.remove(_legacyLastTimestampKey);
+        }
+      }
+
+      if (data == null) {
+        return {};
+      }
+
+      final latitude = (data['latitude'] as num?)?.toDouble();
+      final longitude = (data['longitude'] as num?)?.toDouble();
+      if (latitude == null || longitude == null) {
+        return {};
+      }
+
+      final altitude = (data['altitude'] as num?)?.toDouble();
+      final accuracy = (data['accuracy'] as num?)?.toDouble();
+      final timestampRaw = data['timestamp'];
+      DateTime? timestamp;
+      if (timestampRaw is int) {
+        timestamp = DateTime.fromMillisecondsSinceEpoch(timestampRaw);
+      } else if (timestampRaw is String) {
+        timestamp = DateTime.tryParse(timestampRaw);
+      }
+
+      return {
+        'latitude': latitude,
+        'longitude': longitude,
+        'altitude': altitude,
+        'accuracy': accuracy,
+        'timestamp': timestamp,
+      };
+    } catch (e) {
+      debugPrint('Error retrieving last location: $e');
       return {};
     }
-
-    return {
-      'latitude': latitude,
-      'longitude': longitude,
-      'altitude': altitude,
-      'accuracy': accuracy,
-      'timestamp': timestamp != null
-          ? DateTime.fromMillisecondsSinceEpoch(timestamp)
-          : null,
-    };
   }
 
   // Start location updates
   Future<void> startLocationUpdates() async {
-    if (!await requestLocationPermission()) {
-      return;
+    try {
+      if (!await requestLocationPermission()) {
+        return;
+      }
+
+      _locationController ??= StreamController<Position>.broadcast();
+      _locationStream ??= _locationController?.stream;
+
+      await _locationSubscription?.cancel();
+      _locationSubscription = null;
+
+      const locationSettings = LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      );
+
+      _locationSubscription =
+          Geolocator.getPositionStream(locationSettings: locationSettings)
+              .listen(
+        (Position position) {
+          _locationController?.add(position);
+          unawaited(saveLastPosition(position));
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          debugPrint('Location stream error: $error');
+        },
+        cancelOnError: false,
+      );
+    } catch (e) {
+      debugPrint('Error starting location updates: $e');
     }
-
-    _locationController = StreamController<Position>.broadcast();
-    _locationStream = _locationController?.stream;
-
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 10,
-    );
-
-    _locationSubscription =
-        Geolocator.getPositionStream(locationSettings: locationSettings)
-            .listen((Position position) {
-      _locationController?.add(position);
-      saveLastPosition(position);
-    });
   }
 
   // Stop location updates

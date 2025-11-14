@@ -1,12 +1,9 @@
 // Models for AGiXT authentication
-import 'dart:async';
 import 'dart:convert';
-
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:jwt_decoder/jwt_decoder.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 
 class UserModel {
   final String id;
@@ -41,8 +38,7 @@ class UserModel {
       lastName: json['last_name'] ?? '',
       timezone: json['timezone'] ?? 'UTC',
       phoneNumber: json['phone_number'] ?? '',
-      companies:
-          (json['companies'] as List<dynamic>?)
+      companies: (json['companies'] as List<dynamic>?)
               ?.map((company) => CompanyModel.fromJson(company))
               .toList() ??
           [],
@@ -80,8 +76,7 @@ class CompanyModel {
       trainingData: json['training_data'],
       roleId: json['role_id'] ?? 0,
       primary: json['primary'] ?? false,
-      agents:
-          (json['agents'] as List<dynamic>?)
+      agents: (json['agents'] as List<dynamic>?)
               ?.map((agent) => AgentModel.fromJson(agent))
               .toList() ??
           [],
@@ -116,35 +111,29 @@ class AuthModel {
   final String email;
   final String token;
 
-  AuthModel({required this.email, required this.token});
+  AuthModel({
+    required this.email,
+    required this.token,
+  });
 
-  Map<String, dynamic> toJson() => {'email': email, 'token': token};
+  Map<String, dynamic> toJson() => {
+        'email': email,
+        'token': token,
+      };
 }
 
 class AuthService {
   static const String JWT_KEY = 'jwt_token';
   static const String EMAIL_KEY = 'user_email';
-  static const Duration _tokenExpiryGracePeriod = Duration(seconds: 30);
   static String? _serverUrl;
   static String? _appUri;
   static String? _appName;
-  static final StreamController<bool> _authStateController =
-      StreamController<bool>.broadcast();
-
-  static Stream<bool> get authStateChanges => _authStateController.stream;
-
-  static void _emitAuthState(bool isLoggedIn) {
-    if (!_authStateController.isClosed) {
-      _authStateController.add(isLoggedIn);
-    }
-  }
 
   // Initialize with environment variables
-  static void init({
-    required String serverUrl,
-    required String appUri,
-    required String appName,
-  }) {
+  static void init(
+      {required String serverUrl,
+      required String appUri,
+      required String appName}) {
     _serverUrl = serverUrl;
     _appUri = appUri;
     _appName = appName;
@@ -157,12 +146,8 @@ class AuthService {
   // Store JWT token
   static Future<void> storeJwt(String token) async {
     try {
-      if (_isTokenExpired(token)) {
-        throw StateError('Refusing to store expired JWT token');
-      }
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(JWT_KEY, token);
-      _emitAuthState(true);
     } catch (e) {
       debugPrint('Error storing JWT token: $e');
       rethrow;
@@ -181,20 +166,10 @@ class AuthService {
   }
 
   // Get stored JWT token
-  static Future<String?> getJwt({bool enforceValidity = false}) async {
+  static Future<String?> getJwt() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString(JWT_KEY);
-      if (token == null) {
-        return null;
-      }
-
-      if (enforceValidity && _isTokenExpired(token)) {
-        await logout();
-        return null;
-      }
-
-      return token;
+      return prefs.getString(JWT_KEY);
     } catch (e) {
       debugPrint('Error getting JWT token: $e');
       return null;
@@ -218,7 +193,6 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(JWT_KEY);
       await prefs.remove(EMAIL_KEY);
-      _emitAuthState(false);
     } catch (e) {
       debugPrint('Error during logout: $e');
       rethrow;
@@ -229,16 +203,7 @@ class AuthService {
   static Future<bool> isLoggedIn() async {
     try {
       final jwt = await getJwt();
-      if (jwt == null || jwt.isEmpty) {
-        return false;
-      }
-
-      if (_isTokenExpired(jwt)) {
-        await logout();
-        return false;
-      }
-
-      return true;
+      return jwt != null && jwt.isNotEmpty;
     } catch (e) {
       debugPrint('Error checking login status: $e');
       return false;
@@ -251,7 +216,10 @@ class AuthService {
       final response = await http.post(
         Uri.parse('$serverUrl/v1/login'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'token': mfaCode}),
+        body: jsonEncode({
+          'email': email,
+          'token': mfaCode,
+        }),
       );
 
       if (response.statusCode == 200) {
@@ -297,8 +265,7 @@ class AuthService {
         } else {
           // 200 status code but couldn't extract JWT
           debugPrint(
-            'Login successful but couldn\'t extract JWT token from response: $responseBody',
-          );
+              'Login successful but couldn\'t extract JWT token from response: $responseBody');
           return null;
         }
       } else if (response.statusCode == 401) {
@@ -306,8 +273,7 @@ class AuthService {
         return null;
       } else {
         debugPrint(
-          'Login failed: ${response.statusCode} - ${response.reasonPhrase}',
-        );
+            'Login failed: ${response.statusCode} - ${response.reasonPhrase}');
         return null;
       }
     } catch (e) {
@@ -318,10 +284,7 @@ class AuthService {
 
   // Get the web URL with token for opening in browser
   static Future<String> getWebUrlWithToken() async {
-    final jwt = await getJwt(enforceValidity: true);
-    if (jwt == null || jwt.isEmpty) {
-      return appUri;
-    }
+    final jwt = await getJwt();
     return '$appUri?token=$jwt';
   }
 
@@ -373,9 +336,8 @@ class AuthService {
       // Find the primary company
       CompanyModel? primaryCompany;
       try {
-        primaryCompany = userInfo.companies.firstWhere(
-          (company) => company.primary,
-        );
+        primaryCompany =
+            userInfo.companies.firstWhere((company) => company.primary);
       } catch (e) {
         // No primary company found, try to use the first one if available
         if (userInfo.companies.isNotEmpty) {
@@ -386,8 +348,7 @@ class AuthService {
       if (primaryCompany != null) {
         // Return the agent name from the primary company
         debugPrint(
-          'Found primary company: ${primaryCompany.name} with agent: ${primaryCompany.agentName}',
-        );
+            'Found primary company: ${primaryCompany.name} with agent: ${primaryCompany.agentName}');
         return primaryCompany.agentName;
       }
 
@@ -419,18 +380,5 @@ class AuthService {
     } catch (e) {
       debugPrint('Error saving glasses display preference: $e');
     }
-  }
-}
-
-bool _isTokenExpired(String token) {
-  try {
-    final expirationDate = JwtDecoder.getExpirationDate(token);
-    final nowWithGrace = DateTime.now().add(
-      AuthService._tokenExpiryGracePeriod,
-    );
-    return expirationDate.isBefore(nowWithGrace);
-  } catch (e) {
-    debugPrint('Error parsing JWT expiration: $e');
-    return true;
   }
 }

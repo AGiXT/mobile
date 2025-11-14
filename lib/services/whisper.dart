@@ -11,6 +11,9 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'package:agixt/services/secure_storage_service.dart';
+import 'package:agixt/utils/url_security.dart';
+
 abstract class WhisperService {
   static Future<WhisperService> service() async {
     final prefs = await SharedPreferences.getInstance();
@@ -159,14 +162,28 @@ class WhisperLocalService implements WhisperService {
 }
 
 class WhisperRemoteService implements WhisperService {
+  static final SecureStorageService _secureStorage = SecureStorageService();
+
   Future<String?> getBaseURL() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('whisper_api_url');
   }
 
   Future<String?> getApiKey() async {
+    final storedKey = await _secureStorage.read(key: 'whisper_api_key');
+    if (storedKey != null && storedKey.isNotEmpty) {
+      return storedKey;
+    }
+
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('whisper_api_key');
+    final legacyKey = prefs.getString('whisper_api_key');
+    if (legacyKey != null && legacyKey.isNotEmpty) {
+      await _secureStorage.write(key: 'whisper_api_key', value: legacyKey);
+      await prefs.remove('whisper_api_key');
+      return legacyKey;
+    }
+
+    return null;
   }
 
   Future<String?> getModel() async {
@@ -181,12 +198,22 @@ class WhisperRemoteService implements WhisperService {
 
   Future<void> init() async {
     final url = await getBaseURL();
-    if (url == null) {
-      throw Exception("no Whisper Remote URL set");
+    if (url == null || url.isEmpty) {
+      throw Exception('No Whisper Remote URL set');
     }
-    debugPrint('Initializing Whisper Remote Service with URL: $url');
-    OpenAI.baseUrl = url;
-    OpenAI.apiKey = await getApiKey() ?? '';
+
+    final sanitizedUrl = UrlSecurity.sanitizeBaseUrl(
+      url,
+      allowHttpOnLocalhost: true,
+    );
+    debugPrint('Initializing Whisper Remote Service with URL: $sanitizedUrl');
+    OpenAI.baseUrl = sanitizedUrl;
+
+    final apiKey = await getApiKey();
+    if (apiKey == null || apiKey.isEmpty) {
+      throw Exception('No Whisper API key configured');
+    }
+    OpenAI.apiKey = apiKey;
   }
 
   @override
@@ -245,13 +272,18 @@ class WhisperRemoteService implements WhisperService {
     final audioFile = File(wavPath);
     await audioFile.writeAsBytes(Uint8List.fromList(header));
 
-    OpenAIAudioModel transcription = await OpenAI.instance.audio
-        .createTranscription(
-          file: audioFile,
-          model: await getModel() ?? '',
-          responseFormat: OpenAIAudioResponseFormat.json,
-          language: await getLanguage(),
-        );
+    final model = await getModel() ?? '';
+    if (model.isEmpty) {
+      throw Exception('No Whisper model configured');
+    }
+
+    OpenAIAudioModel transcription =
+        await OpenAI.instance.audio.createTranscription(
+      file: audioFile,
+      model: model,
+      responseFormat: OpenAIAudioResponseFormat.json,
+      language: await getLanguage(),
+    );
 
     // delete wav file
     await File(wavPath).delete();
@@ -281,10 +313,28 @@ class WhisperRemoteService implements WhisperService {
     StreamController<String> out,
   ) async {
     await init();
-    final url = (await getBaseURL())!.replaceFirst("http", "ws");
+
+    final rawUrl = await getBaseURL();
+    if (rawUrl == null || rawUrl.isEmpty) {
+      throw Exception('No Whisper Remote URL set');
+    }
+    final sanitizedUrl = UrlSecurity.sanitizeBaseUrl(
+      rawUrl,
+      allowHttpOnLocalhost: true,
+    );
+    final baseUri = Uri.parse(sanitizedUrl);
+
     final model = await getModel();
-    final WebSocketChannel socket = WebSocketChannel.connect(
-      Uri.parse('$url/v1/audio/transcriptions?model=$model'),
+    if (model == null || model.isEmpty) {
+      throw Exception('No Whisper model configured');
+    }
+
+    final socket = WebSocketChannel.connect(
+      UrlSecurity.buildWebSocketUri(
+        baseUri,
+        path: 'v1/audio/transcriptions',
+        queryParameters: {'model': model},
+      ),
     );
 
     // Add wav header
