@@ -8,6 +8,7 @@ import 'package:agixt/models/g1/note.dart';
 import 'package:agixt/screens/home_screen.dart'; // Import HomePage
 import 'package:agixt/services/cookie_manager.dart';
 import 'package:agixt/services/session_manager.dart';
+import 'package:agixt/services/secure_storage_service.dart';
 import 'package:agixt/services/location_service.dart'; // Import LocationService
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/material.dart';
@@ -19,6 +20,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AGiXTChatWidget implements AGiXTWidget {
   static const String DEFAULT_MODEL = "XT";
   static const int DEFAULT_PRIORITY = 1;
+  static const String _interactionStorageKey = 'agixt_last_interaction_v1';
+  static final SecureStorageService _secureStorage = SecureStorageService();
 
   @override
   int getPriority() {
@@ -107,7 +110,10 @@ class AGiXTChatWidget implements AGiXTWidget {
       // Send request to AGiXT API
       final response = await http.post(
         Uri.parse('${AuthService.serverUrl}/v1/chat/completions'),
-        headers: {'Content-Type': 'application/json', 'Authorization': jwt},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwt',
+        },
         body: jsonEncode(requestBody),
       );
 
@@ -178,7 +184,10 @@ class AGiXTChatWidget implements AGiXTWidget {
       // Send request to AGiXT API
       final response = await http.post(
         Uri.parse('${AuthService.serverUrl}/v1/chat/completions'),
-        headers: {'Content-Type': 'application/json', 'Authorization': jwt},
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $jwt',
+        },
         body: jsonEncode(requestBody),
       );
 
@@ -400,10 +409,9 @@ class AGiXTChatWidget implements AGiXTWidget {
             if (event.start != null) {
               final start = event.start!.toLocal();
               final end = event.end?.toLocal();
-              final timeStr =
-                  end != null
-                      ? "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')} - ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}"
-                      : "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}";
+              final timeStr = end != null
+                  ? "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')} - ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}"
+                  : "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}";
 
               calendarEvents.add(
                 "$timeStr ${event.title ?? 'Untitled event'}${event.location != null && event.location!.isNotEmpty ? ' at ${event.location}' : ''}",
@@ -518,40 +526,83 @@ class AGiXTChatWidget implements AGiXTWidget {
 
   // Store the last interaction
   Future<void> _saveInteraction(String question, String answer) async {
+    final payload = jsonEncode({
+      'question': question,
+      'answer': answer,
+      'timestamp': DateTime.now().toIso8601String(),
+    });
+
+    await _secureStorage.write(key: _interactionStorageKey, value: payload);
+
+    // Remove legacy plaintext copies.
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('agixt_last_question', question);
-    await prefs.setString('agixt_last_answer', answer);
-    await prefs.setString(
-      'agixt_last_timestamp',
-      DateTime.now().millisecondsSinceEpoch.toString(),
-    );
+    await prefs.remove('agixt_last_question');
+    await prefs.remove('agixt_last_answer');
+    await prefs.remove('agixt_last_timestamp');
   }
 
   // Retrieve the last interaction if it exists and is not too old
   Future<ChatInteraction?> _getLastInteraction() async {
-    final prefs = await SharedPreferences.getInstance();
-    final question = prefs.getString('agixt_last_question');
-    final answer = prefs.getString('agixt_last_answer');
-    final timestamp = prefs.getString('agixt_last_timestamp');
+    try {
+      final stored = await _secureStorage.read(key: _interactionStorageKey);
+      Map<String, dynamic>? data;
 
-    if (question == null || answer == null || timestamp == null) {
+      if (stored != null && stored.isNotEmpty) {
+        data = jsonDecode(stored) as Map<String, dynamic>;
+      } else {
+        // Migrate legacy plaintext values if present.
+        final prefs = await SharedPreferences.getInstance();
+        final question = prefs.getString('agixt_last_question');
+        final answer = prefs.getString('agixt_last_answer');
+        final timestamp = prefs.getString('agixt_last_timestamp');
+        if (question != null && answer != null && timestamp != null) {
+          data = {
+            'question': question,
+            'answer': answer,
+            'timestamp': DateTime.fromMillisecondsSinceEpoch(
+              int.parse(timestamp),
+            ).toIso8601String(),
+          };
+          await _secureStorage.write(
+            key: _interactionStorageKey,
+            value: jsonEncode(data),
+          );
+          await prefs.remove('agixt_last_question');
+          await prefs.remove('agixt_last_answer');
+          await prefs.remove('agixt_last_timestamp');
+        }
+      }
+
+      if (data == null) {
+        return null;
+      }
+
+      final question = data['question'] as String?;
+      final answer = data['answer'] as String?;
+      final timestampRaw = data['timestamp'] as String?;
+
+      if (question == null || answer == null || timestampRaw == null) {
+        return null;
+      }
+
+      final interactionTime = DateTime.tryParse(timestampRaw);
+      if (interactionTime == null) {
+        return null;
+      }
+
+      if (DateTime.now().difference(interactionTime).inHours > 24) {
+        return null;
+      }
+
+      return ChatInteraction(
+        question: question,
+        answer: answer,
+        timestamp: interactionTime,
+      );
+    } catch (e) {
+      debugPrint('Error reading last interaction: $e');
       return null;
     }
-
-    // Check if the interaction is from the last 24 hours
-    final interactionTime = DateTime.fromMillisecondsSinceEpoch(
-      int.parse(timestamp),
-    );
-    final now = DateTime.now();
-    if (now.difference(interactionTime).inHours > 24) {
-      return null; // Interaction is too old
-    }
-
-    return ChatInteraction(
-      question: question,
-      answer: answer,
-      timestamp: interactionTime,
-    );
   }
 
   // Get user's location if enabled (with timeout for AI responses)

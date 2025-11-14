@@ -133,46 +133,65 @@ class _HomePageState extends State<HomePage> {
     }
 
     // Initialize the WebView controller
-    _webViewController =
-        WebViewController()
-          ..setJavaScriptMode(JavaScriptMode.unrestricted)
-          ..setNavigationDelegate(
-            NavigationDelegate(
-              onPageFinished: (String url) async {
-                // Extract conversation ID from URL and agent cookie
-                await _extractConversationIdAndAgentInfo(url);
+    _webViewController = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (String url) async {
+            // Extract conversation ID from URL and agent cookie
+            await _extractConversationIdAndAgentInfo(url);
 
-                // Set up URL change observer using JavaScript
-                await _setupUrlChangeObserver();
+            // Remove authentication tokens from the visible URL to
+            // prevent them leaking through screenshots or re-shares.
+            await _scrubAuthTokenFromLocation();
 
-                // Set up agent selection observer
-                await _setupAgentSelectionObserver();
-              },
-              onNavigationRequest: (NavigationRequest request) {
-                debugPrint('Navigation request to: ${request.url}');
-                if (!request.url.contains('agixt')) {
-                  // External link, launch in browser
-                  _launchInBrowser(request.url);
-                  return NavigationDecision.prevent;
-                } else {
-                  // Internal link, extract info and navigate
-                  _extractConversationIdAndAgentInfo(request.url);
-                  return NavigationDecision.navigate;
-                }
-              },
-              onUrlChange: (UrlChange change) {
-                // This catches client-side navigation that might not trigger a full navigation request
-                debugPrint('URL changed to: ${change.url}');
-                if (change.url != null) {
-                  _extractConversationIdAndAgentInfo(change.url!);
-                }
-              },
-            ),
-          )
-          ..loadRequest(Uri.parse(urlToLoad));
+            // Set up URL change observer using JavaScript
+            await _setupUrlChangeObserver();
+
+            // Set up agent selection observer
+            await _setupAgentSelectionObserver();
+          },
+          onNavigationRequest: (NavigationRequest request) {
+            debugPrint('Navigation request to: ${request.url}');
+            if (!request.url.contains('agixt')) {
+              // External link, launch in browser
+              _launchInBrowser(request.url);
+              return NavigationDecision.prevent;
+            } else {
+              // Internal link, extract info and navigate
+              _extractConversationIdAndAgentInfo(request.url);
+              return NavigationDecision.navigate;
+            }
+          },
+          onUrlChange: (UrlChange change) {
+            // This catches client-side navigation that might not trigger a full navigation request
+            debugPrint('URL changed to: ${change.url}');
+            if (change.url != null) {
+              _extractConversationIdAndAgentInfo(change.url!);
+              _scrubAuthTokenFromLocation();
+            }
+          },
+        ),
+      )
+      ..loadRequest(Uri.parse(urlToLoad));
 
     // Update the static accessor so it can be used from other classes
     HomePage.webViewController = _webViewController;
+  }
+
+  Future<void> _scrubAuthTokenFromLocation() async {
+    if (_webViewController == null) {
+      return;
+    }
+
+    const script =
+        "(() => { try { const current = new URL(window.location.href); if (current.searchParams.has('token')) { current.searchParams.delete('token'); window.history.replaceState(null, document.title, current.toString()); } } catch (err) { console.error('Token cleanup failed', err); } })();";
+
+    try {
+      await _webViewController!.runJavaScript(script);
+    } catch (e) {
+      debugPrint('Error scrubbing auth token from URL: $e');
+    }
   }
 
   // Extract the conversation ID from URL and agent cookie from WebView
@@ -259,9 +278,8 @@ class _HomePageState extends State<HomePage> {
 
       final agentCookieValue =
           await _webViewController!.runJavaScriptReturningResult(
-                agentCookieScript,
-              )
-              as String?;
+        agentCookieScript,
+      ) as String?;
 
       debugPrint('Extracted agent value: ${agentCookieValue ?? "null"}');
 
@@ -343,9 +361,8 @@ class _HomePageState extends State<HomePage> {
       })()
       ''';
 
-      final agentValue =
-          await _webViewController!.runJavaScriptReturningResult(altAgentScript)
-              as String?;
+      final agentValue = await _webViewController!
+          .runJavaScriptReturningResult(altAgentScript) as String?;
 
       if (agentValue != null &&
           agentValue.isNotEmpty &&

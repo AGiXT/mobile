@@ -1,4 +1,6 @@
 import 'package:agixt/models/agixt/whispermodel.dart';
+import 'package:agixt/services/secure_storage_service.dart';
+import 'package:agixt/utils/url_security.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -53,6 +55,7 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
   final _apiKeyController = TextEditingController();
   final _remoteModelController = TextEditingController();
   final stt.SpeechToText _speech = stt.SpeechToText();
+  final SecureStorageService _secureStorage = SecureStorageService();
 
   void _showSnackBar(String message, {Color? backgroundColor}) {
     if (!mounted) {
@@ -85,6 +88,29 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
 
   Future<void> _loadSelectedModel() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
+    String apiUrl = prefs.getString('whisper_api_url') ?? '';
+    if (apiUrl.isNotEmpty) {
+      try {
+        apiUrl = UrlSecurity.sanitizeBaseUrl(
+          apiUrl,
+          allowHttpOnLocalhost: true,
+        );
+        await prefs.setString('whisper_api_url', apiUrl);
+      } catch (error) {
+        debugPrint('Stored Whisper URL requires attention: $error');
+      }
+    }
+
+    String? apiKey = await _secureStorage.read(key: 'whisper_api_key');
+    if (apiKey == null || apiKey.isEmpty) {
+      final legacyKey = prefs.getString('whisper_api_key');
+      if (legacyKey != null && legacyKey.isNotEmpty) {
+        apiKey = legacyKey;
+        await _secureStorage.write(key: 'whisper_api_key', value: legacyKey);
+        await prefs.remove('whisper_api_key');
+      }
+    }
+
     if (!mounted) {
       return;
     }
@@ -92,8 +118,8 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       _selectedModel = prefs.getString('whisper_model') ?? 'base';
       _selectedMode = prefs.getString('whisper_mode') ?? 'local';
       _selectedLanguage = prefs.getString('whisper_language') ?? 'en';
-      _apiUrlController.text = prefs.getString('whisper_api_url') ?? '';
-      _apiKeyController.text = prefs.getString('whisper_api_key') ?? '';
+      _apiUrlController.text = apiUrl;
+      _apiKeyController.text = apiKey ?? '';
       _remoteModelController.text =
           prefs.getString('whisper_remote_model') ?? '';
     });
@@ -155,14 +181,31 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
         throw Exception("Model is required");
       }
 
+      final sanitizedUrl = UrlSecurity.sanitizeBaseUrl(
+        _apiUrlController.text,
+        allowHttpOnLocalhost: true,
+      );
+      final apiKey = _apiKeyController.text.trim();
+
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setString('whisper_mode', _selectedMode!);
-      await prefs.setString('whisper_api_url', _apiUrlController.text);
-      await prefs.setString('whisper_api_key', _apiKeyController.text);
+      await prefs.setString('whisper_api_url', sanitizedUrl);
       await prefs.setString(
         'whisper_remote_model',
-        _remoteModelController.text,
+        _remoteModelController.text.trim(),
       );
+      if (_selectedLanguage != null) {
+        await prefs.setString('whisper_language', _selectedLanguage!);
+      }
+
+      if (apiKey.isEmpty) {
+        await _secureStorage.delete(key: 'whisper_api_key');
+      } else {
+        await _secureStorage.write(key: 'whisper_api_key', value: apiKey);
+      }
+      await prefs.remove('whisper_api_key');
+
+      _apiUrlController.text = sanitizedUrl;
 
       _showSnackBar(
         'Whisper configuration saved!',
@@ -187,10 +230,9 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
           });
           _saveSelectedModel(newValue!);
         },
-        items:
-            _models.map<DropdownMenuItem<String>>((String model) {
-              return DropdownMenuItem<String>(value: model, child: Text(model));
-            }).toList(),
+        items: _models.map<DropdownMenuItem<String>>((String model) {
+          return DropdownMenuItem<String>(value: model, child: Text(model));
+        }).toList(),
       ),
       const SizedBox(height: 20),
       ElevatedButton(
@@ -203,13 +245,13 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       const SizedBox(height: 10),
       _isRecognitionAvailable
           ? const Text(
-            'Speech recognition is available on this device',
-            style: TextStyle(color: Colors.green),
-          )
+              'Speech recognition is available on this device',
+              style: TextStyle(color: Colors.green),
+            )
           : const Text(
-            'Speech recognition is NOT available on this device',
-            style: TextStyle(color: Colors.red),
-          ),
+              'Speech recognition is NOT available on this device',
+              style: TextStyle(color: Colors.red),
+            ),
     ];
     final remoteOpts = [
       const Text('Whisper server details:', style: TextStyle(fontSize: 18)),
@@ -222,6 +264,9 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
       TextField(
         decoration: const InputDecoration(labelText: 'API Key'),
         controller: _apiKeyController,
+        obscureText: true,
+        enableSuggestions: false,
+        autocorrect: false,
       ),
       const SizedBox(height: 20),
       TextField(
@@ -261,16 +306,15 @@ class WhisperSettingsPageState extends State<WhisperSettingsPage> {
               const SizedBox(height: 10),
               DropdownButton(
                 value: _selectedLanguage,
-                onChanged:
-                    (String? newValue) => _saveSelectedLanguage(newValue!),
+                onChanged: (String? newValue) =>
+                    _saveSelectedLanguage(newValue!),
                 isExpanded: true,
-                items:
-                    _languages.map<DropdownMenuItem<String>>((String lang) {
-                      return DropdownMenuItem<String>(
-                        value: lang,
-                        child: Text(lang),
-                      );
-                    }).toList(),
+                items: _languages.map<DropdownMenuItem<String>>((String lang) {
+                  return DropdownMenuItem<String>(
+                    value: lang,
+                    child: Text(lang),
+                  );
+                }).toList(),
               ),
               ...(_selectedMode == "local" ? localOpts : remoteOpts),
             ],
