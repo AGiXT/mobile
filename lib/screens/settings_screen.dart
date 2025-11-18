@@ -1,28 +1,23 @@
-import 'package:agixt/widgets/glass_status.dart';
-import 'package:agixt/screens/settings/dashboard_screen.dart';
-import 'package:agixt/screens/settings/location_screen.dart';
-import 'package:agixt/screens/settings/notifications_screen.dart';
-import 'package:agixt/screens/settings/permissions_screen.dart';
-import 'package:agixt/widgets/gravatar_image.dart';
-import 'package:agixt/widgets/g1_battery_widget.dart';
-import 'package:agixt/models/agixt/auth/auth.dart';
-import 'package:agixt/models/g1/battery.dart';
-import 'package:agixt/screens/auth/profile_screen.dart';
-import 'package:agixt/screens/calendars_screen.dart';
-import 'package:agixt/services/bluetooth_manager.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-class SettingsPage extends StatefulWidget {
-  const SettingsPage({super.key});
+import 'package:agixt/models/agixt/auth/auth.dart';
+import 'package:agixt/models/g1/battery.dart';
+import 'package:agixt/screens/settings/dashboard_screen.dart';
+import 'package:agixt/screens/settings/location_screen.dart';
+import 'package:agixt/screens/settings/notifications_screen.dart';
+import 'package:agixt/services/bluetooth_manager.dart';
+import 'package:agixt/widgets/g1_battery_widget.dart';
+import 'package:agixt/widgets/glass_status.dart';
+
+class GlassesSettingsPage extends StatefulWidget {
+  const GlassesSettingsPage({super.key});
 
   @override
-  State<SettingsPage> createState() => _SettingsPageState();
+  State<GlassesSettingsPage> createState() => _GlassesSettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
-  String? _userEmail;
-  String? _userName;
+class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
   bool _isGlassesDisplayEnabled = true;
   G1BatteryStatus _batteryStatus = G1BatteryStatus(lastUpdated: DateTime.now());
   StreamSubscription<G1BatteryStatus>? _batterySubscription;
@@ -30,54 +25,38 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    _loadUserDetails();
     _loadGlassesDisplayPreference();
-    _startBatteryStatusTracking(); // Start tracking battery status
-  }
-
-  Future<void> _loadUserDetails() async {
-    final email = await AuthService.getEmail();
-    final userInfo = await AuthService.getUserInfo();
-
-    setState(() {
-      _userEmail = email;
-      if (userInfo != null) {
-        _userName = '${userInfo.firstName} ${userInfo.lastName}'.trim();
-      }
-    });
+    _startBatteryStatusTracking();
   }
 
   Future<void> _loadGlassesDisplayPreference() async {
     final preference = await AuthService.getGlassesDisplayPreference();
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _isGlassesDisplayEnabled = preference;
     });
   }
 
   Future<void> _saveGlassesDisplayPreference(bool value) async {
-    // Save the preference
     await AuthService.setGlassesDisplayPreference(value);
 
-    // Update glasses state if connected
     final bluetoothManager = BluetoothManager();
 
     if (bluetoothManager.isConnected) {
-      // Set silent mode (inverse of display enabled)
       await bluetoothManager.setSilentMode(!value);
 
-      // Clear the display when silent mode is enabled
       if (!value) {
         await bluetoothManager.clearGlassesDisplay();
       }
     }
   }
 
-  // Start tracking battery status
   void _startBatteryStatusTracking() {
     try {
       final bluetoothManager = BluetoothManager();
 
-      // Listen to battery status updates from BluetoothManager
       _batterySubscription = bluetoothManager.batteryStatusStream.listen(
         (status) {
           if (mounted) {
@@ -87,26 +66,22 @@ class _SettingsPageState extends State<SettingsPage> {
           }
         },
         onError: (error) {
-          // Handle stream errors gracefully
           debugPrint('Battery status stream error: $error');
         },
       );
 
-      // Get initial battery status
       if (mounted) {
         setState(() {
           _batteryStatus = bluetoothManager.batteryStatus;
         });
       }
 
-      // Request fresh battery info immediately when starting tracking
       try {
         bluetoothManager.requestBatteryInfo();
       } catch (e) {
         debugPrint('Error requesting battery info in settings: $e');
       }
     } catch (e) {
-      // Handle any initialization errors
       debugPrint('Error starting battery status tracking: $e');
     }
   }
@@ -119,195 +94,213 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Settings'),
+      body: SafeArea(
+        child: Container(
+          color: theme.colorScheme.surface,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHeader(theme),
+                const SizedBox(height: 24),
+                _buildStatusCard(theme),
+                const SizedBox(height: 16),
+                _buildDisplayCard(theme),
+                const SizedBox(height: 16),
+                _buildActionsCard(theme),
+              ],
+            ),
+          ),
+        ),
       ),
-      body: ListView(
-        children: [
-          GlassStatus(),
+    );
+  }
 
-          // Battery status widget with detailed view
-          G1BatteryWidget(batteryStatus: _batteryStatus, showDetails: true),
-
-          // Profile Section
-          if (_userEmail != null)
-            InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const ProfileScreen()),
-                ).then((_) => _loadUserDetails()); // Refresh on return
-              },
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  children: [
-                    GravatarImage(
-                      email: _userEmail!,
-                      size: 50,
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_userName != null && _userName!.isNotEmpty)
-                            Text(
-                              _userName!,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          Text(
-                            _userEmail!,
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const Icon(Icons.chevron_right),
-                  ],
+  Widget _buildHeader(ThemeData theme) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceVariant.withOpacity(
+              theme.brightness == Brightness.dark ? 0.4 : 0.8,
+            ),
+            shape: BoxShape.circle,
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Glasses Settings',
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
-            ),
-
-          const Divider(),
-
-          ListTile(
-            title: Row(
-              children: [
-                Icon(Icons.verified_user),
-                SizedBox(width: 10),
-                Text('Permissions'),
-              ],
-            ),
-            subtitle: Text('Review and enable app permissions on your terms'),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const PermissionsSettingsPage(),
+              const SizedBox(height: 8),
+              Text(
+                'Keep your Even Realities G1 glasses connected and tuned to your day.',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.textTheme.bodyMedium?.color?.withOpacity(0.8),
                 ),
-              );
-            },
+              ),
+            ],
           ),
+        ),
+      ],
+    );
+  }
 
-          ListTile(
-            title: Row(
-              children: [
-                Icon(Icons.notifications),
-                SizedBox(width: 10),
-                Text('App Notifications'),
-              ],
+  Widget _buildStatusCard(ThemeData theme) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Connection status',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => NotificationSettingsPage()),
-              );
-            },
-          ),
-          ListTile(
-            title: Row(
-              children: [
-                Icon(Icons.dashboard),
-                SizedBox(width: 10),
-                Text('Dashboard Settings'),
-              ],
+            const SizedBox(height: 12),
+            const GlassStatus(),
+            const SizedBox(height: 12),
+            const Divider(),
+            const SizedBox(height: 12),
+            G1BatteryWidget(
+              batteryStatus: _batteryStatus,
+              showDetails: true,
             ),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => DashboardSettingsPage()),
-              );
-            },
-          ),
-          ListTile(
-            title: Row(
-              children: [
-                Icon(Icons.calendar_today),
-                SizedBox(width: 10),
-                Text('Calendar Integration'),
-              ],
-            ),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => CalendarsPage()),
-              );
-            },
-          ),
-          ListTile(
-            title: Row(
-              children: [
-                Icon(Icons.location_on),
-                SizedBox(width: 10),
-                Text('Location Settings'),
-              ],
-            ),
-            trailing: Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => LocationSettingsScreen()),
-              );
-            },
-          ),
+          ],
+        ),
+      ),
+    );
+  }
 
-          const Divider(),
-
-          // Toggle for Even Realities Glasses
-          ListTile(
-            title: Row(
-              children: [
-                Icon(Icons.visibility_off),
-                SizedBox(width: 10),
-                Text('Glasses Silent Mode'),
-              ],
+  Widget _buildDisplayCard(ThemeData theme) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Focus & display',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
-            subtitle: Text('No content will be shown on glasses when enabled'),
-            trailing: Switch(
+            const SizedBox(height: 12),
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
               value: !_isGlassesDisplayEnabled,
-              onChanged: (bool value) {
+              onChanged: (value) {
                 setState(() {
                   _isGlassesDisplayEnabled = !value;
                 });
                 _saveGlassesDisplayPreference(!value);
               },
+              title: const Text('Glasses silent mode'),
+              subtitle: const Text(
+                'Pause updates to the glasses display when you need fewer distractions.',
+              ),
             ),
-          ),
+          ],
+        ),
+      ),
+    );
+  }
 
-          const Divider(),
-
-          ListTile(
-            title: Row(
-              children: [
-                Icon(Icons.privacy_tip_outlined),
-                SizedBox(width: 10),
-                Text('Privacy Policy'),
-              ],
-            ),
-            subtitle: Text('Review how AGiXT collects, uses, and retains data'),
-            trailing: Icon(Icons.chevron_right),
+  Widget _buildActionsCard(ThemeData theme) {
+    return Card(
+      elevation: 0,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Column(
+        children: [
+          _buildActionTile(
+            icon: Icons.dashboard_customize_outlined,
+            title: 'Dashboard preferences',
+            subtitle: 'Choose what shows on your glasses timeline.',
             onTap: () {
-              Navigator.pushNamed(context, '/privacy-policy');
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const DashboardSettingsPage()),
+              );
+            },
+          ),
+          const Divider(height: 1),
+          _buildActionTile(
+            icon: Icons.notifications_active_outlined,
+            title: 'Notification routing',
+            subtitle: 'Control which alerts reach your glasses in real time.',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const NotificationSettingsPage()),
+              );
+            },
+          ),
+          const Divider(height: 1),
+          _buildActionTile(
+            icon: Icons.location_on_outlined,
+            title: 'Location & weather',
+            subtitle: 'Share location data for accurate on-glasses updates.',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (context) => const LocationSettingsScreen()),
+              );
             },
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildActionTile({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      leading: CircleAvatar(
+        radius: 24,
+        backgroundColor: theme.colorScheme.primaryContainer,
+        child: Icon(
+          icon,
+          color: theme.colorScheme.onPrimaryContainer,
+        ),
+      ),
+      title: Text(
+        title,
+        style:
+            theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+      ),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: onTap,
     );
   }
 }

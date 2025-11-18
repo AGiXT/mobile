@@ -145,6 +145,20 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
                         .toList(),
                   ),
                 ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: FilledButton.icon(
+            onPressed: _isLoading
+                ? null
+                : () {
+                    Navigator.of(context).maybePop();
+                  },
+            icon: const Icon(Icons.check_circle),
+            label: const Text('Done'),
+          ),
+        ),
+      ),
     );
   }
 
