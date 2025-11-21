@@ -5,6 +5,8 @@ import 'package:flutter/gestures.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/auth/oauth.dart';
 import 'package:agixt/models/agixt/auth/wallet.dart';
+import 'package:agixt/screens/settings/permissions_screen.dart';
+import 'package:agixt/services/onboarding_service.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:bs58/bs58.dart' as bs58;
 import 'package:flutter/services.dart';
@@ -37,6 +39,9 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _loadOAuthProviders();
     _loadWalletProviders();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybeShowPermissionManager();
+    });
   }
 
   @override
@@ -426,6 +431,25 @@ class _LoginScreenState extends State<LoginScreen> {
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
+  }
+
+  Future<void> _maybeShowPermissionManager() async {
+    if (!mounted) {
+      return;
+    }
+
+    final shouldShow = await OnboardingService.shouldShowPermissionManager();
+    if (!shouldShow || !mounted) {
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const PermissionsSettingsPage(),
+        fullscreenDialog: true,
+      ),
+    );
+    await OnboardingService.markPermissionManagerShown();
   }
 
   @override

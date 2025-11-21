@@ -36,6 +36,7 @@ class Glass {
 
   // Callback function for battery responses
   BatteryResponseCallback? onBatteryResponse;
+  VoidCallback? onConnectionStateChanged;
 
   get isConnected => device.isConnected;
 
@@ -58,6 +59,7 @@ class Glass {
         BluetoothConnectionState state,
       ) {
         debugPrint('[$side Glass] Connection state: $state');
+        onConnectionStateChanged?.call();
         if (state == BluetoothConnectionState.disconnected &&
             _connectRetries < maxConnectRetries) {
           _connectRetries++;
@@ -119,6 +121,7 @@ class Glass {
       debugPrint(
         '[$side Glass] Setup complete - connection established successfully',
       );
+      onConnectionStateChanged?.call();
     } catch (e) {
       debugPrint('[$side Glass] Connection process failed: $e');
       rethrow; // Let the caller handle this error
@@ -302,6 +305,7 @@ class Glass {
       debugPrint('[$side Glass] Error during disconnect: $e');
     }
     debugPrint('[$side Glass] Disconnected and cleaned up');
+    onConnectionStateChanged?.call();
   }
 
   /// Request battery information from the glasses

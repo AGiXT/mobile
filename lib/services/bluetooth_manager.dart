@@ -78,7 +78,10 @@ class BluetoothManager {
   G1BatteryStatus _batteryStatus = G1BatteryStatus(lastUpdated: DateTime.now());
   final StreamController<G1BatteryStatus> _batteryStatusController =
       StreamController<G1BatteryStatus>.broadcast();
+  final StreamController<bool> _connectionStatusController =
+      StreamController<bool>.broadcast();
   Timer? _batteryUpdateTimer;
+  bool _lastConnectionStatus = false;
 
   get isConnected =>
       leftGlass?.isConnected == true && rightGlass?.isConnected == true;
@@ -88,8 +91,27 @@ class BluetoothManager {
   Stream<G1BatteryStatus> get batteryStatusStream =>
       _batteryStatusController.stream;
 
+  /// Stream of connection status updates (true when both glasses are connected)
+  Stream<bool> get connectionStatusStream => _connectionStatusController.stream;
+
   /// Current battery status
   G1BatteryStatus get batteryStatus => _batteryStatus;
+
+  void _notifyConnectionStatusChanged() {
+    final connected = isConnected;
+    if (_lastConnectionStatus == connected) {
+      return;
+    }
+
+    _lastConnectionStatus = connected;
+    _connectionStatusController.add(connected);
+
+    if (!connected) {
+      _stopBatteryMonitoring();
+    } else if (_batteryUpdateTimer == null) {
+      _setupBatteryMonitoring();
+    }
+  }
 
   Timer? _scanTimer;
   bool _isScanning = false;
@@ -148,6 +170,7 @@ class BluetoothManager {
 
     // Close battery status stream
     await _batteryStatusController.close();
+    await _connectionStatusController.close();
 
     // Cancel all timers
     _syncTimer?.cancel();
@@ -201,6 +224,7 @@ class BluetoothManager {
         device: BluetoothDevice(remoteId: DeviceIdentifier(leftUid)),
         side: GlassSide.left,
       );
+      leftGlass!.onConnectionStateChanged = _notifyConnectionStatusChanged;
       await leftGlass!.connect();
       _setReconnect(leftGlass!);
       _setupImmediateBatteryMonitoring(leftGlass!);
@@ -212,6 +236,7 @@ class BluetoothManager {
         device: BluetoothDevice(remoteId: DeviceIdentifier(rightUid)),
         side: GlassSide.right,
       );
+      rightGlass!.onConnectionStateChanged = _notifyConnectionStatusChanged;
       await rightGlass!.connect();
       _setReconnect(rightGlass!);
       _setupImmediateBatteryMonitoring(rightGlass!);
@@ -219,6 +244,7 @@ class BluetoothManager {
 
     // Sync settings if both glasses are connected
     if (leftGlass?.isConnected == true && rightGlass?.isConnected == true) {
+      _notifyConnectionStatusChanged();
       await _sync();
     }
   }
@@ -340,6 +366,7 @@ class BluetoothManager {
         device: result.device,
         side: GlassSide.left,
       );
+      glass.onConnectionStateChanged = _notifyConnectionStatusChanged;
       leftGlass = glass;
       onUpdate("Left glass found: ${glass.name}");
       await _saveLastG1Used(
@@ -354,6 +381,7 @@ class BluetoothManager {
         device: result.device,
         side: GlassSide.right,
       );
+      glass.onConnectionStateChanged = _notifyConnectionStatusChanged;
       rightGlass = glass;
       onUpdate("Right glass found: ${glass.name}");
       await _saveLastG1Used(
@@ -397,6 +425,7 @@ class BluetoothManager {
             await Future.delayed(
               const Duration(seconds: 2),
             ); // Increased delay for stability
+            _notifyConnectionStatusChanged();
             await _sync();
           }
         }
@@ -407,6 +436,7 @@ class BluetoothManager {
         } else {
           rightGlass = null;
         }
+        _notifyConnectionStatusChanged();
         // Don't rethrow - let the scan continue to retry
       }
     }
@@ -850,6 +880,8 @@ class BluetoothManager {
     } finally {
       rightGlass = null;
     }
+
+    _notifyConnectionStatusChanged();
   }
 
   Future<bool> _isGlassesDisplayEnabled() async {

@@ -1,12 +1,12 @@
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/widgets/agixt_chat.dart'; // Import AGiXTChatWidget
-import 'package:agixt/screens/auth/profile_screen.dart';
 import 'package:agixt/screens/settings_screen.dart';
 import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/cookie_manager.dart';
+import 'package:agixt/services/onboarding_service.dart';
 import 'package:agixt/utils/app_events.dart'; // Import AppEvents
-import 'package:agixt/widgets/gravatar_image.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/bluetooth_manager.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -29,6 +29,7 @@ class _HomePageState extends State<HomePage> {
   bool _isLoggedIn = true;
   bool _isSideButtonListenerAttached = false;
   WebViewController? _webViewController;
+  bool _hasPromptedForGlasses = false;
 
   @override
   void initState() {
@@ -40,6 +41,9 @@ class _HomePageState extends State<HomePage> {
     _initializeWebView();
     _ensureConversationId(); // Ensure a conversation ID exists at startup
     _initializeAgentCookie(); // Initialize the agent cookie with primary agent if needed
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maybePromptForGlasses();
+    });
   }
 
   Future<void> _loadUserDetails() async {
@@ -323,6 +327,53 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _maybePromptForGlasses() async {
+    if (_hasPromptedForGlasses || !mounted) {
+      return;
+    }
+
+    final shouldShow = await OnboardingService.shouldShowGlassesPrompt();
+    if (!shouldShow || !mounted) {
+      return;
+    }
+
+    _hasPromptedForGlasses = true;
+
+    final wantsToConnect = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Connect your Even Realities glasses?'),
+            content: const Text(
+              'We can help you pair and customize your Even Realities G1 glasses now. You can also do this later from Glasses Settings.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Skip'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Connect now'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    await OnboardingService.markGlassesPromptCompleted();
+
+    if (wantsToConnect && mounted) {
+      _openGlassesSettings();
+    }
+  }
+
+  void _openGlassesSettings() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const GlassesSettingsPage()),
+    ).then((_) => setState(() {}));
+  }
+
   // Retry extracting agent info after a delay
   Future<void> _extractAgentInfoRetry() async {
     if (_webViewController == null) return;
@@ -589,50 +640,19 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(AuthService.appName),
-        actions: [
-          // Profile button with Gravatar
-          if (_userEmail != null)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const ProfileScreen(),
-                    ),
-                  );
-                },
-                child: GravatarImage(email: _userEmail!, size: 40),
-              ),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.account_circle),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ProfileScreen(),
-                  ),
-                );
-              },
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(child: _buildWebView()),
+            Positioned(
+              top: kToolbarHeight +
+                  12, // keep shortcut clear of account/settings buttons
+              right: 12,
+              child: _GlassesShortcut(onPressed: _openGlassesSettings),
             ),
-          // Settings button
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => SettingsPage()),
-              ).then((_) => setState(() {}));
-            },
-          ),
-        ],
+          ],
+        ),
       ),
-      body: _buildWebView(),
     );
   }
 
@@ -642,5 +662,24 @@ class _HomePageState extends State<HomePage> {
     }
 
     return WebViewWidget(controller: _webViewController!);
+  }
+}
+
+class _GlassesShortcut extends StatelessWidget {
+  const _GlassesShortcut({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.all(10),
+        shape: const CircleBorder(),
+        visualDensity: VisualDensity.compact,
+      ),
+      child: const Icon(Symbols.eyeglasses_rounded),
+    );
   }
 }
