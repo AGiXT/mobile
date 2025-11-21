@@ -11,7 +11,7 @@ class GlassStatus extends StatefulWidget {
 }
 
 class GlassStatusState extends State<GlassStatus> {
-  BluetoothManager bluetoothManager = BluetoothManager();
+  final BluetoothManager bluetoothManager = BluetoothManager();
 
   bool isConnected = false;
   bool isScanning = false;
@@ -28,17 +28,27 @@ class GlassStatusState extends State<GlassStatus> {
 
   @override
   void dispose() {
-    if (_refreshTimer != null) {
-      _refreshTimer!.cancel();
-    }
+    _refreshTimer?.cancel();
     super.dispose();
   }
 
   void _refreshData() {
+    if (!mounted) {
+      return;
+    }
     setState(() {
       isConnected = bluetoothManager.isConnected;
       isScanning = bluetoothManager.isScanning;
     });
+  }
+
+  Future<void> _disconnect() async {
+    try {
+      await bluetoothManager.disconnectFromGlasses();
+      _refreshData();
+    } catch (e) {
+      debugPrint('Error disconnecting: $e');
+    }
   }
 
   void _scanAndConnect() {
@@ -58,62 +68,106 @@ class GlassStatusState extends State<GlassStatus> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  bluetoothManager.isConnected
-                      ? 'Connected to Even Realities G1 glasses'
-                      : 'Disconnected from Even Realities G1 glasses',
-                  style: TextStyle(
-                    color: bluetoothManager.isConnected
-                        ? Colors.green
-                        : Colors.red,
-                    fontWeight: FontWeight.bold,
+    final theme = Theme.of(context);
+    final connected = isConnected;
+    final scanning = isScanning;
+
+    final Color accent = connected
+        ? theme.colorScheme.secondary
+        : theme.colorScheme.error;
+    final Color accentContainer = connected
+        ? theme.colorScheme.secondaryContainer
+        : theme.colorScheme.errorContainer;
+
+    final String statusTitle = connected
+        ? 'Connected to Even Realities G1 glasses'
+        : 'Disconnected from Even Realities G1 glasses';
+    final String statusBody = connected
+        ? 'Your glasses are synced and receiving updates.'
+        : 'Tap connect to scan for your glasses and resume updates.';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: accentContainer,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                connected
+                    ? Icons.check_circle_rounded
+                    : Icons.portable_wifi_off_rounded,
+                color: accent,
+                size: 26,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  statusTitle,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: accent,
+                    fontWeight: FontWeight.w700,
                   ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: true,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            bluetoothManager.isConnected
-                ? ElevatedButton(
-                    onPressed: () async {
-                      await bluetoothManager.disconnectFromGlasses();
-                      _refreshData();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      backgroundColor: Colors.red,
-                    ),
-                    child: const Text('Disconnect'),
-                  )
-                : ElevatedButton(
-                    onPressed: isScanning ? null : _scanAndConnect,
-                    child: isScanning
-                        ? const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              SizedBox(width: 10),
-                              SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                              Text('Scanning for Even Realities G1 glasses'),
-                            ],
-                          )
-                        : const Text('Connect to Even Realities G1 Glasses'),
-                  ),
-          ],
+              ),
+            ],
+          ),
         ),
-      ),
+        const SizedBox(height: 12),
+        Text(
+          statusBody,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (connected)
+          Row(
+            children: [
+              OutlinedButton.icon(
+                onPressed: _disconnect,
+                icon: const Icon(Icons.link_off_rounded),
+                label: const Text('Disconnect'),
+              ),
+            ],
+          )
+        else
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: scanning ? null : _scanAndConnect,
+              child: scanning
+                  ? Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        SizedBox(width: 12),
+                        Text('Scanning for your glasses...'),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.link_rounded),
+                        SizedBox(width: 8),
+                        Text('Connect glasses'),
+                      ],
+                    ),
+            ),
+          ),
+      ],
     );
   }
 }

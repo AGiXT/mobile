@@ -645,7 +645,8 @@ class _HomePageState extends State<HomePage> {
           children: [
             Positioned.fill(child: _buildWebView()),
             Positioned(
-              top: 12,
+              top: kToolbarHeight +
+                  12, // keep shortcut clear of account/settings buttons
               right: 12,
               child: _GlassesShortcut(onPressed: _openGlassesSettings),
             ),
@@ -671,14 +672,14 @@ class _GlassesShortcut extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
+    return FilledButton(
       onPressed: onPressed,
-      icon: const Icon(Symbols.eyeglasses_rounded),
-      label: const Text('Glasses settings'),
       style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        padding: const EdgeInsets.all(10),
+        shape: const CircleBorder(),
         visualDensity: VisualDensity.compact,
       ),
+      child: const Icon(Symbols.eyeglasses_rounded),
     );
   }
 }
