@@ -106,7 +106,6 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/icons/
-    - assets/icons/AGiXT_blackbg.png
     - assets/privacy_policy.md
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -135,9 +134,9 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 flutter_launcher_icons:
-  image_path: "assets/icons/AGiXT_blackbg.png"
-  image_path_ios: "assets/icons/AGiXT_blackbg.png"
-  adaptive_icon_foreground: "assets/icons/AGiXT_blackbg.png"
+  image_path: "assets/icons/AGIXT_Mobile_icon.png"
+  image_path_ios: "assets/icons/AGIXT_Mobile_icon.png"
+  adaptive_icon_foreground: "assets/icons/AGIXT_Mobile_icon.png"
   adaptive_icon_background: "#000000"
   android: true
   min_sdk_android: 16
@@ -145,12 +144,13 @@ flutter_launcher_icons:
   remove_alpha_ios: true
   web:
     generate: true
-    background_color: "white"
-    theme_color: "#fff1f1"
+    image_path: "assets/icons/AGIXT_Mobile_icon.png"
+    background_color: "#000000"
+    theme_color: "#000000"
   windows:
     generate: true
-    image_path: "assets/logo/icon.png"
+    image_path: "assets/icons/AGIXT_Mobile_icon.png"
     icon_size: 256
   macos:
     generate: true
-    image_path: "assets/logo/icon.png"
+    image_path: "assets/icons/AGIXT_Mobile_icon.png"

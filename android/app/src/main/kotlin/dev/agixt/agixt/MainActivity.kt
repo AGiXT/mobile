@@ -22,6 +22,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.os.Build
 import android.view.KeyEvent // Import KeyEvent
+import android.webkit.WebView // Import WebView for performance optimization
 
 class MainActivity: FlutterActivity() {
     private val CHANNEL = "dev.agixt.agixt/channel"
@@ -33,6 +34,12 @@ class MainActivity: FlutterActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Enable WebView debugging and performance optimizations
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            WebView.setWebContentsDebuggingEnabled(false) // Set to true only for development
+        }
+        
         Notifications.createNotificationChannels(this)
         
         // Don't request microphone permission here to avoid blocking the UI
