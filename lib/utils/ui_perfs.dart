@@ -13,10 +13,6 @@ class UiPerfs {
 
   UiPerfs._internal();
 
-  bool _trainNerdMode = false;
-  bool get trainNerdMode => _trainNerdMode;
-  set trainNerdMode(bool value) => _setTrainNerdMode(value);
-
   // Default to Fahrenheit
   TemperatureUnit _temperatureUnit = TemperatureUnit.FAHRENHEIT;
   TemperatureUnit get temperatureUnit => _temperatureUnit;
@@ -29,7 +25,6 @@ class UiPerfs {
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    _trainNerdMode = prefs.getBool('trainNerdMode') ?? false;
 
     // Load temperature unit preference (0 for Celsius, 1 for Fahrenheit)
     final tempUnitIdx = prefs.getInt('temperatureUnit') ?? 1;
@@ -40,12 +35,6 @@ class UiPerfs {
     _timeFormat = TimeFormat.values[timeFormatIdx];
 
     // Removed loading weather provider preference
-  }
-
-  void _setTrainNerdMode(bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    _trainNerdMode = value;
-    prefs.setBool('trainNerdMode', value);
   }
 
   void _setTemperatureUnit(TemperatureUnit value) async {

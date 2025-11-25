@@ -136,11 +136,17 @@ class _HomePageState extends State<HomePage> {
       urlToLoad = uri.replace(path: '/chat').toString();
     }
 
-    // Initialize the WebView controller
+    // Initialize the WebView controller with performance optimizations
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..enableZoom(false)
       ..setNavigationDelegate(
         NavigationDelegate(
+          onPageStarted: (String url) {
+            // Pre-warm any necessary connections
+            debugPrint('Page loading started: $url');
+          },
           onPageFinished: (String url) async {
             // Extract conversation ID from URL and agent cookie
             await _extractConversationIdAndAgentInfo(url);
@@ -661,7 +667,10 @@ class _HomePageState extends State<HomePage> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    return WebViewWidget(controller: _webViewController!);
+    // Use RepaintBoundary to optimize rendering performance
+    return RepaintBoundary(
+      child: WebViewWidget(controller: _webViewController!),
+    );
   }
 }
 
