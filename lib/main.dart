@@ -10,7 +10,6 @@ import 'package:agixt/models/agixt/stop.dart';
 import 'package:agixt/screens/auth/login_screen.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
 import 'package:agixt/screens/privacy/privacy_consent_screen.dart';
-import 'package:agixt/screens/privacy/privacy_policy_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
@@ -23,6 +22,7 @@ import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:app_links/app_links.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'screens/home_screen.dart';
 
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -41,6 +41,8 @@ const String APP_URI = String.fromEnvironment(
   'APP_URI',
   defaultValue: 'https://agixt.dev',
 );
+const String PRIVACY_POLICY_URL =
+    'https://agixt.com/docs/5-Reference/1-Privacy%20Policy';
 
 void main() async {
   try {
@@ -239,6 +241,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
   DateTime? _privacyAcceptedAt;
   StreamSubscription? _deepLinkSubscription;
   final _appLinks = AppLinks();
+  static final Uri _privacyPolicyUri = Uri.parse(PRIVACY_POLICY_URL);
 
   @override
   void initState() {
@@ -295,6 +298,37 @@ class _AGiXTAppState extends State<AGiXTApp> {
         );
       }
     }
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    try {
+      final launched = await launchUrl(
+        _privacyPolicyUri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        _showPrivacyPolicyError();
+      }
+    } catch (e) {
+      debugPrint('Error opening privacy policy: $e');
+      _showPrivacyPolicyError();
+    }
+  }
+
+  void _showPrivacyPolicyError() {
+    final context = AGiXTApp.navigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Unable to open the privacy policy. Please try again later.',
+        ),
+      ),
+    );
   }
 
   @override
@@ -474,7 +508,6 @@ class _AGiXTAppState extends State<AGiXTApp> {
           '/home': (context) => const HomePage(),
           '/login': (context) => const LoginScreen(),
           '/profile': (context) => const ProfileScreen(),
-          '/privacy-policy': (context) => const PrivacyPolicyScreen(),
         },
       );
     } catch (e) {
@@ -514,9 +547,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
         return PrivacyConsentScreen(
           policyVersion: PrivacyConsentService.policyVersion,
           acceptedAt: _privacyAcceptedAt,
-          onViewPolicy: () {
-            AGiXTApp.navigatorKey.currentState?.pushNamed('/privacy-policy');
-          },
+          onViewPolicy: _openPrivacyPolicy,
           onAccept: _handlePrivacyAccepted,
         );
       }
