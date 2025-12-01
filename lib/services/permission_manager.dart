@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -59,6 +60,15 @@ class PermissionSummary {
 }
 
 class PermissionManager {
+  static final List<Permission> _android13MediaPermissions =
+      List<Permission>.unmodifiable(<Permission>[
+    Permission.photos,
+    Permission.videos,
+    Permission.audio,
+  ]);
+
+  static int? _cachedAndroidSdkInt;
+
   static final List<PermissionDefinition> _definitions = [
     const PermissionDefinition(
       id: AppPermission.bluetooth,
@@ -161,6 +171,7 @@ class PermissionManager {
   static Future<PermissionSummary> getSummary(AppPermission id) async {
     final definition = definitionOf(id);
     final Map<Permission, PermissionStatus> statuses = {};
+    final permissions = await _effectivePermissions(definition);
 
     if (!Platform.isAndroid && !Platform.isIOS) {
       return PermissionSummary(definition: definition, statuses: {});
@@ -174,7 +185,7 @@ class PermissionManager {
       return PermissionSummary(definition: definition, statuses: {});
     }
 
-    for (final permission in definition.permissions) {
+    for (final permission in permissions) {
       try {
         final status = await permission.status;
         statuses[permission] = status;
@@ -204,7 +215,9 @@ class PermissionManager {
       return PermissionSummary(definition: definition, statuses: {});
     }
 
-    for (final permission in definition.permissions) {
+    final permissions = await _effectivePermissions(definition);
+
+    for (final permission in permissions) {
       try {
         final currentStatus = await permission.status;
         if (currentStatus.isGranted) {
@@ -232,6 +245,38 @@ class PermissionManager {
 
     final requested = await requestPermissions(id);
     return requested.allGranted;
+  }
+
+  static Future<List<Permission>> _effectivePermissions(
+    PermissionDefinition definition,
+  ) async {
+    if (definition.id == AppPermission.storage && Platform.isAndroid) {
+      final sdkInt = await _getAndroidSdkInt();
+      if (sdkInt != null && sdkInt >= 33) {
+        return _android13MediaPermissions;
+      }
+    }
+
+    return definition.permissions;
+  }
+
+  static Future<int?> _getAndroidSdkInt() async {
+    if (!Platform.isAndroid) {
+      return null;
+    }
+
+    if (_cachedAndroidSdkInt != null) {
+      return _cachedAndroidSdkInt;
+    }
+
+    try {
+      final info = await DeviceInfoPlugin().androidInfo;
+      _cachedAndroidSdkInt = info.version.sdkInt;
+    } catch (error) {
+      debugPrint('PermissionManager: Failed to read Android SDK version: $error');
+    }
+
+    return _cachedAndroidSdkInt;
   }
 
   static Future<bool> isGroupGranted(AppPermission id) async {
