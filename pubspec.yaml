@@ -133,9 +133,9 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 flutter_launcher_icons:
-  image_path: "assets/icons/AGIXT_Mobile_icon.png"
-  image_path_ios: "assets/icons/AGIXT_Mobile_icon.png"
-  adaptive_icon_foreground: "assets/icons/AGIXT_Mobile_icon.png"
+  image_path: "assets/icons/AGiXT_Mobile_BB_small.png"
+  image_path_ios: "assets/icons/AGiXT_Mobile_BB_small.png"
+  adaptive_icon_foreground: "assets/icons/AGiXT_Mobile_BB_small.png"
   adaptive_icon_background: "#000000"
   android: true
   min_sdk_android: 16
@@ -143,13 +143,13 @@ flutter_launcher_icons:
   remove_alpha_ios: true
   web:
     generate: true
-    image_path: "assets/icons/AGIXT_Mobile_icon.png"
+    image_path: "assets/icons/AGiXT_Mobile_BB.png"
     background_color: "#000000"
     theme_color: "#000000"
   windows:
     generate: true
-    image_path: "assets/icons/AGIXT_Mobile_icon.png"
+    image_path: "assets/icons/AGiXT_Mobile_BB.png"
     icon_size: 256
   macos:
     generate: true
-    image_path: "assets/icons/AGIXT_Mobile_icon.png"
+    image_path: "assets/icons/AGiXT_Mobile_BB.png"
