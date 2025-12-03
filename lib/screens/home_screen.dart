@@ -162,25 +162,22 @@ class _HomePageState extends State<HomePage> {
             await _setupAgentSelectionObserver();
           },
           onNavigationRequest: (NavigationRequest request) {
-            debugPrint(
-              'Navigation request to: ${request.url} (isMainFrame=${request.isMainFrame})',
-            );
-
-            // Always allow subframe/iframe navigations so embedded content can load.
+            debugPrint('Navigation request to: ${request.url} (isMainFrame: ${request.isMainFrame})');
+            
+            // Always allow iframe/subframe navigations
             if (!request.isMainFrame) {
               return NavigationDecision.navigate;
             }
-
-            final uri = Uri.tryParse(request.url);
-            final isAllowedHost = _isAllowedHost(uri);
-
-            if (!isAllowedHost) {
+            
+            if (!request.url.contains('agixt')) {
+              // External link, launch in browser
               _launchInBrowser(request.url);
               return NavigationDecision.prevent;
+            } else {
+              // Internal link, extract info and navigate
+              _extractConversationIdAndAgentInfo(request.url);
+              return NavigationDecision.navigate;
             }
-
-            _extractConversationIdAndAgentInfo(request.url);
-            return NavigationDecision.navigate;
           },
           onUrlChange: (UrlChange change) {
             // This catches client-side navigation that might not trigger a full navigation request
@@ -650,23 +647,6 @@ class _HomePageState extends State<HomePage> {
     } else {
       throw 'Could not launch $url';
     }
-  }
-
-  bool _isAllowedHost(Uri? uri) {
-    if (uri == null) {
-      return false;
-    }
-
-    final configured = Uri.tryParse(AuthService.appUri)?.host;
-    if (configured == null || configured.isEmpty) {
-      return false;
-    }
-
-    if (uri.host == configured) {
-      return true;
-    }
-
-    return uri.host.endsWith('.$configured');
   }
 
   @override

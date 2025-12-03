@@ -70,6 +70,8 @@ dependencies:
   # flutter_sound for audio recording (doesn't rely on ffmpeg)
   flutter_sound: ^9.2.13
   webview_flutter: ^4.11.0
+  webview_flutter_android: ^4.10.1
+  webview_flutter_wkwebview: ^3.23.0
   geolocator: ^11.0.0
   solana_wallet_adapter: ^0.1.5
   solana: ^0.31.0
