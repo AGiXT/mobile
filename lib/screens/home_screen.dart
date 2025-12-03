@@ -162,7 +162,13 @@ class _HomePageState extends State<HomePage> {
             await _setupAgentSelectionObserver();
           },
           onNavigationRequest: (NavigationRequest request) {
-            debugPrint('Navigation request to: ${request.url}');
+            debugPrint('Navigation request to: ${request.url} (isMainFrame: ${request.isMainFrame})');
+            
+            // Always allow iframe/subframe navigations
+            if (!request.isMainFrame) {
+              return NavigationDecision.navigate;
+            }
+            
             if (!request.url.contains('agixt')) {
               // External link, launch in browser
               _launchInBrowser(request.url);

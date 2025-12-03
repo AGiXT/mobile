@@ -14,6 +14,7 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
   final Set<AppPermission> _inFlight = <AppPermission>{};
   late final List<PermissionDefinition> _definitions;
   bool _isLoading = true;
+  bool _bulkRequestInFlight = false;
 
   @override
   void initState() {
@@ -59,7 +60,7 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
   }
 
   Future<void> _handleToggle(AppPermission permission, bool value) async {
-    if (_inFlight.contains(permission)) {
+    if (_bulkRequestInFlight || _inFlight.contains(permission)) {
       return;
     }
 
@@ -89,6 +90,45 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
     }
 
     await _refreshSingle(permission);
+  }
+
+  Future<void> _handleEnableAllPermissions() async {
+    if (_bulkRequestInFlight || _isLoading) {
+      return;
+    }
+
+    setState(() {
+      _bulkRequestInFlight = true;
+    });
+
+    var anyFailures = false;
+
+    for (final definition in _definitions) {
+      final summary = _summaries[definition.id];
+      if (summary?.allGranted ?? false) {
+        continue;
+      }
+
+      final granted = await PermissionManager.ensureGranted(definition.id);
+      if (!granted) {
+        anyFailures = true;
+      }
+      await _refreshSingle(definition.id);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _bulkRequestInFlight = false;
+    });
+
+    _showSnack(
+      anyFailures
+          ? 'Some permissions still need to be enabled from system settings.'
+          : 'All permissions enabled.',
+    );
   }
 
   void _showSnack(String message) {
@@ -140,9 +180,11 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.all(16),
-                    children: _definitions
-                        .map((definition) => _buildPermissionCard(definition))
-                        .toList(),
+                    children: [
+                      _buildBulkActionCard(),
+                      const SizedBox(height: 12),
+                      ..._definitions.map(_buildPermissionCard),
+                    ],
                   ),
                 ),
       bottomNavigationBar: SafeArea(
@@ -166,7 +208,7 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
     final summary = _summaries[definition.id];
     final granted = summary?.allGranted ?? false;
     final permanentlyDenied = summary?.anyPermanentlyDenied ?? false;
-    final isWorking = _inFlight.contains(definition.id);
+    final isWorking = _bulkRequestInFlight || _inFlight.contains(definition.id);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -248,6 +290,44 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
                   label: const Text('Open system settings'),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBulkActionCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Enable All Permissions',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Grant every available permission at once to ensure Bluetooth, media, and notifications all work without interruption.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: (_isLoading || _bulkRequestInFlight)
+                  ? null
+                  : _handleEnableAllPermissions,
+              icon: _bulkRequestInFlight
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.done_all),
+              label: Text(
+                _bulkRequestInFlight ? 'Requesting…' : 'Enable everything',
+              ),
+            ),
           ],
         ),
       ),

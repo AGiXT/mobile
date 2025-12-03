@@ -70,6 +70,8 @@ dependencies:
   # flutter_sound for audio recording (doesn't rely on ffmpeg)
   flutter_sound: ^9.2.13
   webview_flutter: ^4.11.0
+  webview_flutter_android: ^4.10.1
+  webview_flutter_wkwebview: ^3.23.0
   geolocator: ^11.0.0
   solana_wallet_adapter: ^0.1.5
   solana: ^0.31.0
@@ -133,9 +135,9 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 flutter_launcher_icons:
-  image_path: "assets/icons/AGIXT_Mobile_icon.png"
-  image_path_ios: "assets/icons/AGIXT_Mobile_icon.png"
-  adaptive_icon_foreground: "assets/icons/AGIXT_Mobile_icon.png"
+  image_path: "assets/icons/AGiXT_Mobile_BB_small.png"
+  image_path_ios: "assets/icons/AGiXT_Mobile_BB_small.png"
+  adaptive_icon_foreground: "assets/icons/AGiXT_Mobile_BB_small.png"
   adaptive_icon_background: "#000000"
   android: true
   min_sdk_android: 16
@@ -143,13 +145,13 @@ flutter_launcher_icons:
   remove_alpha_ios: true
   web:
     generate: true
-    image_path: "assets/icons/AGIXT_Mobile_icon.png"
+    image_path: "assets/icons/AGiXT_Mobile_BB.png"
     background_color: "#000000"
     theme_color: "#000000"
   windows:
     generate: true
-    image_path: "assets/icons/AGIXT_Mobile_icon.png"
+    image_path: "assets/icons/AGiXT_Mobile_BB.png"
     icon_size: 256
   macos:
     generate: true
-    image_path: "assets/icons/AGIXT_Mobile_icon.png"
+    image_path: "assets/icons/AGiXT_Mobile_BB.png"
