@@ -1144,9 +1144,10 @@ class WalletAdapterService {
     // For Phantom and Solflare, also try null first since they primarily support
     // the standard solana-wallet:// scheme for MWA protocol.
     final int nullIndex = candidates.indexOf(null);
-    if (nullIndex > 0 && (canonicalProvider == 'solana_mobile_stack' ||
-                          canonicalProvider == 'phantom' ||
-                          canonicalProvider == 'solflare')) {
+    if (nullIndex > 0 &&
+        (canonicalProvider == 'solana_mobile_stack' ||
+            canonicalProvider == 'phantom' ||
+            canonicalProvider == 'solflare')) {
       candidates
         ..removeAt(nullIndex)
         ..insert(0, null);
