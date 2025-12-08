@@ -125,6 +125,7 @@ class AuthModel {
 class AuthService {
   static const String JWT_KEY = 'jwt_token';
   static const String EMAIL_KEY = 'user_email';
+  static const String COOKIE_AUTH_KEY = 'cookie_authenticated';
   static String? _serverUrl;
   static String? _appUri;
   static String? _appName;
@@ -193,6 +194,7 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(JWT_KEY);
       await prefs.remove(EMAIL_KEY);
+      await prefs.remove(COOKIE_AUTH_KEY);
     } catch (e) {
       debugPrint('Error during logout: $e');
       rethrow;
@@ -203,9 +205,38 @@ class AuthService {
   static Future<bool> isLoggedIn() async {
     try {
       final jwt = await getJwt();
-      return jwt != null && jwt.isNotEmpty;
+      if (jwt != null && jwt.isNotEmpty) return true;
+
+      // Also check if we have cookie-based authentication
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(COOKIE_AUTH_KEY) ?? false;
     } catch (e) {
       debugPrint('Error checking login status: $e');
+      return false;
+    }
+  }
+
+  // Mark user as authenticated via cookies (OAuth web flow)
+  static Future<void> setCookieAuthenticated(bool authenticated) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (authenticated) {
+        await prefs.setBool(COOKIE_AUTH_KEY, true);
+      } else {
+        await prefs.remove(COOKIE_AUTH_KEY);
+      }
+    } catch (e) {
+      debugPrint('Error setting cookie auth status: $e');
+    }
+  }
+
+  // Check if we have cookie-based auth (vs JWT)
+  static Future<bool> isCookieAuthenticated() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(COOKIE_AUTH_KEY) ?? false;
+    } catch (e) {
+      debugPrint('Error checking cookie auth status: $e');
       return false;
     }
   }
@@ -285,7 +316,12 @@ class AuthService {
   // Get the web URL with token for opening in browser
   static Future<String> getWebUrlWithToken() async {
     final jwt = await getJwt();
-    return '$appUri?token=$jwt';
+    // If we have a JWT, append it; otherwise just return the base URL
+    // (for cookie-based auth, the WebView cookies will handle authentication)
+    if (jwt != null && jwt.isNotEmpty) {
+      return '$appUri?token=$jwt';
+    }
+    return appUri;
   }
 
   // Fetch user information from the server

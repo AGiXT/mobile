@@ -70,5 +70,13 @@
 		<string>Access to calendar is needed to add events and display them.</string>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>Microphone access is required for wake word detection and voice commands.</string>
+		<!-- URL schemes that the app can query (for wallet detection) -->
+		<key>LSApplicationQueriesSchemes</key>
+		<array>
+			<string>phantom</string>
+			<string>solflare</string>
+			<string>solana-wallet</string>
+			<string>https</string>
+		</array>
 	</dict>
 </plist>

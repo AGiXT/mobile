@@ -2,7 +2,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
-import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'auth.dart';
 
@@ -47,9 +46,8 @@ class OAuthFlowResult {
 }
 
 class OAuthService {
-  // Deep link URI for the callback
+  // Deep link URI for the callback - the app receives the JWT here
   static const String DEEP_LINK_URI = 'agixt://callback';
-  static final FlutterAppAuth _appAuth = FlutterAppAuth();
 
   // Fetch available OAuth providers
   static Future<List<OAuthProvider>> getProviders() async {
@@ -75,58 +73,46 @@ class OAuthService {
     }
   }
 
-  // Perform OAuth authentication
+  // Perform OAuth authentication via AGiXT web app
+  // Flow:
+  // 1. App opens AGiXT web app's OAuth login page with mobile callback parameter
+  // 2. Web app handles OAuth flow with the provider
+  // 3. Web app redirects to agixt://callback?token={jwt} after successful login
+  // 4. App receives deep link and stores the JWT
   static Future<OAuthFlowResult> authenticate(OAuthProvider provider) async {
     try {
-      // Use a web-based redirect URI for the OAuth flow
-      final redirectUri = '${AuthService.appUri}/user/mobile/${provider.name}';
+      // Build the web app OAuth URL with mobile callback
+      // The web app at /user/{provider} will handle the OAuth flow
+      // and redirect back to agixt://callback?token={jwt} when complete
+      final loginUrl = Uri.parse(AuthService.appUri).replace(
+        path: '/user/${provider.name}',
+        queryParameters: {
+          'mobile_callback': DEEP_LINK_URI,
+        },
+      );
 
-      if (provider.pkceRequired) {
-        // Handle PKCE flow
-        final pkceResponse = await _appAuth.authorizeAndExchangeCode(
-          AuthorizationTokenRequest(
-            provider.clientId,
-            redirectUri,
-            serviceConfiguration: AuthorizationServiceConfiguration(
-              authorizationEndpoint: provider.authorize,
-              tokenEndpoint: '${AuthService.serverUrl}/v1/oauth/token',
-            ),
-            scopes: provider.scopes.split(' '),
-          ),
+      debugPrint('OAuth: Opening ${provider.name} via web app');
+      debugPrint('OAuth: URL = $loginUrl');
+
+      if (await canLaunchUrl(loginUrl)) {
+        final launched = await launchUrl(
+          loginUrl,
+          mode: LaunchMode.externalApplication,
         );
-
-        if (pkceResponse?.accessToken != null) {
-          await AuthService.storeJwt(pkceResponse!.accessToken!);
-          return const OAuthFlowResult(OAuthFlowStatus.completed);
+        if (launched) {
+          // The web app will handle OAuth and redirect back with token
+          // The app will receive the token via deep link (handled in main.dart)
+          return const OAuthFlowResult(OAuthFlowStatus.launched);
         }
         return const OAuthFlowResult(
           OAuthFlowStatus.failed,
-          message: 'PKCE exchange succeeded without an access token.',
+          message: 'Unable to open the login page in a browser.',
         );
-      } else {
-        // Launch browser for standard OAuth
-        final loginUrl = Uri.parse(
-          '${provider.authorize}?client_id=${provider.clientId}&redirect_uri=${Uri.encodeComponent(redirectUri)}&response_type=code&scope=${Uri.encodeComponent(provider.scopes)}',
-        );
-
-        if (await canLaunchUrl(loginUrl)) {
-          final launched = await launchUrl(
-            loginUrl,
-            mode: LaunchMode.externalApplication,
-          );
-          if (launched) {
-            return const OAuthFlowResult(OAuthFlowStatus.launched);
-          }
-          return const OAuthFlowResult(
-            OAuthFlowStatus.failed,
-            message: 'Unable to open the OAuth provider in a browser.',
-          );
-        }
       }
 
       return const OAuthFlowResult(
         OAuthFlowStatus.failed,
-        message: 'The OAuth provider URL could not be opened.',
+        message: 'The login URL could not be opened.',
       );
     } catch (e) {
       debugPrint('OAuth error: $e');

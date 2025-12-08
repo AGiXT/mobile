@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/auth/oauth.dart';
 import 'package:agixt/models/agixt/auth/wallet.dart';
+import 'package:agixt/screens/auth/oauth_webview_screen.dart';
 import 'package:agixt/screens/settings/permissions_screen.dart';
 import 'package:agixt/services/onboarding_service.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
@@ -83,6 +84,8 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       final providers = await WalletAuthService.getProviders();
       final installed = WalletAdapterService.installedProviderIds;
+
+      // First, include providers that match installed wallets
       final filtered = providers.where((provider) {
         if (!provider.supportsChain('solana')) {
           return false;
@@ -90,10 +93,13 @@ class _LoginScreenState extends State<LoginScreen> {
         final canonical = WalletAdapterService.canonicalProviderId(
           provider.id,
         );
-        if (canonical == null) {
-          return false;
+        // If we have a canonical ID, check if it's installed
+        if (canonical != null) {
+          return installed.contains(canonical);
         }
-        return installed.contains(canonical);
+        // If no canonical mapping, still show the provider if it supports Solana
+        // This ensures new providers aren't hidden
+        return WalletAdapterService.supportsProvider(provider.id);
       }).toList();
 
       final Set<String> missingInstalled = {...installed}..removeWhere(
@@ -102,6 +108,40 @@ class _LoginScreenState extends State<LoginScreen> {
                 WalletAdapterService.canonicalProviderId(provider.id) == id,
           ),
         );
+
+      // Add Phantom if installed but not provided by the server
+      if (missingInstalled.contains('phantom') ||
+          (installed.contains('phantom') &&
+              !filtered.any((p) =>
+                  WalletAdapterService.canonicalProviderId(p.id) ==
+                  'phantom'))) {
+        filtered.add(
+          WalletProvider(
+            id: 'phantom',
+            name: 'Phantom',
+            chains: const ['solana'],
+            primaryChain: 'solana',
+            icon: 'phantom',
+          ),
+        );
+      }
+
+      // Add Solflare if installed but not provided by the server
+      if (missingInstalled.contains('solflare') ||
+          (installed.contains('solflare') &&
+              !filtered.any((p) =>
+                  WalletAdapterService.canonicalProviderId(p.id) ==
+                  'solflare'))) {
+        filtered.add(
+          WalletProvider(
+            id: 'solflare',
+            name: 'Solflare',
+            chains: const ['solana'],
+            primaryChain: 'solana',
+            icon: 'solflare',
+          ),
+        );
+      }
 
       if (missingInstalled.contains('solana_mobile_stack')) {
         filtered.add(
@@ -233,52 +273,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginWithOAuth(OAuthProvider provider) async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final result = await OAuthService.authenticate(provider);
-
-      if (!mounted) {
-        return;
-      }
-
-      switch (result.status) {
-        case OAuthFlowStatus.completed:
-          setState(() {
-            _isLoading = false;
-          });
-          Navigator.of(context).pushReplacementNamed('/home');
-          break;
-        case OAuthFlowStatus.launched:
-          setState(() {
-            _isLoading = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Complete the ${provider.name} sign-in in your browser. We\'ll return you here automatically.',
-              ),
-              duration: const Duration(seconds: 6),
-            ),
-          );
-          break;
-        case OAuthFlowStatus.failed:
-          setState(() {
-            _errorMessage =
-                result.message ?? 'OAuth login failed. Please try again.';
-            _isLoading = false;
-          });
-          break;
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'An error occurred. Please try again.';
-        _isLoading = false;
-      });
-    }
+    // Use WebView-based OAuth for a smoother in-app experience
+    // Opens directly to the OAuth provider's login page
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => OAuthWebViewScreen(provider: provider),
+      ),
+    );
+    // Navigation to home is handled by the WebView screen on success
   }
 
   Future<void> _loginWithWallet(WalletProvider provider) async {

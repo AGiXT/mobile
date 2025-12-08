@@ -354,16 +354,57 @@ class _AGiXTAppState extends State<AGiXTApp> {
   void _handleDeepLink(String link) {
     debugPrint('Received deep link: $link');
 
-    if (!link.startsWith('agixt://callback')) {
+    // Handle various URL formats that might come from the OAuth redirect
+    // The web server should redirect to: agixt://callback?token={jwt}
+    final uri = Uri.tryParse(link);
+    if (uri == null) {
+      debugPrint('Failed to parse deep link URI');
       return;
     }
 
-    final uri = Uri.parse(link);
-    final token = uri.queryParameters['token'];
+    // Check if this is our callback URL (case-insensitive scheme check)
+    if (uri.scheme.toLowerCase() != 'agixt') {
+      debugPrint('Deep link scheme is not agixt: ${uri.scheme}');
+      return;
+    }
+
+    // Accept both 'callback' and 'oauth' hosts for flexibility
+    final host = uri.host.toLowerCase();
+    if (host != 'callback' && host != 'oauth' && host != '') {
+      debugPrint('Deep link host is not callback/oauth: $host');
+      return;
+    }
+
+    // Try to extract token from query parameters
+    String? token = uri.queryParameters['token'];
+
+    // Also check for 'access_token' parameter (some OAuth implementations use this)
+    token ??= uri.queryParameters['access_token'];
+
+    // Check path segments for token (agixt://callback/token/{jwt})
+    if (token == null &&
+        uri.pathSegments.length >= 2 &&
+        uri.pathSegments[0] == 'token') {
+      token = uri.pathSegments[1];
+    }
+
+    // Check fragment for token (some OAuth flows put it in the hash)
+    if (token == null && uri.fragment.isNotEmpty) {
+      final fragmentParams = Uri.splitQueryString(uri.fragment);
+      token = fragmentParams['token'] ?? fragmentParams['access_token'];
+    }
 
     if (token != null && token.isNotEmpty) {
       debugPrint('Received JWT token from deep link');
       _processJwtToken(token);
+    } else {
+      debugPrint('No token found in deep link: $link');
+      // Check if there's an error parameter
+      final error = uri.queryParameters['error'];
+      if (error != null) {
+        debugPrint(
+            'OAuth error: $error - ${uri.queryParameters['error_description']}');
+      }
     }
   }
 
@@ -380,9 +421,9 @@ class _AGiXTAppState extends State<AGiXTApp> {
         _isLoading = false;
       });
 
-      if (Navigator.of(context).canPop()) {
-        Navigator.of(context).pushReplacementNamed('/home');
-      }
+      // Navigate to home screen after successful login via deep link
+      // Use pushNamedAndRemoveUntil to clear the navigation stack
+      Navigator.of(context).pushNamedAndRemoveUntil('/home', (route) => false);
     } catch (e) {
       debugPrint('Error processing JWT token: $e');
       if (mounted) {
@@ -505,7 +546,12 @@ class _AGiXTAppState extends State<AGiXTApp> {
         themeMode: ThemeMode.system,
         home: _buildHome(),
         routes: {
-          '/home': (context) => const HomePage(),
+          '/home': (context) {
+            final args = ModalRoute.of(context)?.settings.arguments
+                as Map<String, dynamic>?;
+            final forceNewChat = args?['forceNewChat'] as bool? ?? false;
+            return HomePage(forceNewChat: forceNewChat);
+          },
           '/login': (context) => const LoginScreen(),
           '/profile': (context) => const ProfileScreen(),
         },

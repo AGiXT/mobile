@@ -61,12 +61,32 @@ class WalletAdapterService {
       ),
       Uri.parse('https://solanamobile.com/wallet'),
     ],
+    'phantom': [
+      Uri.parse('market://details?id=app.phantom'),
+      Uri.parse('https://play.google.com/store/apps/details?id=app.phantom'),
+      Uri.parse('https://phantom.app'),
+    ],
+    'solflare': [
+      Uri.parse('market://details?id=com.solflare.mobile'),
+      Uri.parse(
+          'https://play.google.com/store/apps/details?id=com.solflare.mobile'),
+      Uri.parse('https://solflare.com'),
+    ],
   };
 
   /// Canonical provider identifiers mapped to their known aliases.
   static const Map<String, List<String>> _providerAliases = {
-    'phantom': ['phantom'],
-    'solflare': ['solflare'],
+    'phantom': [
+      'phantom',
+      'app.phantom',
+      'phantom.app',
+      'phantom.solana',
+    ],
+    'solflare': [
+      'solflare',
+      'com.solflare.mobile',
+      'solflare.com',
+    ],
     'solana_mobile_stack': [
       'solana_mobile_stack',
       'solana_mobile',
@@ -110,6 +130,16 @@ class WalletAdapterService {
     return installed.contains(canonical);
   }
 
+  /// Package IDs for Phantom wallet
+  static const Set<String> _phantomPackageIds = {
+    'app.phantom',
+  };
+
+  /// Package IDs for Solflare wallet
+  static const Set<String> _solflarePackageIds = {
+    'com.solflare.mobile',
+  };
+
   static Future<bool> _hasSolanaMobilePackage() async {
     if (!Platform.isAndroid) {
       return false;
@@ -133,6 +163,66 @@ class WalletAdapterService {
     return false;
   }
 
+  /// Check if Phantom wallet is installed
+  static Future<bool> _hasPhantomPackage() async {
+    if (!Platform.isAndroid) {
+      // On iOS, we can check if we can open the phantom URL scheme
+      try {
+        return await canLaunchUrl(Uri.parse('phantom://'));
+      } catch (_) {
+        return false;
+      }
+    }
+
+    try {
+      final applications =
+          await AndroidPackageManager().getInstalledApplications() ?? const [];
+      for (final app in applications) {
+        final packageName = app.packageName?.toLowerCase();
+        if (packageName != null && _phantomPackageIds.contains(packageName)) {
+          return true;
+        }
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Failed to query Phantom package: $error');
+      debugPrint('$stackTrace');
+    }
+
+    return false;
+  }
+
+  /// Check if Solflare wallet is installed
+  static Future<bool> _hasSolflarePackage() async {
+    if (!Platform.isAndroid) {
+      // On iOS, we can check if we can open the solflare URL scheme
+      try {
+        return await canLaunchUrl(Uri.parse('solflare://'));
+      } catch (_) {
+        return false;
+      }
+    }
+
+    try {
+      final applications =
+          await AndroidPackageManager().getInstalledApplications() ?? const [];
+      for (final app in applications) {
+        final packageName = app.packageName?.toLowerCase();
+        if (packageName != null && _solflarePackageIds.contains(packageName)) {
+          return true;
+        }
+      }
+    } catch (error, stackTrace) {
+      debugPrint('Failed to query Solflare package: $error');
+      debugPrint('$stackTrace');
+    }
+
+    return false;
+  }
+
+  // Cached values for package detection (refreshed during initialization)
+  static bool _hasPhantom = false;
+  static bool _hasSolflare = false;
+
   /// Initialize the adapter once during application start.
   static Future<void> initialize({
     required String appUri,
@@ -153,6 +243,13 @@ class WalletAdapterService {
         cluster: cluster ?? Cluster.mainnet,
       );
       _assumeSolanaMobileStack = await _shouldAssumeSolanaMobileStack();
+
+      // Detect installed wallet packages
+      _hasPhantom = await _hasPhantomPackage();
+      _hasSolflare = await _hasSolflarePackage();
+
+      debugPrint(
+          'Wallet detection - Phantom: $_hasPhantom, Solflare: $_hasSolflare, SolanaMobile: $_assumeSolanaMobileStack');
     } catch (error, stackTrace) {
       debugPrint('Failed to initialise Solana wallet adapter: $error');
       debugPrint('$stackTrace');
@@ -557,6 +654,15 @@ class WalletAdapterService {
 
     if (_assumeSolanaMobileStack) {
       installed.add('solana_mobile_stack');
+    }
+
+    // Add Phantom and Solflare if detected during initialization
+    if (_hasPhantom) {
+      installed.add('phantom');
+    }
+
+    if (_hasSolflare) {
+      installed.add('solflare');
     }
 
     return installed;

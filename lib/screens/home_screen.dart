@@ -7,12 +7,16 @@ import 'package:agixt/services/onboarding_service.dart';
 import 'package:agixt/utils/app_events.dart'; // Import AppEvents
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/bluetooth_manager.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  const HomePage({super.key, this.forceNewChat = false});
+
+  /// When true, forces a new chat instead of restoring the previous conversation
+  final bool forceNewChat;
 
   // Static accessor for the WebViewController
   static WebViewController? webViewController;
@@ -36,14 +40,64 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     // Initialize AIService for foreground mode
     aiService.setBackgroundMode(false);
-    _loadUserDetails();
     _setupBluetoothListeners();
-    _initializeWebView();
-    _ensureConversationId(); // Ensure a conversation ID exists at startup
-    _initializeAgentCookie(); // Initialize the agent cookie with primary agent if needed
+    _initializeApp();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybePromptForGlasses();
     });
+  }
+
+  /// Initialize the app in proper sequence to avoid race conditions
+  Future<void> _initializeApp() async {
+    debugPrint('HomeScreen: Starting app initialization');
+
+    // First, load user details to set _isLoggedIn state
+    await _loadUserDetails();
+    debugPrint('HomeScreen: User details loaded, _isLoggedIn=$_isLoggedIn');
+
+    // Only proceed with WebView initialization if logged in
+    if (!_isLoggedIn) {
+      debugPrint('HomeScreen: Not logged in, skipping WebView initialization');
+      return;
+    }
+
+    // Clear cache if needed, then initialize WebView
+    debugPrint('HomeScreen: Clearing WebView cache if needed');
+    await _clearWebViewCacheIfNeeded();
+
+    debugPrint('HomeScreen: Initializing WebView');
+    await _initializeWebView();
+    debugPrint('HomeScreen: WebView initialized');
+
+    // Initialize conversation and agent after WebView is ready
+    await _ensureConversationId();
+    await _initializeAgentCookie();
+    debugPrint('HomeScreen: App initialization complete');
+  }
+
+  // Clear WebView cache on first launch after install/update to prevent stale state
+  Future<void> _clearWebViewCacheIfNeeded() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastCacheClear = prefs.getInt('webview_cache_cleared_version') ?? 0;
+      const currentVersion =
+          2; // Increment this to force cache clear on updates
+
+      if (lastCacheClear < currentVersion) {
+        debugPrint(
+            'Clearing WebView cache (version $lastCacheClear -> $currentVersion)');
+
+        // Clear WebView cookies
+        final cookieManager = WebViewCookieManager();
+        await cookieManager.clearCookies();
+
+        // Mark cache as cleared for this version
+        await prefs.setInt('webview_cache_cleared_version', currentVersion);
+        debugPrint('WebView cache cleared successfully');
+      }
+    } catch (e) {
+      debugPrint('Error clearing WebView cache: $e');
+    }
   }
 
   Future<void> _loadUserDetails() async {
@@ -125,15 +179,18 @@ class _HomePageState extends State<HomePage> {
 
     // Determine the URL to load
     String urlToLoad;
-    if (lastConversationId != null && lastConversationId != "-") {
-      // Navigate to the previous conversation if available
+    if (!widget.forceNewChat &&
+        lastConversationId != null &&
+        lastConversationId != "-") {
+      // Navigate to the previous conversation if available (unless forceNewChat is true)
       final uri = Uri.parse(webUrl);
       urlToLoad = uri.replace(path: '/chat/$lastConversationId').toString();
       debugPrint('Navigating to previous conversation: $urlToLoad');
     } else {
-      // Otherwise, just go to the main chat page
+      // Otherwise, just go to the main chat page for a new chat
       final uri = Uri.parse(webUrl);
       urlToLoad = uri.replace(path: '/chat').toString();
+      debugPrint('Starting new chat (forceNewChat=${widget.forceNewChat})');
     }
 
     // Initialize the WebView controller with performance optimizations
@@ -162,13 +219,14 @@ class _HomePageState extends State<HomePage> {
             await _setupAgentSelectionObserver();
           },
           onNavigationRequest: (NavigationRequest request) {
-            debugPrint('Navigation request to: ${request.url} (isMainFrame: ${request.isMainFrame})');
-            
+            debugPrint(
+                'Navigation request to: ${request.url} (isMainFrame: ${request.isMainFrame})');
+
             // Always allow iframe/subframe navigations
             if (!request.isMainFrame) {
               return NavigationDecision.navigate;
             }
-            
+
             if (!request.url.contains('agixt')) {
               // External link, launch in browser
               _launchInBrowser(request.url);
@@ -187,12 +245,71 @@ class _HomePageState extends State<HomePage> {
               _scrubAuthTokenFromLocation();
             }
           },
+          onWebResourceError: (WebResourceError error) {
+            debugPrint(
+                'WebView error: ${error.errorCode} - ${error.description}');
+            debugPrint('Failed URL: ${error.url}');
+            debugPrint('Error type: ${error.errorType}');
+
+            // Handle common client-side errors
+            if (error.isForMainFrame == true) {
+              // Only handle main frame errors - iframe errors are often benign
+              _handleWebViewError(error);
+            } else {
+              // Log iframe errors but don't disrupt the user experience
+              debugPrint('Iframe error (non-critical): ${error.description}');
+            }
+          },
+          onHttpError: (HttpResponseError error) {
+            debugPrint(
+                'HTTP error: ${error.response?.statusCode} for ${error.request?.uri}');
+            // Handle authentication errors
+            if (error.response?.statusCode == 401) {
+              _handleAuthenticationError();
+            }
+          },
         ),
       )
       ..loadRequest(Uri.parse(urlToLoad));
 
     // Update the static accessor so it can be used from other classes
     HomePage.webViewController = _webViewController;
+
+    // Trigger rebuild to show the WebView instead of loading indicator
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  // Handle WebView errors gracefully
+  void _handleWebViewError(WebResourceError error) {
+    // Common error codes that indicate we should retry
+    const retryableCodes = [
+      -2,
+      -6,
+      -8
+    ]; // NET_ERROR_FAILED, NET_ERROR_CONNECTION_REFUSED, etc.
+
+    if (retryableCodes.contains(error.errorCode)) {
+      debugPrint('Retryable error detected, will attempt reload');
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted && _webViewController != null) {
+          _webViewController!.reload();
+        }
+      });
+    }
+  }
+
+  // Handle authentication errors from WebView
+  Future<void> _handleAuthenticationError() async {
+    debugPrint('Authentication error in WebView, refreshing token');
+    // Try to refresh the page with a new token
+    if (mounted) {
+      final webUrl = await AuthService.getWebUrlWithToken();
+      final uri = Uri.parse(webUrl);
+      final urlToLoad = uri.replace(path: '/chat').toString();
+      _webViewController?.loadRequest(Uri.parse(urlToLoad));
+    }
   }
 
   Future<void> _scrubAuthTokenFromLocation() async {
