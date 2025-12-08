@@ -6,6 +6,7 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:solana_wallet_adapter/solana_wallet_adapter.dart';
+import 'package:solana_wallet_adapter_platform_interface/src/exceptions/solana_wallet_adapter_exception.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Centralized helper for interacting with the Solana Mobile Wallet Adapter.
@@ -34,6 +35,21 @@ class WalletAdapterService {
     Uri.parse('https://seeker.solanamobile.com/mobilewalletadapter'),
     Uri.parse('https://www.solanamobile.com/mobilewalletadapter'),
     Uri.parse('https://solanamobile.com/mobilewalletadapter'),
+  ];
+
+  /// Fallback URIs for Phantom wallet - the base URI that MWA protocol appends to
+  /// Phantom expects: https://phantom.app/ul/v1/associate/local?...
+  /// So the base should be: https://phantom.app/ul/
+  static final List<Uri> _phantomFallbackUris = [
+    Uri.parse('https://phantom.app/ul/'),
+    Uri.parse('https://phantom.app/ul'),
+  ];
+
+  /// Fallback URIs for Solflare wallet
+  /// Solflare expects: https://solflare.com/ul/v1/associate/local?...
+  static final List<Uri> _solflareFallbackUris = [
+    Uri.parse('https://solflare.com/ul/'),
+    Uri.parse('https://solflare.com/ul'),
   ];
 
   static final List<Uri> _solanaMobileHttpsUris = [
@@ -241,6 +257,8 @@ class WalletAdapterService {
       _adapter = SolanaWalletAdapter(
         AppIdentity(uri: identityUri, name: appName),
         cluster: cluster ?? Cluster.mainnet,
+        // Allow more time for the wallet to respond (60 seconds)
+        timeLimit: const Duration(seconds: 60),
       );
       _assumeSolanaMobileStack = await _shouldAssumeSolanaMobileStack();
 
@@ -293,6 +311,7 @@ class WalletAdapterService {
     final List<String> attempted = [];
     PlatformException? lastActivityNotFound;
     PlatformException? lastHttpsRequirement;
+    SolanaWalletAdapterException? lastWalletNotFound;
     AuthorizeResult? authorizeResult;
 
     for (final Uri? candidate in walletUriBases) {
@@ -303,6 +322,15 @@ class WalletAdapterService {
         );
         authorizeResult = result;
         break;
+      } on SolanaWalletAdapterException catch (error) {
+        if (error.code == SolanaWalletAdapterExceptionCode.walletNotFound) {
+          lastWalletNotFound = error;
+          debugPrint(
+            'Wallet authorize fallback: wallet not found for ${candidate ?? '(default)'}',
+          );
+          continue;
+        }
+        rethrow;
       } on PlatformException catch (error) {
         if (_isActivityNotFound(error)) {
           lastActivityNotFound = error;
@@ -323,7 +351,7 @@ class WalletAdapterService {
     }
 
     if (authorizeResult == null) {
-      if (lastActivityNotFound != null) {
+      if (lastWalletNotFound != null || lastActivityNotFound != null) {
         debugPrint(
           'Wallet authorize failed after trying: ${attempted.join(', ')}',
         );
@@ -332,7 +360,7 @@ class WalletAdapterService {
               ? 'No compatible Solana Mobile wallet responded to the HTTPS app link. '
                   'Install or update the Solana Mobile Vault and try again.'
               : 'No wallet application was found to handle the selected provider. '
-                  'Install the wallet app or choose another provider.',
+                  'Please ensure the ${canonicalProvider ?? 'wallet'} app is installed and try again.',
         );
       }
 
@@ -377,6 +405,7 @@ class WalletAdapterService {
     SignMessagesResult? signingResult;
     PlatformException? lastActivityNotFound;
     PlatformException? lastHttpsRequirement;
+    SolanaWalletAdapterException? lastWalletNotFound;
 
     for (final Uri? candidate in walletUriBases) {
       try {
@@ -387,6 +416,15 @@ class WalletAdapterService {
         );
         signingResult = result;
         break;
+      } on SolanaWalletAdapterException catch (error) {
+        if (error.code == SolanaWalletAdapterExceptionCode.walletNotFound) {
+          lastWalletNotFound = error;
+          debugPrint(
+            'Wallet signMessages fallback: wallet not found for ${candidate ?? '(default)'}',
+          );
+          continue;
+        }
+        rethrow;
       } on PlatformException catch (error) {
         if (_isActivityNotFound(error)) {
           lastActivityNotFound = error;
@@ -407,13 +445,13 @@ class WalletAdapterService {
     }
 
     if (signingResult == null) {
-      if (lastActivityNotFound != null) {
+      if (lastWalletNotFound != null || lastActivityNotFound != null) {
         throw StateError(
           canonical == 'solana_mobile_stack'
               ? 'No compatible Solana Mobile wallet responded to the HTTPS app link during signing. '
                   'Install or update the Solana Mobile Vault and try again.'
               : 'No wallet application was found to handle the selected provider. '
-                  'Install the wallet app or choose another provider.',
+                  'Please ensure the ${canonical ?? 'wallet'} app is installed and try again.',
         );
       }
 
@@ -1075,6 +1113,22 @@ class WalletAdapterService {
       for (final Uri uri in _solanaMobileHttpsUris) {
         add(uri);
       }
+    } else if (canonicalProvider == 'phantom') {
+      // Add Phantom-specific fallback URIs
+      final Uri? previous = adapter.authorizeResult?.walletUriBase;
+      add(previous);
+
+      for (final Uri uri in _phantomFallbackUris) {
+        add(uri);
+      }
+    } else if (canonicalProvider == 'solflare') {
+      // Add Solflare-specific fallback URIs
+      final Uri? previous = adapter.authorizeResult?.walletUriBase;
+      add(previous);
+
+      for (final Uri uri in _solflareFallbackUris) {
+        add(uri);
+      }
     } else {
       final Uri? previous = adapter.authorizeResult?.walletUriBase;
       add(previous);
@@ -1085,8 +1139,14 @@ class WalletAdapterService {
       nullAdded = true;
     }
 
+    // For Solana Mobile Stack, try null (system default) first since the built-in
+    // wallet may not be discoverable via URI.
+    // For Phantom and Solflare, also try null first since they primarily support
+    // the standard solana-wallet:// scheme for MWA protocol.
     final int nullIndex = candidates.indexOf(null);
-    if (nullIndex > 0) {
+    if (nullIndex > 0 && (canonicalProvider == 'solana_mobile_stack' ||
+                          canonicalProvider == 'phantom' ||
+                          canonicalProvider == 'solflare')) {
       candidates
         ..removeAt(nullIndex)
         ..insert(0, null);

@@ -3,25 +3,35 @@
     <queries>
       <intent>
         <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <category android:name="android.intent.category.DEFAULT" />
         <data android:scheme="solana-wallet" />
       </intent>
       <!-- Phantom wallet -->
       <intent>
         <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <category android:name="android.intent.category.DEFAULT" />
         <data android:scheme="phantom" />
       </intent>
       <intent>
         <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <category android:name="android.intent.category.DEFAULT" />
         <data android:scheme="https" android:host="phantom.app" />
       </intent>
       <package android:name="app.phantom" />
       <!-- Solflare wallet -->
       <intent>
         <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <category android:name="android.intent.category.DEFAULT" />
         <data android:scheme="solflare" />
       </intent>
       <intent>
         <action android:name="android.intent.action.VIEW" />
+        <category android:name="android.intent.category.BROWSABLE" />
+        <category android:name="android.intent.category.DEFAULT" />
         <data android:scheme="https" android:host="solflare.com" />
       </intent>
       <package android:name="com.solflare.mobile" />

@@ -129,19 +129,51 @@ class SolanaWalletAdapterAndroidPlugin:
     uri: Uri?,
     flags: Int = Intent.FLAG_ACTIVITY_NEW_TASK,
   ): Boolean {
-    val packageManager = context.packageManager
+    if (uri == null) {
+      return false
+    }
+    
+    android.util.Log.d("SolanaWalletAdapter", "Attempting to open URI: $uri")
+    
     val intent = Intent(Intent.ACTION_VIEW, uri)
       .addCategory(Intent.CATEGORY_BROWSABLE)
       .addFlags(flags)
       .setData(uri)
-    return if (
-      uri != null
-      && packageManager != null
-      && intent.resolveActivity(packageManager) != null
-    ) {
-      context.startActivity(intent) //startActivityForResult(intent, requestCode)
+    
+    // Try to set the package explicitly for known wallet apps based on the URI
+    val uriString = uri.toString().lowercase()
+    when {
+      uriString.contains("phantom") -> intent.setPackage("app.phantom")
+      uriString.contains("solflare") -> intent.setPackage("com.solflare.mobile")
+    }
+    
+    // On Android 11+, resolveActivity may return null due to package visibility
+    // restrictions even if an app can handle the intent. Try to start the activity
+    // anyway and catch any exceptions.
+    return try {
+      context.startActivity(intent)
+      android.util.Log.d("SolanaWalletAdapter", "Successfully started activity for URI: $uri")
       true
-    } else {
+    } catch (e: android.content.ActivityNotFoundException) {
+      android.util.Log.e("SolanaWalletAdapter", "ActivityNotFoundException for URI: $uri", e)
+      // If explicit package failed, try without package restriction
+      if (intent.`package` != null) {
+        android.util.Log.d("SolanaWalletAdapter", "Retrying without package restriction")
+        intent.setPackage(null)
+        try {
+          context.startActivity(intent)
+          android.util.Log.d("SolanaWalletAdapter", "Successfully started activity without package for URI: $uri")
+          true
+        } catch (e2: Exception) {
+          android.util.Log.e("SolanaWalletAdapter", "Failed retry without package: $uri", e2)
+          false
+        }
+      } else {
+        false
+      }
+    } catch (e: Exception) {
+      android.util.Log.e("SolanaWalletAdapter", "Exception opening URI: $uri", e)
+      // Other errors (security exceptions, etc.)
       false
     }
   }
@@ -173,13 +205,18 @@ class SolanaWalletAdapterAndroidPlugin:
     call: MethodCall,
     result: Result,
   ) {
-//    check(cancelLocalAssociation == null)
-//    cancelLocalAssociation = { this@coroutineScope.cancel() }
-//    pingJob?.cancel()
-    val opened = startActivity(parseUri(call), openWalletActivityFlags)
-//    Log.d("START PING!!!!", "PING!!! $opened")
-//    channel.invokeMethod(Method.PING.method, null)
-//   if (opened) pingJob = ping(parseInt(call, "timeLimit"))
+    val uri = parseUri(call)
+    android.util.Log.d("SolanaWalletAdapter", "openWallet called with URI: $uri")
+    
+    // First try with REQUIRE_NON_BROWSER flag to avoid browsers
+    var opened = startActivity(uri, openWalletActivityFlags)
+    
+    // If that failed and we're on Android 11+, try without the REQUIRE_NON_BROWSER flag
+    if (!opened && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+      android.util.Log.d("SolanaWalletAdapter", "Retrying without REQUIRE_NON_BROWSER flag")
+      opened = startActivity(uri, Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    
     result.success(opened)
   }
 
