@@ -92,6 +92,58 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
     await _refreshSingle(permission);
   }
 
+  /// The essential permissions needed for core app functionality.
+  /// These are the minimum permissions to make the app usable.
+  static const Set<AppPermission> _requiredPermissions = {
+    AppPermission.bluetooth, // Required to connect to glasses
+    AppPermission.notifications, // Required for alerts and messages
+    AppPermission.microphone, // Required for voice features
+  };
+
+  Future<void> _handleEnableRequiredPermissions() async {
+    if (_bulkRequestInFlight || _isLoading) {
+      return;
+    }
+
+    setState(() {
+      _bulkRequestInFlight = true;
+    });
+
+    var anyFailures = false;
+
+    for (final definition in _definitions) {
+      // Only request required permissions
+      if (!_requiredPermissions.contains(definition.id)) {
+        continue;
+      }
+
+      final summary = _summaries[definition.id];
+      if (summary?.allGranted ?? false) {
+        continue;
+      }
+
+      final granted = await PermissionManager.ensureGranted(definition.id);
+      if (!granted) {
+        anyFailures = true;
+      }
+      await _refreshSingle(definition.id);
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _bulkRequestInFlight = false;
+    });
+
+    _showSnack(
+      anyFailures
+          ? 'Some permissions still need to be enabled from system settings.'
+          : 'Required permissions enabled. Other permissions will be requested when needed.',
+    );
+  }
+
   Future<void> _handleEnableAllPermissions() async {
     if (_bulkRequestInFlight || _isLoading) {
       return;
@@ -296,7 +348,19 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
     );
   }
 
+  bool get _allRequiredGranted {
+    for (final permission in _requiredPermissions) {
+      final summary = _summaries[permission];
+      if (!(summary?.allGranted ?? false)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   Widget _buildBulkActionCard() {
+    final requiredAllGranted = _allRequiredGranted;
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -304,30 +368,99 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Enable All Permissions',
+              'Quick Setup',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
             Text(
-              'Grant every available permission at once to ensure Bluetooth, media, and notifications all work without interruption.',
+              'Enable only the essential permissions to get started quickly. Other permissions will be requested when you use specific features.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 12),
-            FilledButton.icon(
-              onPressed: (_isLoading || _bulkRequestInFlight)
-                  ? null
-                  : _handleEnableAllPermissions,
-              icon: _bulkRequestInFlight
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.done_all),
-              label: Text(
-                _bulkRequestInFlight ? 'Requesting…' : 'Enable everything',
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    onPressed: (_isLoading ||
+                            _bulkRequestInFlight ||
+                            requiredAllGranted)
+                        ? null
+                        : _handleEnableRequiredPermissions,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (_bulkRequestInFlight)
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Theme.of(context).colorScheme.onPrimary,
+                            ),
+                          )
+                        else
+                          Icon(
+                            requiredAllGranted ? Icons.check : Icons.bolt,
+                            size: 18,
+                          ),
+                        const SizedBox(width: 6),
+                        Text(
+                          _bulkRequestInFlight
+                              ? 'Requesting…'
+                              : requiredAllGranted
+                                  ? 'Done'
+                                  : 'Required',
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: (_isLoading || _bulkRequestInFlight)
+                        ? null
+                        : _handleEnableAllPermissions,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.primary,
+                      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 12),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.done_all, size: 18),
+                        SizedBox(width: 6),
+                        Text(
+                          'All',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
             ),
+            if (!requiredAllGranted)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Required: Bluetooth, Notifications, Microphone',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+              ),
           ],
         ),
       ),
