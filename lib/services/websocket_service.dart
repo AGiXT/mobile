@@ -13,7 +13,8 @@ class WebSocketMessage {
   final String role;
   final String message;
   final DateTime timestamp;
-  final String? type; // message_added, activity.stream, remote_command.request, etc.
+  final String?
+      type; // message_added, activity.stream, remote_command.request, etc.
   final Map<String, dynamic>? rawData;
 
   WebSocketMessage({
@@ -230,8 +231,8 @@ class AGiXTWebSocketService {
       // Submit via HTTP to the remote-command-result endpoint
       final serverUrl = AuthService.serverUrl;
       final conversationId = _currentConversationId ?? '-';
-      final url =
-          Uri.parse('$serverUrl/v1/conversation/$conversationId/remote-command-result');
+      final url = Uri.parse(
+          '$serverUrl/v1/conversation/$conversationId/remote-command-result');
 
       final response = await http.post(
         url,
@@ -477,8 +478,8 @@ class AGiXTWebSocketService {
     final baseDelay = reconnectBaseDelay * (1 << _reconnectAttempts);
     final delay = baseDelay.clamp(reconnectBaseDelay, reconnectMaxDelay);
     // Add some jitter (±20%)
-    final jitter = (delay * 0.2 * (DateTime.now().millisecond / 1000 - 0.5))
-        .round();
+    final jitter =
+        (delay * 0.2 * (DateTime.now().millisecond / 1000 - 0.5)).round();
     return delay + jitter;
   }
 

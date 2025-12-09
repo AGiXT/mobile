@@ -307,7 +307,8 @@ class PermissionManager {
       final info = await DeviceInfoPlugin().androidInfo;
       _cachedAndroidSdkInt = info.version.sdkInt;
     } catch (error) {
-      debugPrint('PermissionManager: Failed to read Android SDK version: $error');
+      debugPrint(
+          'PermissionManager: Failed to read Android SDK version: $error');
     }
 
     return _cachedAndroidSdkInt;

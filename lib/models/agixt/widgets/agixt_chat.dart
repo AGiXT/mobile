@@ -96,6 +96,9 @@ class AGiXTChatWidget implements AGiXTWidget {
         contextData = '';
       }
 
+      // Get available tools based on granted permissions
+      final availableTools = await ClientSideTools.getToolDefinitions();
+
       final Map<String, dynamic> requestBody = {
         "model": await _getAgentName(),
         "messages": [
@@ -107,8 +110,10 @@ class AGiXTChatWidget implements AGiXTWidget {
         ],
         "user": conversationId, // Use the conversation ID for the user field
         // Include client-side tools so the agent can execute commands on user's device
-        "tools": ClientSideTools.getToolDefinitions(),
-        "tool_choice": "auto", // Let the model decide when to use tools
+        // Only tools with granted permissions are included
+        if (availableTools.isNotEmpty) "tools": availableTools,
+        if (availableTools.isNotEmpty)
+          "tool_choice": "auto", // Let the model decide when to use tools
       };
 
       // Send request to AGiXT API

@@ -4,6 +4,7 @@ import 'package:agixt/services/websocket_service.dart';
 import 'package:agixt/services/contacts_service.dart';
 import 'package:agixt/services/sms_service.dart';
 import 'package:agixt/services/location_service.dart';
+import 'package:agixt/services/permission_manager.dart';
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -310,7 +311,8 @@ class ClientCommandsService {
           args['location'] as String?;
       final lat = args['latitude'] as double?;
       final lng = args['longitude'] as double?;
-      final mode = args['mode'] as String? ?? 'd'; // d=driving, w=walking, b=bicycling
+      final mode =
+          args['mode'] as String? ?? 'd'; // d=driving, w=walking, b=bicycling
 
       Uri uri;
 
@@ -498,9 +500,24 @@ class ClientCommandsService {
 /// List of available client-side tools that can be sent to the AGiXT server
 /// This mirrors the CLI's cli_tools array format
 class ClientSideTools {
-  static List<Map<String, dynamic>> getToolDefinitions() {
-    return [
-      {
+  /// Get tool definitions filtered by granted permissions
+  /// Only returns tools the user has actually granted access to
+  static Future<List<Map<String, dynamic>>> getToolDefinitions() async {
+    final List<Map<String, dynamic>> tools = [];
+
+    // Check permissions and add tools accordingly
+    final contactsGranted =
+        await PermissionManager.isGroupGranted(AppPermission.contacts);
+    final smsGranted =
+        await PermissionManager.isGroupGranted(AppPermission.sms);
+    final locationGranted =
+        await PermissionManager.isGroupGranted(AppPermission.location);
+    final phoneGranted =
+        await PermissionManager.isGroupGranted(AppPermission.phone);
+
+    // Contacts tools - requires contacts permission
+    if (contactsGranted) {
+      tools.add({
         'type': 'function',
         'function': {
           'name': 'get_contacts',
@@ -513,14 +530,16 @@ Use this when the user asks to find a contact or needs to send a message to some
             'properties': {
               'limit': {
                 'type': 'integer',
-                'description': 'Maximum number of contacts to return. Default: 50',
+                'description':
+                    'Maximum number of contacts to return. Default: 50',
               },
             },
             'required': [],
           },
         },
-      },
-      {
+      });
+
+      tools.add({
         'type': 'function',
         'function': {
           'name': 'search_contacts',
@@ -538,8 +557,12 @@ Use this to find a specific contact before sending them a message or calling the
             'required': ['query'],
           },
         },
-      },
-      {
+      });
+    }
+
+    // SMS tool - requires SMS permission (and optionally contacts for name resolution)
+    if (smsGranted) {
+      tools.add({
         'type': 'function',
         'function': {
           'name': 'send_sms',
@@ -563,8 +586,12 @@ or a contact name (which will be resolved to their phone number).''',
             'required': ['phone_number', 'message'],
           },
         },
-      },
-      {
+      });
+    }
+
+    // Location tool - requires location permission
+    if (locationGranted) {
+      tools.add({
         'type': 'function',
         'function': {
           'name': 'get_location',
@@ -578,12 +605,15 @@ Use this when the user asks where they are or needs location-based assistance.''
             'required': [],
           },
         },
-      },
-      {
+      });
+
+      // Maps/navigation doesn't require special permission, but location helps
+      tools.add({
         'type': 'function',
         'function': {
           'name': 'open_maps',
-          'description': '''Open Google Maps and optionally navigate to a destination.
+          'description':
+              '''Open Google Maps and optionally navigate to a destination.
 
 Can navigate to an address, place name, or specific coordinates.''',
           'parameters': {
@@ -613,8 +643,12 @@ Can navigate to an address, place name, or specific coordinates.''',
             'required': [],
           },
         },
-      },
-      {
+      });
+    }
+
+    // Phone call tool - requires phone permission
+    if (phoneGranted) {
+      tools.add({
         'type': 'function',
         'function': {
           'name': 'make_phone_call',
@@ -633,37 +667,44 @@ Can call a phone number directly or find a contact by name and call them.''',
             'required': ['phone_number'],
           },
         },
-      },
-      {
-        'type': 'function',
-        'function': {
-          'name': 'open_url',
-          'description': 'Open a URL in the device\'s default browser.',
-          'parameters': {
-            'type': 'object',
-            'properties': {
-              'url': {
-                'type': 'string',
-                'description': 'The URL to open',
-              },
+      });
+    }
+
+    // These tools don't require special permissions
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'open_url',
+        'description': 'Open a URL in the device\'s default browser.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'url': {
+              'type': 'string',
+              'description': 'The URL to open',
             },
-            'required': ['url'],
           },
+          'required': ['url'],
         },
       },
-      {
-        'type': 'function',
-        'function': {
-          'name': 'get_device_info',
-          'description':
-              'Get information about the device and available capabilities.',
-          'parameters': {
-            'type': 'object',
-            'properties': {},
-            'required': [],
-          },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'get_device_info',
+        'description':
+            'Get information about the device and available capabilities.',
+        'parameters': {
+          'type': 'object',
+          'properties': {},
+          'required': [],
         },
       },
-    ];
+    });
+
+    debugPrint(
+        'ClientSideTools: Returning ${tools.length} tools based on permissions');
+    return tools;
   }
 }

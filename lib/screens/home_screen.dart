@@ -79,7 +79,7 @@ class _HomePageState extends State<HomePage> {
     // Initialize conversation and agent after WebView is ready
     await _ensureConversationId();
     await _initializeAgentCookie();
-    
+
     // Connect WebSocket for real-time streaming and client commands
     debugPrint('HomeScreen: Connecting WebSocket for streaming');
     await aiService.connectWebSocket();

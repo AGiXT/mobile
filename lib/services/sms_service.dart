@@ -22,11 +22,11 @@ class SmsService {
   }
 
   /// Send an SMS message
-  /// 
+  ///
   /// This opens the default SMS app with the message pre-filled.
   /// For direct sending without user interaction, you would need
   /// additional native integration with telephony APIs.
-  /// 
+  ///
   /// Returns true if the SMS app was successfully launched.
   Future<bool> sendSms({
     required String phoneNumber,
@@ -35,9 +35,10 @@ class SmsService {
     try {
       // Clean phone number - remove common formatting
       final cleanNumber = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)]'), '');
-      
+
       debugPrint('SmsService: Sending SMS to $cleanNumber');
-      debugPrint('SmsService: Message: ${message.substring(0, message.length > 50 ? 50 : message.length)}...');
+      debugPrint(
+          'SmsService: Message: ${message.substring(0, message.length > 50 ? 50 : message.length)}...');
 
       // Use URL launcher to open SMS app
       // This is the most reliable cross-platform approach
@@ -54,7 +55,8 @@ class SmsService {
       }
 
       // Fallback: try without body parameter (some devices don't support it)
-      final fallbackUri = Uri.parse('sms:$cleanNumber?body=${Uri.encodeComponent(message)}');
+      final fallbackUri =
+          Uri.parse('sms:$cleanNumber?body=${Uri.encodeComponent(message)}');
       if (await canLaunchUrl(fallbackUri)) {
         await launchUrl(fallbackUri);
         debugPrint('SmsService: SMS app launched with fallback URI');
@@ -65,7 +67,8 @@ class SmsService {
       final simpleUri = Uri.parse('sms:$cleanNumber');
       if (await canLaunchUrl(simpleUri)) {
         await launchUrl(simpleUri);
-        debugPrint('SmsService: SMS app launched with simple URI (message may not be pre-filled)');
+        debugPrint(
+            'SmsService: SMS app launched with simple URI (message may not be pre-filled)');
         return true;
       }
 
@@ -78,11 +81,11 @@ class SmsService {
   }
 
   /// Send SMS directly using platform channels (if implemented)
-  /// 
+  ///
   /// This would require native Android/iOS code to send SMS without
   /// opening the SMS app. This is more intrusive and requires
   /// SEND_SMS permission on Android.
-  /// 
+  ///
   /// For now, this falls back to the URL launcher method.
   Future<bool> sendSmsDirect({
     required String phoneNumber,
@@ -90,7 +93,7 @@ class SmsService {
   }) async {
     // For truly direct SMS sending without user interaction,
     // you would need to implement a MethodChannel to native code.
-    // 
+    //
     // Android would use SmsManager:
     // SmsManager smsManager = SmsManager.getDefault();
     // smsManager.sendTextMessage(phoneNumber, null, message, null, null);
@@ -100,7 +103,7 @@ class SmsService {
     //
     // For MVP, we use the URL launcher approach which opens the SMS app.
     // The user still needs to tap "Send" but the message is pre-filled.
-    
+
     debugPrint('SmsService: Direct SMS not implemented, using URL launcher');
     return sendSms(phoneNumber: phoneNumber, message: message);
   }

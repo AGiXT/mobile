@@ -24,7 +24,7 @@ class AIService {
   Timer? _micTimer;
   bool _isBackgroundMode = false;
   bool _methodChannelInitialized = false;
-  
+
   // WebSocket streaming state
   StreamSubscription<WebSocketMessage>? _messageSubscription;
   StreamSubscription<ActivityUpdate>? _activitySubscription;
@@ -56,7 +56,7 @@ class AIService {
         debugPrint('AIService: Failed to set method call handler: $e');
       }
     }
-    
+
     // Start client commands listener when in foreground
     if (!_isBackgroundMode) {
       _clientCommandsService.startListening();
@@ -89,9 +89,10 @@ class AIService {
     if (message.role == 'assistant' && message.message.isNotEmpty) {
       // Check if this is part of an ongoing stream or a complete message
       final content = message.message;
-      
+
       // Skip activity messages
-      if (content.startsWith('[ACTIVITY]') || content.startsWith('[SUBACTIVITY]')) {
+      if (content.startsWith('[ACTIVITY]') ||
+          content.startsWith('[SUBACTIVITY]')) {
         return;
       }
 
@@ -106,8 +107,9 @@ class AIService {
 
   /// Handle activity updates (thinking, reflection, etc.)
   void _handleActivityUpdate(ActivityUpdate activity) {
-    debugPrint('AIService: Activity [${activity.type}]: ${activity.content.substring(0, activity.content.length > 50 ? 50 : activity.content.length)}...');
-    
+    debugPrint(
+        'AIService: Activity [${activity.type}]: ${activity.content.substring(0, activity.content.length > 50 ? 50 : activity.content.length)}...');
+
     // Optionally show activity on glasses
     if (activity.type == 'thinking' && !activity.isComplete) {
       // Could show "Thinking..." on glasses
@@ -302,13 +304,13 @@ class AIService {
 
   /// Check if AIService is in background mode
   bool get isBackgroundMode => _isBackgroundMode;
-  
+
   /// Check if WebSocket is connected
   bool get isWebSocketConnected => _webSocketService.isConnected;
-  
+
   /// Get WebSocket connection status
   String get webSocketStatus => _webSocketService.connectionStatus;
-  
+
   /// Dispose of resources
   void dispose() {
     _messageSubscription?.cancel();
