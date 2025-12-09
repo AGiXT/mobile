@@ -208,6 +208,12 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
         return Icons.folder;
       case AppPermission.batteryOptimization:
         return Icons.battery_alert;
+      case AppPermission.contacts:
+        return Icons.contacts;
+      case AppPermission.sms:
+        return Icons.sms;
+      case AppPermission.phone:
+        return Icons.phone;
     }
   }
 
