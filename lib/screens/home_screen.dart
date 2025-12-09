@@ -47,6 +47,13 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  @override
+  void dispose() {
+    // Clean up WebSocket connections when home screen is disposed
+    aiService.disconnectWebSocket();
+    super.dispose();
+  }
+
   /// Initialize the app in proper sequence to avoid race conditions
   Future<void> _initializeApp() async {
     debugPrint('HomeScreen: Starting app initialization');
@@ -72,6 +79,10 @@ class _HomePageState extends State<HomePage> {
     // Initialize conversation and agent after WebView is ready
     await _ensureConversationId();
     await _initializeAgentCookie();
+    
+    // Connect WebSocket for real-time streaming and client commands
+    debugPrint('HomeScreen: Connecting WebSocket for streaming');
+    await aiService.connectWebSocket();
     debugPrint('HomeScreen: App initialization complete');
   }
 

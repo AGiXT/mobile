@@ -78,6 +78,8 @@ dependencies:
   bs58: ^1.0.2
   web_socket_channel: ^2.4.0
   material_symbols_icons: ^4.2874.0
+  # Flutter contacts for AI assistant to access device contacts
+  flutter_contacts: ^1.1.9+2
 
 dependency_overrides:
   solana_wallet_adapter:
