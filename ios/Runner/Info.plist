@@ -70,6 +70,9 @@
 		<string>Access to calendar is needed to add events and display them.</string>
 		<key>NSMicrophoneUsageDescription</key>
 		<string>Microphone access is required for wake word detection and voice commands.</string>
+		<!-- Contacts permission for AGiXT agent to access contacts -->
+		<key>NSContactsUsageDescription</key>
+		<string>This app needs access to your contacts to help you send messages and make calls via AI assistant.</string>
 		<!-- URL schemes that the app can query (for wallet detection) -->
 		<key>LSApplicationQueriesSchemes</key>
 		<array>

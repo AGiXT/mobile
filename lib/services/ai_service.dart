@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:agixt/models/agixt/widgets/agixt_chat.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/whisper.dart';
+import 'package:agixt/services/websocket_service.dart';
+import 'package:agixt/services/client_commands_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'; // Import Services
 
@@ -15,11 +17,19 @@ class AIService {
   final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
   WhisperService? _whisperService;
   final AGiXTChatWidget _chatWidget = AGiXTChatWidget();
+  final AGiXTWebSocketService _webSocketService = AGiXTWebSocketService();
+  final ClientCommandsService _clientCommandsService = ClientCommandsService();
 
   bool _isProcessing = false;
   Timer? _micTimer;
   bool _isBackgroundMode = false;
   bool _methodChannelInitialized = false;
+
+  // WebSocket streaming state
+  StreamSubscription<WebSocketMessage>? _messageSubscription;
+  StreamSubscription<ActivityUpdate>? _activitySubscription;
+  StringBuffer _streamingResponse = StringBuffer();
+  bool _isStreaming = false;
 
   factory AIService() {
     return singleton;
@@ -27,6 +37,7 @@ class AIService {
 
   AIService._internal() {
     _initWhisperService();
+    _initWebSocketService();
     // Method channel handler will be set up when needed
   }
 
@@ -45,6 +56,75 @@ class AIService {
         debugPrint('AIService: Failed to set method call handler: $e');
       }
     }
+
+    // Start client commands listener when in foreground
+    if (!_isBackgroundMode) {
+      _clientCommandsService.startListening();
+    } else {
+      _clientCommandsService.stopListening();
+    }
+  }
+
+  /// Initialize WebSocket service and listeners
+  void _initWebSocketService() {
+    // Listen for streamed messages
+    _messageSubscription = _webSocketService.messageStream.listen(
+      _handleStreamedMessage,
+      onError: (error) {
+        debugPrint('AIService: WebSocket message error: $error');
+      },
+    );
+
+    // Listen for activity updates (thinking, reflection, etc.)
+    _activitySubscription = _webSocketService.activityStream.listen(
+      _handleActivityUpdate,
+      onError: (error) {
+        debugPrint('AIService: WebSocket activity error: $error');
+      },
+    );
+  }
+
+  /// Handle streamed message from WebSocket
+  void _handleStreamedMessage(WebSocketMessage message) {
+    if (message.role == 'assistant' && message.message.isNotEmpty) {
+      // Check if this is part of an ongoing stream or a complete message
+      final content = message.message;
+
+      // Skip activity messages
+      if (content.startsWith('[ACTIVITY]') ||
+          content.startsWith('[SUBACTIVITY]')) {
+        return;
+      }
+
+      if (_isStreaming) {
+        _streamingResponse.write(content);
+      } else {
+        // Complete message received
+        debugPrint('AIService: Received complete message via WebSocket');
+      }
+    }
+  }
+
+  /// Handle activity updates (thinking, reflection, etc.)
+  void _handleActivityUpdate(ActivityUpdate activity) {
+    debugPrint(
+        'AIService: Activity [${activity.type}]: ${activity.content.substring(0, activity.content.length > 50 ? 50 : activity.content.length)}...');
+
+    // Optionally show activity on glasses
+    if (activity.type == 'thinking' && !activity.isComplete) {
+      // Could show "Thinking..." on glasses
+      // _bluetoothManager.sendAIResponse('Thinking...');
+    }
+  }
+
+  /// Connect to WebSocket for real-time streaming
+  Future<bool> connectWebSocket({String? conversationId}) async {
+    return await _webSocketService.connect(conversationId: conversationId);
+  }
+
+  /// Disconnect from WebSocket
+  Future<void> disconnectWebSocket() async {
+    await _webSocketService.disconnect();
   }
 
   // Handle method calls from the button events channel
@@ -224,4 +304,18 @@ class AIService {
 
   /// Check if AIService is in background mode
   bool get isBackgroundMode => _isBackgroundMode;
+
+  /// Check if WebSocket is connected
+  bool get isWebSocketConnected => _webSocketService.isConnected;
+
+  /// Get WebSocket connection status
+  String get webSocketStatus => _webSocketService.connectionStatus;
+
+  /// Dispose of resources
+  void dispose() {
+    _messageSubscription?.cancel();
+    _activitySubscription?.cancel();
+    _clientCommandsService.dispose();
+    _webSocketService.dispose();
+  }
 }

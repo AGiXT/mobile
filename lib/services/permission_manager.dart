@@ -12,6 +12,9 @@ enum AppPermission {
   microphone,
   storage,
   batteryOptimization,
+  contacts,
+  sms,
+  phone,
 }
 
 /// Metadata describing a logical permission group.
@@ -146,6 +149,37 @@ class PermissionManager {
       requiredForCoreFlow: false,
       androidOnly: true,
     ),
+    const PermissionDefinition(
+      id: AppPermission.contacts,
+      title: 'Contacts',
+      description:
+          'Allows the AI assistant to find contacts when you ask to send messages or make calls.',
+      permissions: [
+        Permission.contacts,
+      ],
+      requiredForCoreFlow: false,
+    ),
+    const PermissionDefinition(
+      id: AppPermission.sms,
+      title: 'SMS Messages',
+      description:
+          'Enables the AI assistant to send text messages on your behalf when you ask.',
+      permissions: [
+        Permission.sms,
+      ],
+      requiredForCoreFlow: false,
+      androidOnly: true,
+    ),
+    const PermissionDefinition(
+      id: AppPermission.phone,
+      title: 'Phone Calls',
+      description:
+          'Allows the AI assistant to initiate phone calls when you request.',
+      permissions: [
+        Permission.phone,
+      ],
+      requiredForCoreFlow: false,
+    ),
   ];
 
   static List<PermissionDefinition> get availableDefinitions {
@@ -273,7 +307,8 @@ class PermissionManager {
       final info = await DeviceInfoPlugin().androidInfo;
       _cachedAndroidSdkInt = info.version.sdkInt;
     } catch (error) {
-      debugPrint('PermissionManager: Failed to read Android SDK version: $error');
+      debugPrint(
+          'PermissionManager: Failed to read Android SDK version: $error');
     }
 
     return _cachedAndroidSdkInt;

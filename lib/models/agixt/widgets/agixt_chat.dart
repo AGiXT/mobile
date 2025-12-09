@@ -10,6 +10,7 @@ import 'package:agixt/services/cookie_manager.dart';
 import 'package:agixt/services/session_manager.dart';
 import 'package:agixt/services/secure_storage_service.dart';
 import 'package:agixt/services/location_service.dart'; // Import LocationService
+import 'package:agixt/services/client_commands_service.dart'; // Import ClientSideTools
 import 'package:device_calendar/device_calendar.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart'; // Import Geolocator
@@ -95,6 +96,9 @@ class AGiXTChatWidget implements AGiXTWidget {
         contextData = '';
       }
 
+      // Get available tools based on granted permissions
+      final availableTools = await ClientSideTools.getToolDefinitions();
+
       final Map<String, dynamic> requestBody = {
         "model": await _getAgentName(),
         "messages": [
@@ -105,6 +109,11 @@ class AGiXTChatWidget implements AGiXTWidget {
           },
         ],
         "user": conversationId, // Use the conversation ID for the user field
+        // Include client-side tools so the agent can execute commands on user's device
+        // Only tools with granted permissions are included
+        if (availableTools.isNotEmpty) "tools": availableTools,
+        if (availableTools.isNotEmpty)
+          "tool_choice": "auto", // Let the model decide when to use tools
       };
 
       // Send request to AGiXT API
