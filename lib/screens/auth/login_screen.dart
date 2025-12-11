@@ -194,32 +194,73 @@ class _LoginScreenState extends State<LoginScreen> {
     String originalMessage,
   ) {
     const int signatureLength = 64;
+
+    // Log payload info for debugging
+    debugPrint(
+      'Signed payload length: ${signedPayload.length}, expected signature: $signatureLength',
+    );
+
+    // Case 1: Exact signature length - return as-is
     if (signedPayload.length == signatureLength) {
       return signedPayload;
     }
 
     if (signedPayload.length < signatureLength) {
       throw StateError(
-        'Wallet returned an unexpectedly short signature payload.',
+        'Wallet returned an unexpectedly short signature payload (${signedPayload.length} bytes).',
       );
     }
 
     final Uint8List messageBytes = Uint8List.fromList(
       utf8.encode(originalMessage),
     );
+
+    // Case 2: Message prefix + signature (message at start, signature at end)
     final bool hasMessagePrefix = messageBytes.isNotEmpty &&
         _startsWithBytes(signedPayload, messageBytes);
 
     if (hasMessagePrefix &&
         signedPayload.length == messageBytes.length + signatureLength) {
+      debugPrint('Extracting signature from end (after message prefix)');
       return signedPayload.sublist(signedPayload.length - signatureLength);
     }
 
+    // Case 3: Signature prefix + message (signature at start, message at end)
+    // This is the "signed message" format used by some Ed25519 implementations
+    final bool hasMessageSuffix = messageBytes.isNotEmpty &&
+        signedPayload.length == signatureLength + messageBytes.length &&
+        _endsWithBytes(signedPayload, messageBytes);
+
+    if (hasMessageSuffix) {
+      debugPrint('Extracting signature from beginning (before message suffix)');
+      return signedPayload.sublist(0, signatureLength);
+    }
+
+    // Case 4: Unknown format but longer than signature - try extracting from end
     if (signedPayload.length > signatureLength) {
+      debugPrint(
+        'Unknown payload format (${signedPayload.length} bytes), extracting last $signatureLength bytes',
+      );
       return signedPayload.sublist(signedPayload.length - signatureLength);
     }
 
     throw StateError('Wallet returned an unexpected signed payload format.');
+  }
+
+  bool _endsWithBytes(Uint8List data, Uint8List suffix) {
+    if (suffix.isEmpty) {
+      return true;
+    }
+    if (data.length < suffix.length) {
+      return false;
+    }
+    final int offset = data.length - suffix.length;
+    for (int index = 0; index < suffix.length; index += 1) {
+      if (data[offset + index] != suffix[index]) {
+        return false;
+      }
+    }
+    return true;
   }
 
   bool _startsWithBytes(Uint8List data, Uint8List prefix) {
@@ -331,22 +372,28 @@ class _LoginScreenState extends State<LoginScreen> {
         providerId: provider.id,
       );
       final walletAddress = account.toBase58();
+      debugPrint('Wallet connected: $walletAddress');
 
       final nonce = await WalletAuthService.requestNonce(
         walletAddress: walletAddress,
         chain: provider.primaryChain,
       );
+      debugPrint('Nonce received: ${nonce.nonce}');
+      debugPrint('Message to sign length: ${nonce.message.length}');
 
       final signatureBase64 = await WalletAdapterService.signMessage(
         nonce.message,
         account: account,
         providerId: provider.id,
       );
+      debugPrint(
+          'Signature received (base64 length): ${signatureBase64.length}');
 
       final signedPayload = _decodeWalletSignedPayload(signatureBase64);
       final signatureBytes =
           _extractSignatureFromPayload(signedPayload, nonce.message);
       final signatureBase58 = bs58.base58.encode(signatureBytes);
+      debugPrint('Signature (base58 length): ${signatureBase58.length}');
 
       final result = await WalletAuthService.verifySignature(
         walletAddress: walletAddress,
