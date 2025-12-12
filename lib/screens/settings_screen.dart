@@ -140,7 +140,7 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                 const SizedBox(height: 24),
                 Center(
                   child: Text(
-                    'v0.0.1',
+                    'v0.0.68',
                     style: TextStyle(
                       fontSize: 12,
                       color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
