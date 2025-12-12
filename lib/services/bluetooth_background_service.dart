@@ -32,7 +32,8 @@ class BluetoothBackgroundService {
           _channelId,
           'AGiXT Glasses Connection',
           description: 'Maintains connection to your glasses in the background',
-          importance: Importance.max, // Changed from high to max for better background processing
+          importance: Importance
+              .max, // Changed from high to max for better background processing
           playSound: false,
           enableVibration: false,
           showBadge: false,
@@ -58,16 +59,16 @@ class BluetoothBackgroundService {
       await service.configure(
         androidConfiguration: AndroidConfiguration(
           onStart: _onStart,
-          autoStart: true,
+          autoStart: false,
           isForegroundMode: true,
           notificationChannelId: _channelId,
           initialNotificationTitle: 'AGiXT Glasses Connection',
-          initialNotificationContent: 'Maintaining connection to glasses...',
+          initialNotificationContent: 'Connected to glasses',
           foregroundServiceNotificationId: _notificationId,
-          autoStartOnBoot: true,
+          autoStartOnBoot: false,
         ),
         iosConfiguration: IosConfiguration(
-          autoStart: true,
+          autoStart: false,
           onForeground: _onStart,
           onBackground: _onIosBackground,
         ),
@@ -84,6 +85,55 @@ class BluetoothBackgroundService {
       } else {
         rethrow;
       }
+    }
+  }
+
+  /// Show or update the connection notification immediately
+  static Future<void> showConnectionNotification({
+    bool isConnected = true,
+    bool leftConnected = false,
+    bool rightConnected = false,
+  }) async {
+    try {
+      final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+      String status;
+      if (isConnected) {
+        status = 'Connected to glasses';
+      } else if (leftConnected || rightConnected) {
+        status =
+            'Partially connected (${leftConnected ? 'L' : ''}${rightConnected ? 'R' : ''})';
+      } else {
+        status = 'Disconnected - trying to reconnect...';
+      }
+
+      await flutterLocalNotificationsPlugin.show(
+        _notificationId,
+        'AGiXT Glasses Connection',
+        status,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _channelId,
+            'AGiXT Glasses Connection',
+            icon: 'agixt_logo',
+            ongoing: true,
+            importance: Importance.max,
+            priority: Priority.max,
+            category: AndroidNotificationCategory.service,
+            showWhen: true,
+            usesChronometer: false,
+            playSound: false,
+            enableVibration: false,
+            autoCancel: false,
+            setAsGroupSummary: false,
+          ),
+        ),
+      );
+      debugPrint(
+          'BluetoothBackgroundService: Connection notification shown - $status');
+    } catch (e) {
+      debugPrint(
+          'BluetoothBackgroundService: Failed to show connection notification: $e');
     }
   }
 
@@ -183,7 +233,8 @@ class BluetoothBackgroundService {
       // Initialize AIService for background operations
       _aiService = AIService.singleton;
       _aiService!.setBackgroundMode(true);
-      debugPrint('BluetoothBackgroundService: AIService initialized for background mode');
+      debugPrint(
+          'BluetoothBackgroundService: AIService initialized for background mode');
 
       // Initialize Bluetooth Receiver to handle voice commands
       _bluetoothReceiver = BluetoothReciever.singleton;
@@ -353,10 +404,12 @@ class BluetoothBackgroundService {
               android: AndroidNotificationDetails(
                 _channelId,
                 'AGiXT Glasses Connection',
-                icon: 'branding',
+                icon: 'agixt_logo',
                 ongoing: true,
-                importance: Importance.max, // Changed from high to max for better persistence
-                priority: Priority.max, // Changed from high to max for better persistence
+                importance: Importance
+                    .max, // Changed from high to max for better persistence
+                priority: Priority
+                    .max, // Changed from high to max for better persistence
                 category: AndroidNotificationCategory.service,
                 showWhen: true,
                 usesChronometer: false,
@@ -426,24 +479,31 @@ class BluetoothBackgroundService {
     try {
       // First check if location services are enabled
       final isLocationEnabled = await _isLocationServicesEnabled();
-      
+
       if (isLocationEnabled) {
-        debugPrint('BluetoothBackgroundService: Location services are enabled, requesting battery optimization exemption');
-        
+        debugPrint(
+            'BluetoothBackgroundService: Location services are enabled, requesting battery optimization exemption');
+
         // Request battery optimization exemption to maintain service when location is enabled
-        final isOptimizationDisabled = await BatteryOptimizationHelper.isBatteryOptimizationDisabled();
-        
+        final isOptimizationDisabled =
+            await BatteryOptimizationHelper.isBatteryOptimizationDisabled();
+
         if (!isOptimizationDisabled) {
-          debugPrint('BluetoothBackgroundService: Battery optimization is enabled, this may affect service performance with location enabled');
-          debugPrint('BluetoothBackgroundService: ${BatteryOptimizationHelper.getBatteryOptimizationExplanation()}');
+          debugPrint(
+              'BluetoothBackgroundService: Battery optimization is enabled, this may affect service performance with location enabled');
+          debugPrint(
+              'BluetoothBackgroundService: ${BatteryOptimizationHelper.getBatteryOptimizationExplanation()}');
         } else {
-          debugPrint('BluetoothBackgroundService: Battery optimization is disabled, service should work properly with location enabled');
+          debugPrint(
+              'BluetoothBackgroundService: Battery optimization is disabled, service should work properly with location enabled');
         }
       } else {
-        debugPrint('BluetoothBackgroundService: Location services are disabled');
+        debugPrint(
+            'BluetoothBackgroundService: Location services are disabled');
       }
     } catch (e) {
-      debugPrint('BluetoothBackgroundService: Error checking location and battery optimization: $e');
+      debugPrint(
+          'BluetoothBackgroundService: Error checking location and battery optimization: $e');
     }
   }
 
@@ -453,7 +513,8 @@ class BluetoothBackgroundService {
       final locationService = LocationService();
       return await locationService.isLocationEnabled();
     } catch (e) {
-      debugPrint('BluetoothBackgroundService: Error checking location services: $e');
+      debugPrint(
+          'BluetoothBackgroundService: Error checking location services: $e');
       return false;
     }
   }

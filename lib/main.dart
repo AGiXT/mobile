@@ -65,7 +65,7 @@ void main() async {
     try {
       await flutterLocalNotificationsPlugin.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('branding'),
+          android: AndroidInitializationSettings('agixt_logo'),
         ),
         onDidReceiveNotificationResponse: (NotificationResponse resp) async {
           debugPrint('onDidReceiveBackgroundNotificationResponse: $resp');
@@ -115,13 +115,8 @@ void main() async {
       debugPrint('Failed to initialize BluetoothManager: $e');
     }
 
-    // Start services with error handling and delay to prevent conflicts
-    try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      await BluetoothBackgroundService.start();
-    } catch (e) {
-      debugPrint('Failed to start BluetoothBackgroundService: $e');
-    }
+    // Note: BluetoothBackgroundService.start() is now called automatically
+    // when glasses connect via BluetoothManager._notifyConnectionStatusChanged()
 
     // Start the legacy background service only if needed
     try {
@@ -813,7 +808,7 @@ Future<void> onStart(ServiceInstance service) async {
                 android: AndroidNotificationDetails(
                   notificationChannelId,
                   'AGiXT Background Service',
-                  icon: 'branding',
+                  icon: 'agixt_logo',
                   ongoing: true,
                   autoCancel: false,
                   playSound: false,
