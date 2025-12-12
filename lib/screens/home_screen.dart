@@ -6,6 +6,7 @@ import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/cookie_manager.dart';
 import 'package:agixt/services/location_service.dart'; // Import LocationService
 import 'package:agixt/services/onboarding_service.dart';
+import 'package:agixt/services/session_manager.dart';
 import 'package:agixt/utils/app_events.dart'; // Import AppEvents
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart'; // Import Geolocator
@@ -40,6 +41,10 @@ class _HomePageState extends State<HomePage> {
   bool _hasPromptedForGlasses = false;
   Timer? _locationUpdateTimer;
   StreamSubscription<Position>? _locationSubscription;
+  bool _hasLoadedChatPage =
+      false; // Track if we've successfully loaded chat before detecting logout
+  bool _jsChannelsRegistered =
+      false; // Track if JavaScript channels have been registered
 
   @override
   void initState() {
@@ -233,7 +238,13 @@ class _HomePageState extends State<HomePage> {
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0x00000000))
-      ..enableZoom(false)
+      ..enableZoom(false);
+
+    // Register JavaScript channels BEFORE setting up navigation delegate
+    // This must be done only once per WebViewController instance
+    await _registerJavaScriptChannels();
+
+    _webViewController!
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -248,11 +259,11 @@ class _HomePageState extends State<HomePage> {
             // prevent them leaking through screenshots or re-shares.
             await _scrubAuthTokenFromLocation();
 
-            // Set up URL change observer using JavaScript
-            await _setupUrlChangeObserver();
+            // Inject JavaScript observers (channels already registered)
+            await _injectUrlChangeObserver();
 
-            // Set up agent selection observer
-            await _setupAgentSelectionObserver();
+            // Inject agent selection observer
+            await _injectAgentSelectionObserver();
 
             // Set up location injection for the webview
             await _setupLocationInjection();
@@ -366,6 +377,33 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Check if the URL indicates the user has been logged out
+  /// This happens when the webview navigates to the /user login page
+  bool _isLogoutUrl(Uri uri) {
+    final path = uri.path;
+    // Check if we're on the /user page (login page) which indicates logout
+    // Also check for /login or empty path with no auth
+    return path == '/user' ||
+        path.startsWith('/user/') ||
+        path == '/login' ||
+        path.startsWith('/login/');
+  }
+
+  /// Handle logout detected from the WebView
+  /// Clears the session and navigates back to the mobile login screen
+  Future<void> _handleWebViewLogout() async {
+    debugPrint('HomeScreen: WebView logout detected, clearing session');
+
+    // Import SessionManager to clear all session data
+    await SessionManager.clearSession(clearWebCookies: true);
+
+    if (mounted) {
+      // Navigate to login screen and clear navigation stack
+      // This gives the user a fresh start like opening the app for the first time
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+  }
+
   // Extract the conversation ID from URL and agent cookie from WebView
   Future<void> _extractConversationIdAndAgentInfo(String url) async {
     if (_webViewController == null) return;
@@ -376,6 +414,22 @@ class _HomePageState extends State<HomePage> {
       final uri = Uri.parse(url);
       final pathSegments = uri.pathSegments;
       debugPrint('Path segments: $pathSegments');
+
+      // Check if we're on a chat page - mark that we've loaded it
+      final isOnChatPage = pathSegments.contains('chat');
+      if (isOnChatPage && !_hasLoadedChatPage) {
+        debugPrint('HomeScreen: First chat page load detected');
+        _hasLoadedChatPage = true;
+      }
+
+      // Check if the user has logged out (navigated to /user login page)
+      // Only trigger logout detection after we've successfully loaded the chat page at least once
+      // This prevents false logout detection during initial login flow
+      if (_hasLoadedChatPage && _isLogoutUrl(uri)) {
+        debugPrint('Detected logout - navigating to login screen');
+        await _handleWebViewLogout();
+        return;
+      }
 
       // Check if the URL is '/chat' (exactly)
       if (pathSegments.contains('chat') &&
@@ -596,12 +650,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Set up a JavaScript observer for URL changes (for SPA navigation that doesn't trigger native events)
-  Future<void> _setupUrlChangeObserver() async {
-    if (_webViewController == null) return;
+  /// Register JavaScript channels for WebView communication
+  /// This must be called once when the WebViewController is created, before loading any URL
+  Future<void> _registerJavaScriptChannels() async {
+    if (_webViewController == null || _jsChannelsRegistered) return;
 
     try {
-      // Register the JavaScript channel first
+      // Register the URL change listener channel
       await _webViewController!.addJavaScriptChannel(
         'UrlChangeListener',
         onMessageReceived: (JavaScriptMessage message) {
@@ -610,6 +665,31 @@ class _HomePageState extends State<HomePage> {
         },
       );
 
+      // Register the agent change listener channel
+      await _webViewController!.addJavaScriptChannel(
+        'AgentChangeListener',
+        onMessageReceived: (JavaScriptMessage message) {
+          if (message.message.isNotEmpty &&
+              message.message != 'null' &&
+              message.message != '""') {
+            debugPrint('Agent change from JS: ${message.message}');
+            _saveAgentValue(message.message);
+          }
+        },
+      );
+
+      _jsChannelsRegistered = true;
+      debugPrint('JavaScript channels registered successfully');
+    } catch (e) {
+      debugPrint('Error registering JavaScript channels: $e');
+    }
+  }
+
+  /// Inject URL change observer JavaScript (channels must already be registered)
+  Future<void> _injectUrlChangeObserver() async {
+    if (_webViewController == null) return;
+
+    try {
       // JavaScript to observe URL changes and call our handling function
       final urlObserverScript = '''
       (function() {
@@ -626,7 +706,9 @@ class _HomePageState extends State<HomePage> {
             lastUrl = window.location.href;
             
             // Use the registered JavaScript channel
-            UrlChangeListener.postMessage(lastUrl);
+            if (typeof UrlChangeListener !== 'undefined') {
+              UrlChangeListener.postMessage(lastUrl);
+            }
           }
         }
         
@@ -655,30 +737,17 @@ class _HomePageState extends State<HomePage> {
       ''';
 
       await _webViewController!.runJavaScript(urlObserverScript);
-      debugPrint('URL change observer setup complete');
+      debugPrint('URL change observer script injected');
     } catch (e) {
-      debugPrint('Error setting up URL observer: $e');
+      debugPrint('Error injecting URL observer: $e');
     }
   }
 
-  // Set up a JavaScript observer for agent selection changes
-  Future<void> _setupAgentSelectionObserver() async {
+  /// Inject agent selection observer JavaScript (channels must already be registered)
+  Future<void> _injectAgentSelectionObserver() async {
     if (_webViewController == null) return;
 
     try {
-      // Register the JavaScript channel first
-      await _webViewController!.addJavaScriptChannel(
-        'AgentChangeListener',
-        onMessageReceived: (JavaScriptMessage message) {
-          if (message.message.isNotEmpty &&
-              message.message != 'null' &&
-              message.message != '""') {
-            debugPrint('Agent change from JS: ${message.message}');
-            _saveAgentValue(message.message);
-          }
-        },
-      );
-
       // JavaScript to observe agent selection changes
       final agentObserverScript = '''
       (function() {
@@ -730,7 +799,7 @@ class _HomePageState extends State<HomePage> {
           // Wait a moment for the UI/cookie to update after a click
           setTimeout(() => {
             const agent = extractCurrentAgent();
-            if (agent) {
+            if (agent && typeof AgentChangeListener !== 'undefined') {
               console.log('Agent may have changed to:', agent);
               // Use the registered JavaScript channel
               AgentChangeListener.postMessage(agent);
@@ -741,7 +810,7 @@ class _HomePageState extends State<HomePage> {
         // Also check periodically
         setInterval(() => {
           const agent = extractCurrentAgent();
-          if (agent) {
+          if (agent && typeof AgentChangeListener !== 'undefined') {
             // Use the registered JavaScript channel
             AgentChangeListener.postMessage(agent);
           }
@@ -755,9 +824,9 @@ class _HomePageState extends State<HomePage> {
       ''';
 
       await _webViewController!.runJavaScript(agentObserverScript);
-      debugPrint('Agent selection observer setup complete');
+      debugPrint('Agent selection observer script injected');
     } catch (e) {
-      debugPrint('Error setting up agent observer: $e');
+      debugPrint('Error injecting agent observer: $e');
     }
   }
 
