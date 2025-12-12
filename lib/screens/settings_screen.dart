@@ -137,6 +137,17 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                 _buildDisplayCard(theme),
                 const SizedBox(height: 16),
                 _buildActionsCard(theme),
+                const SizedBox(height: 24),
+                Center(
+                  child: Text(
+                    'v0.0.1',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
               ],
             ),
           ),
