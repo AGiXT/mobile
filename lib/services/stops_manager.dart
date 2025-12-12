@@ -78,7 +78,7 @@ class StopsManager {
         android: AndroidNotificationDetails(
           'agixt',
           'AGiXT',
-          icon: 'branding',
+          icon: 'agixt_logo',
           importance: Importance.max,
           priority: Priority.high,
           actions: [

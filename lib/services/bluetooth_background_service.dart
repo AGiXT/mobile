@@ -95,8 +95,7 @@ class BluetoothBackgroundService {
     bool rightConnected = false,
   }) async {
     try {
-      final flutterLocalNotificationsPlugin =
-          FlutterLocalNotificationsPlugin();
+      final flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
       String status;
       if (isConnected) {
@@ -116,7 +115,7 @@ class BluetoothBackgroundService {
           android: AndroidNotificationDetails(
             _channelId,
             'AGiXT Glasses Connection',
-            icon: 'branding',
+            icon: 'agixt_logo',
             ongoing: true,
             importance: Importance.max,
             priority: Priority.max,
@@ -405,7 +404,7 @@ class BluetoothBackgroundService {
               android: AndroidNotificationDetails(
                 _channelId,
                 'AGiXT Glasses Connection',
-                icon: 'branding',
+                icon: 'agixt_logo',
                 ongoing: true,
                 importance: Importance
                     .max, // Changed from high to max for better persistence

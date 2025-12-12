@@ -65,7 +65,7 @@ void main() async {
     try {
       await flutterLocalNotificationsPlugin.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('branding'),
+          android: AndroidInitializationSettings('agixt_logo'),
         ),
         onDidReceiveNotificationResponse: (NotificationResponse resp) async {
           debugPrint('onDidReceiveBackgroundNotificationResponse: $resp');
@@ -808,7 +808,7 @@ Future<void> onStart(ServiceInstance service) async {
                 android: AndroidNotificationDetails(
                   notificationChannelId,
                   'AGiXT Background Service',
-                  icon: 'branding',
+                  icon: 'agixt_logo',
                   ongoing: true,
                   autoCancel: false,
                   playSound: false,
