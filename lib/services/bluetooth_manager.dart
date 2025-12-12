@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:android_package_manager/android_package_manager.dart';
 import 'package:agixt/models/agixt/agixt_dashboard.dart';
 import 'package:agixt/models/g1/bmp.dart';
@@ -37,6 +38,7 @@ import 'permission_manager.dart';
 typedef OnUpdate = void Function(String message);
 
 class BluetoothManager {
+  NCSNotification? _lastNotification;
   static final BluetoothManager singleton = BluetoothManager._internal();
 
   factory BluetoothManager() {
@@ -108,8 +110,55 @@ class BluetoothManager {
 
     if (!connected) {
       _stopBatteryMonitoring();
-    } else if (_batteryUpdateTimer == null) {
-      _setupBatteryMonitoring();
+      // Stop the background service notification when glasses disconnect
+      _stopBackgroundService();
+    } else {
+      // Start battery monitoring if not already running
+      if (_batteryUpdateTimer == null) {
+        _setupBatteryMonitoring();
+      }
+      // Always start the background service notification when glasses connect
+      _startBackgroundService();
+
+      // Resend last notification if available
+      if (_lastNotification != null) {
+        sendNotification(_lastNotification!);
+      }
+    }
+  }
+
+  /// Start the background service when glasses connect
+  void _startBackgroundService() async {
+    try {
+      final isRunning = await BluetoothBackgroundService.isRunning();
+      if (!isRunning) {
+        debugPrint(
+            'BluetoothManager: Starting background service - glasses connected');
+        await BluetoothBackgroundService.start();
+      }
+      // Always show the connection notification when glasses connect
+      // This ensures it pops up every time, even on reconnect
+      await BluetoothBackgroundService.showConnectionNotification(
+        isConnected: isConnected,
+        leftConnected: leftGlass?.isConnected ?? false,
+        rightConnected: rightGlass?.isConnected ?? false,
+      );
+    } catch (e) {
+      debugPrint('BluetoothManager: Failed to start background service: $e');
+    }
+  }
+
+  /// Stop the background service when glasses disconnect
+  void _stopBackgroundService() async {
+    try {
+      final isRunning = await BluetoothBackgroundService.isRunning();
+      if (isRunning) {
+        debugPrint(
+            'BluetoothManager: Stopping background service - glasses disconnected');
+        await BluetoothBackgroundService.stop();
+      }
+    } catch (e) {
+      debugPrint('BluetoothManager: Failed to stop background service: $e');
     }
   }
 
@@ -685,6 +734,9 @@ class BluetoothManager {
       );
       return;
     }
+
+    // Cache the last notification
+    _lastNotification = notification;
 
     G1Notification notif = G1Notification(ncsNotification: notification);
     List<Uint8List> notificationChunks = await notif.constructNotification();

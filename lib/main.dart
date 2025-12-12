@@ -115,13 +115,8 @@ void main() async {
       debugPrint('Failed to initialize BluetoothManager: $e');
     }
 
-    // Start services with error handling and delay to prevent conflicts
-    try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      await BluetoothBackgroundService.start();
-    } catch (e) {
-      debugPrint('Failed to start BluetoothBackgroundService: $e');
-    }
+    // Note: BluetoothBackgroundService.start() is now called automatically
+    // when glasses connect via BluetoothManager._notifyConnectionStatusChanged()
 
     // Start the legacy background service only if needed
     try {

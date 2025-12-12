@@ -57,16 +57,16 @@ class BluetoothBackgroundService {
       await service.configure(
         androidConfiguration: AndroidConfiguration(
           onStart: _onStart,
-          autoStart: true,
+          autoStart: false,
           isForegroundMode: true,
           notificationChannelId: _channelId,
           initialNotificationTitle: 'AGiXT Glasses Connection',
-          initialNotificationContent: 'Maintaining connection to glasses...',
+          initialNotificationContent: 'Connected to glasses',
           foregroundServiceNotificationId: _notificationId,
-          autoStartOnBoot: true,
+          autoStartOnBoot: false,
         ),
         iosConfiguration: IosConfiguration(
-          autoStart: true,
+          autoStart: false,
           onForeground: _onStart,
           onBackground: _onIosBackground,
         ),
