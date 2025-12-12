@@ -260,17 +260,66 @@ class _PermissionsSettingsPageState extends State<PermissionsSettingsPage> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
           child: FilledButton.icon(
-            onPressed: _isLoading
-                ? null
-                : () {
-                    Navigator.of(context).maybePop();
-                  },
+            onPressed: _isLoading ? null : _handleDone,
             icon: const Icon(Icons.check_circle),
             label: const Text('Done'),
           ),
         ),
       ),
     );
+  }
+
+  /// Checks if any permission has been granted
+  bool get _anyPermissionGranted {
+    for (final summary in _summaries.values) {
+      if (summary.allGranted) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Handles the Done button press, showing a warning if no permissions are granted
+  Future<void> _handleDone() async {
+    if (_anyPermissionGranted) {
+      Navigator.of(context).maybePop();
+      return;
+    }
+
+    // Show confirmation dialog if no permissions are granted
+    final shouldContinue = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        icon: Icon(
+          Icons.warning_amber_rounded,
+          color: Theme.of(context).colorScheme.error,
+          size: 48,
+        ),
+        title: const Text('Continue Without Permissions?'),
+        content: const Text(
+          'You haven\'t enabled any permissions. The app\'s functionality will be limited and may not work properly without the required permissions.\n\n'
+          'Are you sure you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Go Back'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            child: const Text('Continue Anyway'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldContinue == true && mounted) {
+      Navigator.of(context).maybePop();
+    }
   }
 
   Widget _buildPermissionCard(PermissionDefinition definition) {
