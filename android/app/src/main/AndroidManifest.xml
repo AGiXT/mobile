@@ -30,8 +30,11 @@
     <!-- SMS permissions for AI assistant to send text messages -->
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
-    <!-- Phone call permission for AI assistant to initiate calls -->
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
+    <!-- Phone call permissions for AI assistant to initiate calls -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 
     <!-- Ensure compatibility with different Android versions -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

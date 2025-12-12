@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/widgets/agixt_chat.dart'; // Import AGiXTChatWidget
 import 'package:agixt/screens/settings_screen.dart';
 import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/cookie_manager.dart';
+import 'package:agixt/services/location_service.dart'; // Import LocationService
 import 'package:agixt/services/onboarding_service.dart';
+import 'package:agixt/services/session_manager.dart';
 import 'package:agixt/utils/app_events.dart'; // Import AppEvents
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart'; // Import Geolocator
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -28,12 +32,22 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final BluetoothManager bluetoothManager = BluetoothManager();
   final AIService aiService = AIService();
+  final LocationService _locationService = LocationService();
+
+  // Static flag to prevent multiple instances from showing the glasses prompt dialog
+  static bool _isShowingGlassesPrompt = false;
 
   String? _userEmail;
   bool _isLoggedIn = true;
   bool _isSideButtonListenerAttached = false;
   WebViewController? _webViewController;
   bool _hasPromptedForGlasses = false;
+  Timer? _locationUpdateTimer;
+  StreamSubscription<Position>? _locationSubscription;
+  bool _hasLoadedChatPage =
+      false; // Track if we've successfully loaded chat before detecting logout
+  bool _jsChannelsRegistered =
+      false; // Track if JavaScript channels have been registered
 
   @override
   void initState() {
@@ -42,6 +56,8 @@ class _HomePageState extends State<HomePage> {
     aiService.setBackgroundMode(false);
     _setupBluetoothListeners();
     _initializeApp();
+    // Listen for location settings changes
+    AppEvents.addLocationListener(_onLocationSettingsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _maybePromptForGlasses();
     });
@@ -51,7 +67,24 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     // Clean up WebSocket connections when home screen is disposed
     aiService.disconnectWebSocket();
+    // Clean up location updates
+    _locationUpdateTimer?.cancel();
+    _locationSubscription?.cancel();
+    // Remove location settings listener
+    AppEvents.removeLocationListener(_onLocationSettingsChanged);
     super.dispose();
+  }
+
+  /// Handle location settings changes from the settings screen
+  void _onLocationSettingsChanged(bool enabled) {
+    debugPrint('HomeScreen: Location settings changed to $enabled');
+    if (enabled) {
+      _setupLocationInjection();
+    } else {
+      _locationUpdateTimer?.cancel();
+      _locationSubscription?.cancel();
+      _clearLocationInWebView();
+    }
   }
 
   /// Initialize the app in proper sequence to avoid race conditions
@@ -208,7 +241,13 @@ class _HomePageState extends State<HomePage> {
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0x00000000))
-      ..enableZoom(false)
+      ..enableZoom(false);
+
+    // Register JavaScript channels BEFORE setting up navigation delegate
+    // This must be done only once per WebViewController instance
+    await _registerJavaScriptChannels();
+
+    _webViewController!
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (String url) {
@@ -223,11 +262,14 @@ class _HomePageState extends State<HomePage> {
             // prevent them leaking through screenshots or re-shares.
             await _scrubAuthTokenFromLocation();
 
-            // Set up URL change observer using JavaScript
-            await _setupUrlChangeObserver();
+            // Inject JavaScript observers (channels already registered)
+            await _injectUrlChangeObserver();
 
-            // Set up agent selection observer
-            await _setupAgentSelectionObserver();
+            // Inject agent selection observer
+            await _injectAgentSelectionObserver();
+
+            // Set up location injection for the webview
+            await _setupLocationInjection();
           },
           onNavigationRequest: (NavigationRequest request) {
             debugPrint(
@@ -338,6 +380,33 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Check if the URL indicates the user has been logged out
+  /// This happens when the webview navigates to the /user login page
+  bool _isLogoutUrl(Uri uri) {
+    final path = uri.path;
+    // Check if we're on the /user page (login page) which indicates logout
+    // Also check for /login or empty path with no auth
+    return path == '/user' ||
+        path.startsWith('/user/') ||
+        path == '/login' ||
+        path.startsWith('/login/');
+  }
+
+  /// Handle logout detected from the WebView
+  /// Clears the session and navigates back to the mobile login screen
+  Future<void> _handleWebViewLogout() async {
+    debugPrint('HomeScreen: WebView logout detected, clearing session');
+
+    // Import SessionManager to clear all session data
+    await SessionManager.clearSession(clearWebCookies: true);
+
+    if (mounted) {
+      // Navigate to login screen and clear navigation stack
+      // This gives the user a fresh start like opening the app for the first time
+      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    }
+  }
+
   // Extract the conversation ID from URL and agent cookie from WebView
   Future<void> _extractConversationIdAndAgentInfo(String url) async {
     if (_webViewController == null) return;
@@ -348,6 +417,22 @@ class _HomePageState extends State<HomePage> {
       final uri = Uri.parse(url);
       final pathSegments = uri.pathSegments;
       debugPrint('Path segments: $pathSegments');
+
+      // Check if we're on a chat page - mark that we've loaded it
+      final isOnChatPage = pathSegments.contains('chat');
+      if (isOnChatPage && !_hasLoadedChatPage) {
+        debugPrint('HomeScreen: First chat page load detected');
+        _hasLoadedChatPage = true;
+      }
+
+      // Check if the user has logged out (navigated to /user login page)
+      // Only trigger logout detection after we've successfully loaded the chat page at least once
+      // This prevents false logout detection during initial login flow
+      if (_hasLoadedChatPage && _isLogoutUrl(uri)) {
+        debugPrint('Detected logout - navigating to login screen');
+        await _handleWebViewLogout();
+        return;
+      }
 
       // Check if the URL is '/chat' (exactly)
       if (pathSegments.contains('chat') &&
@@ -468,16 +553,29 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _maybePromptForGlasses() async {
-    if (_hasPromptedForGlasses || !mounted) {
+    // Use static flag to prevent multiple dialogs from different HomePage instances
+    // Set it immediately before any async operations to prevent race conditions
+    if (_hasPromptedForGlasses || _isShowingGlassesPrompt || !mounted) {
       return;
     }
+
+    // Claim the lock immediately before any async work
+    _isShowingGlassesPrompt = true;
+    _hasPromptedForGlasses = true;
 
     final shouldShow = await OnboardingService.shouldShowGlassesPrompt();
     if (!shouldShow || !mounted) {
+      _isShowingGlassesPrompt = false;
       return;
     }
 
-    _hasPromptedForGlasses = true;
+    // Mark as completed immediately to prevent the dialog from showing again
+    await OnboardingService.markGlassesPromptCompleted();
+
+    if (!mounted) {
+      _isShowingGlassesPrompt = false;
+      return;
+    }
 
     final wantsToConnect = await showDialog<bool>(
           context: context,
@@ -500,7 +598,7 @@ class _HomePageState extends State<HomePage> {
         ) ??
         false;
 
-    await OnboardingService.markGlassesPromptCompleted();
+    _isShowingGlassesPrompt = false;
 
     if (wantsToConnect && mounted) {
       _openGlassesSettings();
@@ -568,12 +666,13 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // Set up a JavaScript observer for URL changes (for SPA navigation that doesn't trigger native events)
-  Future<void> _setupUrlChangeObserver() async {
-    if (_webViewController == null) return;
+  /// Register JavaScript channels for WebView communication
+  /// This must be called once when the WebViewController is created, before loading any URL
+  Future<void> _registerJavaScriptChannels() async {
+    if (_webViewController == null || _jsChannelsRegistered) return;
 
     try {
-      // Register the JavaScript channel first
+      // Register the URL change listener channel
       await _webViewController!.addJavaScriptChannel(
         'UrlChangeListener',
         onMessageReceived: (JavaScriptMessage message) {
@@ -582,6 +681,31 @@ class _HomePageState extends State<HomePage> {
         },
       );
 
+      // Register the agent change listener channel
+      await _webViewController!.addJavaScriptChannel(
+        'AgentChangeListener',
+        onMessageReceived: (JavaScriptMessage message) {
+          if (message.message.isNotEmpty &&
+              message.message != 'null' &&
+              message.message != '""') {
+            debugPrint('Agent change from JS: ${message.message}');
+            _saveAgentValue(message.message);
+          }
+        },
+      );
+
+      _jsChannelsRegistered = true;
+      debugPrint('JavaScript channels registered successfully');
+    } catch (e) {
+      debugPrint('Error registering JavaScript channels: $e');
+    }
+  }
+
+  /// Inject URL change observer JavaScript (channels must already be registered)
+  Future<void> _injectUrlChangeObserver() async {
+    if (_webViewController == null) return;
+
+    try {
       // JavaScript to observe URL changes and call our handling function
       final urlObserverScript = '''
       (function() {
@@ -598,7 +722,9 @@ class _HomePageState extends State<HomePage> {
             lastUrl = window.location.href;
             
             // Use the registered JavaScript channel
-            UrlChangeListener.postMessage(lastUrl);
+            if (typeof UrlChangeListener !== 'undefined') {
+              UrlChangeListener.postMessage(lastUrl);
+            }
           }
         }
         
@@ -627,30 +753,17 @@ class _HomePageState extends State<HomePage> {
       ''';
 
       await _webViewController!.runJavaScript(urlObserverScript);
-      debugPrint('URL change observer setup complete');
+      debugPrint('URL change observer script injected');
     } catch (e) {
-      debugPrint('Error setting up URL observer: $e');
+      debugPrint('Error injecting URL observer: $e');
     }
   }
 
-  // Set up a JavaScript observer for agent selection changes
-  Future<void> _setupAgentSelectionObserver() async {
+  /// Inject agent selection observer JavaScript (channels must already be registered)
+  Future<void> _injectAgentSelectionObserver() async {
     if (_webViewController == null) return;
 
     try {
-      // Register the JavaScript channel first
-      await _webViewController!.addJavaScriptChannel(
-        'AgentChangeListener',
-        onMessageReceived: (JavaScriptMessage message) {
-          if (message.message.isNotEmpty &&
-              message.message != 'null' &&
-              message.message != '""') {
-            debugPrint('Agent change from JS: ${message.message}');
-            _saveAgentValue(message.message);
-          }
-        },
-      );
-
       // JavaScript to observe agent selection changes
       final agentObserverScript = '''
       (function() {
@@ -702,7 +815,7 @@ class _HomePageState extends State<HomePage> {
           // Wait a moment for the UI/cookie to update after a click
           setTimeout(() => {
             const agent = extractCurrentAgent();
-            if (agent) {
+            if (agent && typeof AgentChangeListener !== 'undefined') {
               console.log('Agent may have changed to:', agent);
               // Use the registered JavaScript channel
               AgentChangeListener.postMessage(agent);
@@ -713,7 +826,7 @@ class _HomePageState extends State<HomePage> {
         // Also check periodically
         setInterval(() => {
           const agent = extractCurrentAgent();
-          if (agent) {
+          if (agent && typeof AgentChangeListener !== 'undefined') {
             // Use the registered JavaScript channel
             AgentChangeListener.postMessage(agent);
           }
@@ -727,9 +840,9 @@ class _HomePageState extends State<HomePage> {
       ''';
 
       await _webViewController!.runJavaScript(agentObserverScript);
-      debugPrint('Agent selection observer setup complete');
+      debugPrint('Agent selection observer script injected');
     } catch (e) {
-      debugPrint('Error setting up agent observer: $e');
+      debugPrint('Error injecting agent observer: $e');
     }
   }
 
@@ -766,6 +879,473 @@ class _HomePageState extends State<HomePage> {
       await cookieManager.initializeAgentCookie();
     } catch (e) {
       debugPrint('Error initializing agent cookie: $e');
+    }
+  }
+
+  // Set up location injection for the webview
+  Future<void> _setupLocationInjection() async {
+    if (_webViewController == null) return;
+
+    try {
+      // Check if location is enabled in settings
+      final isLocationEnabled = await _locationService.isLocationEnabled();
+      debugPrint('Location enabled in settings: $isLocationEnabled');
+
+      if (!isLocationEnabled) {
+        debugPrint('Location is disabled in settings, skipping injection');
+        // Clear any existing location data in the webview
+        await _clearLocationInWebView();
+        return;
+      }
+
+      // Set up JavaScript channel for location requests from webview
+      await _webViewController!.addJavaScriptChannel(
+        'NativeLocationChannel',
+        onMessageReceived: (JavaScriptMessage message) async {
+          debugPrint('Location request from webview: ${message.message}');
+          await _injectCurrentLocation();
+        },
+      );
+
+      // Inject initial location
+      await _injectCurrentLocation();
+
+      // Start periodic location updates (every 30 seconds)
+      _locationUpdateTimer?.cancel();
+      _locationUpdateTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => _injectCurrentLocation(),
+      );
+
+      // Also listen to location stream for real-time updates
+      _locationSubscription?.cancel();
+      final locationStream = _locationService.getLocationStream();
+      if (locationStream != null) {
+        _locationSubscription = locationStream.listen(
+          (Position position) {
+            _injectPositionToWebView(position);
+          },
+          onError: (error) {
+            debugPrint('Location stream error: $error');
+          },
+        );
+      }
+
+      // Inject JavaScript to override navigator.geolocation API
+      await _injectGeolocationOverride();
+
+      // Inject fetch interceptor to add location context to chat API calls
+      await _injectFetchInterceptor();
+
+      debugPrint('Location injection setup complete');
+    } catch (e) {
+      debugPrint('Error setting up location injection: $e');
+    }
+  }
+
+  // Inject a fetch interceptor to add location context to chat completions API calls
+  Future<void> _injectFetchInterceptor() async {
+    if (_webViewController == null) return;
+
+    try {
+      const fetchInterceptorScript = '''
+      (function() {
+        if (window._fetchInterceptorSetup) return;
+        
+        // Store the original fetch function
+        const originalFetch = window.fetch;
+        
+        // Helper to build location context string
+        function buildLocationContext() {
+          if (!window._nativeDeviceLocation || !window._nativeLocationEnabled) {
+            return null;
+          }
+          
+          const loc = window._nativeDeviceLocation;
+          const lines = [
+            "### User's Current Location",
+            "",
+            "Coordinates: " + loc.formatted,
+            "Latitude: " + loc.latitude,
+            "Longitude: " + loc.longitude
+          ];
+          
+          if (loc.altitude !== null && loc.altitude !== undefined) {
+            lines.push("Altitude: " + loc.altitude.toFixed(1) + " m");
+          }
+          if (loc.accuracy !== null && loc.accuracy !== undefined) {
+            lines.push("Accuracy: " + loc.accuracy.toFixed(1) + " m");
+          }
+          if (loc.speed !== null && loc.speed !== undefined && loc.speed > 0) {
+            lines.push("Speed: " + loc.speed.toFixed(1) + " m/s");
+          }
+          if (loc.heading !== null && loc.heading !== undefined && loc.heading >= 0) {
+            lines.push("Heading: " + loc.heading.toFixed(1) + "°");
+          }
+          
+          return lines.join("\\n");
+        }
+        
+        // Helper to inject location into user_input for GraphQL mutations
+        function injectLocationIntoUserInput(userInput, locationContext) {
+          if (!userInput || !locationContext) return userInput;
+          return userInput + "\\n\\n[Location Context]\\n" + locationContext;
+        }
+        
+        // Override fetch
+        window.fetch = async function(url, options) {
+          const urlStr = typeof url === 'string' ? url : url.toString();
+          
+          // Skip if location is not enabled
+          if (!window._nativeLocationEnabled || !window._nativeDeviceLocation) {
+            return originalFetch.apply(this, arguments);
+          }
+          
+          // Check if this is a chat completions REST request
+          const isChatCompletion = urlStr.includes('/v1/chat/completions') || 
+                                    (urlStr.includes('/api/agent/') && urlStr.includes('/prompt'));
+          
+          // Check if this is a GraphQL request
+          const isGraphQL = urlStr.includes('/graphql');
+          
+          if (options && options.body) {
+            try {
+              const body = JSON.parse(options.body);
+              const locationContext = buildLocationContext();
+              
+              if (!locationContext) {
+                return originalFetch.apply(this, arguments);
+              }
+              
+              let modified = false;
+              
+              // Handle REST chat completions
+              if (isChatCompletion && body.messages && body.messages.length > 0) {
+                for (let i = body.messages.length - 1; i >= 0; i--) {
+                  if (body.messages[i].role === 'user') {
+                    if (body.messages[i].context) {
+                      body.messages[i].context = body.messages[i].context + "\\n\\n" + locationContext;
+                    } else {
+                      body.messages[i].context = locationContext;
+                    }
+                    console.log('[Native Location] Injected into REST chat message');
+                    modified = true;
+                    break;
+                  }
+                }
+              }
+              
+              // Handle GraphQL mutations (promptAgent, chat completions via GQL)
+              if (isGraphQL && body.query) {
+                const query = body.query.toLowerCase();
+                const isPromptMutation = query.includes('mutation') && 
+                  (query.includes('promptagent') || query.includes('prompt_agent') || 
+                   query.includes('chatcompletion') || query.includes('chat_completion'));
+                
+                if (isPromptMutation && body.variables) {
+                  // Look for user_input or content in variables
+                  if (body.variables.input) {
+                    if (body.variables.input.prompt_args && body.variables.input.prompt_args.user_input) {
+                      body.variables.input.prompt_args.user_input = 
+                        injectLocationIntoUserInput(body.variables.input.prompt_args.user_input, locationContext);
+                      console.log('[Native Location] Injected into GraphQL prompt_args.user_input');
+                      modified = true;
+                    } else if (body.variables.input.user_input) {
+                      body.variables.input.user_input = 
+                        injectLocationIntoUserInput(body.variables.input.user_input, locationContext);
+                      console.log('[Native Location] Injected into GraphQL input.user_input');
+                      modified = true;
+                    }
+                  }
+                  
+                  // Also check for messages array in variables (chat completions style)
+                  if (body.variables.messages && Array.isArray(body.variables.messages)) {
+                    for (let i = body.variables.messages.length - 1; i >= 0; i--) {
+                      if (body.variables.messages[i].role === 'user') {
+                        const msg = body.variables.messages[i];
+                        if (typeof msg.content === 'string') {
+                          body.variables.messages[i].content = 
+                            injectLocationIntoUserInput(msg.content, locationContext);
+                          console.log('[Native Location] Injected into GraphQL messages content');
+                          modified = true;
+                          break;
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+              
+              if (modified) {
+                // Create new options object with modified body
+                const newOptions = { ...options, body: JSON.stringify(body) };
+                return originalFetch.call(this, url, newOptions);
+              }
+            } catch (e) {
+              console.error('[Native Location] Error injecting location:', e);
+            }
+          }
+          
+          // Call the original fetch with original arguments
+          return originalFetch.apply(this, arguments);
+        };
+        
+        window._fetchInterceptorSetup = true;
+        console.log('[Native Location] Fetch interceptor initialized - location will be injected into chat messages');
+      })();
+      ''';
+
+      await _webViewController!.runJavaScript(fetchInterceptorScript);
+      debugPrint('Fetch interceptor injected');
+    } catch (e) {
+      debugPrint('Error injecting fetch interceptor: $e');
+    }
+  }
+
+  // Clear location data from webview when location is disabled
+  Future<void> _clearLocationInWebView() async {
+    if (_webViewController == null) return;
+
+    try {
+      const clearScript = '''
+      (function() {
+        // Clear native device location
+        window._nativeDeviceLocation = null;
+        window._nativeLocationEnabled = false;
+        console.log('Native device location cleared - location will no longer be injected into chat messages');
+      })();
+      ''';
+      await _webViewController!.runJavaScript(clearScript);
+    } catch (e) {
+      debugPrint('Error clearing location in webview: $e');
+    }
+  }
+
+  // Inject current location into the webview
+  Future<void> _injectCurrentLocation() async {
+    if (_webViewController == null) return;
+
+    try {
+      // Check if location is still enabled
+      final isLocationEnabled = await _locationService.isLocationEnabled();
+      if (!isLocationEnabled) {
+        await _clearLocationInWebView();
+        return;
+      }
+
+      // Get current position with timeout
+      final position = await _locationService.getCurrentPosition(
+        timeout: const Duration(seconds: 5),
+      );
+
+      if (position != null) {
+        await _injectPositionToWebView(position);
+      } else {
+        // Try to use last known position
+        final lastPosition = await _locationService.getLastPosition();
+        if (lastPosition.isNotEmpty) {
+          await _injectLastPositionToWebView(lastPosition);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error injecting current location: $e');
+    }
+  }
+
+  // Inject a Position object to the webview
+  Future<void> _injectPositionToWebView(Position position) async {
+    if (_webViewController == null) return;
+
+    try {
+      final timestamp = position.timestamp.millisecondsSinceEpoch;
+
+      final locationScript = '''
+      (function() {
+        window._nativeDeviceLocation = {
+          latitude: ${position.latitude},
+          longitude: ${position.longitude},
+          altitude: ${position.altitude},
+          accuracy: ${position.accuracy},
+          altitudeAccuracy: ${position.altitudeAccuracy},
+          heading: ${position.heading},
+          speed: ${position.speed},
+          timestamp: $timestamp,
+          formatted: "${LocationService.formatCoordinates(position.latitude, position.longitude)}"
+        };
+        window._nativeLocationEnabled = true;
+        console.log('Native device location updated:', window._nativeDeviceLocation);
+        
+        // Dispatch event so web app knows location is available
+        window.dispatchEvent(new CustomEvent('nativeLocationUpdate', { 
+          detail: window._nativeDeviceLocation 
+        }));
+      })();
+      ''';
+
+      await _webViewController!.runJavaScript(locationScript);
+      debugPrint(
+          'Location injected: ${position.latitude}, ${position.longitude}');
+    } catch (e) {
+      debugPrint('Error injecting position to webview: $e');
+    }
+  }
+
+  // Inject last known position to the webview
+  Future<void> _injectLastPositionToWebView(
+      Map<String, dynamic> lastPosition) async {
+    if (_webViewController == null) return;
+
+    try {
+      final latitude = lastPosition['latitude'] as double?;
+      final longitude = lastPosition['longitude'] as double?;
+      if (latitude == null || longitude == null) return;
+
+      final altitude = lastPosition['altitude'] as double? ?? 0.0;
+      final accuracy = lastPosition['accuracy'] as double? ?? 0.0;
+      final timestamp =
+          (lastPosition['timestamp'] as DateTime?)?.millisecondsSinceEpoch ??
+              DateTime.now().millisecondsSinceEpoch;
+
+      final locationScript = '''
+      (function() {
+        window._nativeDeviceLocation = {
+          latitude: $latitude,
+          longitude: $longitude,
+          altitude: $altitude,
+          accuracy: $accuracy,
+          altitudeAccuracy: null,
+          heading: null,
+          speed: null,
+          timestamp: $timestamp,
+          formatted: "${LocationService.formatCoordinates(latitude, longitude)}",
+          isLastKnown: true
+        };
+        window._nativeLocationEnabled = true;
+        console.log('Native device location updated (last known):', window._nativeDeviceLocation);
+        
+        // Dispatch event so web app knows location is available
+        window.dispatchEvent(new CustomEvent('nativeLocationUpdate', { 
+          detail: window._nativeDeviceLocation 
+        }));
+      })();
+      ''';
+
+      await _webViewController!.runJavaScript(locationScript);
+      debugPrint('Last known location injected: $latitude, $longitude');
+    } catch (e) {
+      debugPrint('Error injecting last position to webview: $e');
+    }
+  }
+
+  // Inject a geolocation API override into the webview
+  Future<void> _injectGeolocationOverride() async {
+    if (_webViewController == null) return;
+
+    try {
+      const geolocationScript = '''
+      (function() {
+        if (window._geolocationOverrideSetup) return;
+        
+        // Store original geolocation
+        const originalGeolocation = navigator.geolocation;
+        
+        // Override getCurrentPosition
+        const customGetCurrentPosition = function(success, error, options) {
+          // First try native device location
+          if (window._nativeDeviceLocation && window._nativeLocationEnabled) {
+            const loc = window._nativeDeviceLocation;
+            const position = {
+              coords: {
+                latitude: loc.latitude,
+                longitude: loc.longitude,
+                altitude: loc.altitude,
+                accuracy: loc.accuracy,
+                altitudeAccuracy: loc.altitudeAccuracy,
+                heading: loc.heading,
+                speed: loc.speed
+              },
+              timestamp: loc.timestamp
+            };
+            console.log('Using native device location for getCurrentPosition');
+            success(position);
+            return;
+          }
+          
+          // Fall back to browser geolocation
+          console.log('Native location not available, falling back to browser');
+          if (originalGeolocation && originalGeolocation.getCurrentPosition) {
+            originalGeolocation.getCurrentPosition(success, error, options);
+          } else if (error) {
+            error({ code: 2, message: 'Location not available' });
+          }
+        };
+        
+        // Override watchPosition
+        const customWatchPosition = function(success, error, options) {
+          // Set up listener for native location updates
+          let watchId = Math.floor(Math.random() * 1000000);
+          
+          const handleUpdate = function(event) {
+            if (event.detail && window._nativeLocationEnabled) {
+              const loc = event.detail;
+              const position = {
+                coords: {
+                  latitude: loc.latitude,
+                  longitude: loc.longitude,
+                  altitude: loc.altitude,
+                  accuracy: loc.accuracy,
+                  altitudeAccuracy: loc.altitudeAccuracy,
+                  heading: loc.heading,
+                  speed: loc.speed
+                },
+                timestamp: loc.timestamp
+              };
+              success(position);
+            }
+          };
+          
+          window.addEventListener('nativeLocationUpdate', handleUpdate);
+          
+          // Send initial position if available
+          if (window._nativeDeviceLocation && window._nativeLocationEnabled) {
+            handleUpdate({ detail: window._nativeDeviceLocation });
+          }
+          
+          // Store the handler for clearWatch
+          window._geoWatches = window._geoWatches || {};
+          window._geoWatches[watchId] = handleUpdate;
+          
+          return watchId;
+        };
+        
+        // Override clearWatch
+        const customClearWatch = function(watchId) {
+          if (window._geoWatches && window._geoWatches[watchId]) {
+            window.removeEventListener('nativeLocationUpdate', window._geoWatches[watchId]);
+            delete window._geoWatches[watchId];
+          }
+        };
+        
+        // Apply overrides
+        Object.defineProperty(navigator, 'geolocation', {
+          value: {
+            getCurrentPosition: customGetCurrentPosition,
+            watchPosition: customWatchPosition,
+            clearWatch: customClearWatch
+          },
+          configurable: true,
+          writable: false
+        });
+        
+        window._geolocationOverrideSetup = true;
+        console.log('Geolocation API override initialized');
+      })();
+      ''';
+
+      await _webViewController!.runJavaScript(geolocationScript);
+      debugPrint('Geolocation override injected');
+    } catch (e) {
+      debugPrint('Error injecting geolocation override: $e');
     }
   }
 
