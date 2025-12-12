@@ -506,7 +506,27 @@ class _LoginScreenState extends State<LoginScreen> {
     final appName = AuthService.appName;
 
     return Scaffold(
-      appBar: AppBar(title: Text('Login to $appName')),
+      appBar: AppBar(
+        title: Text('Login to $appName'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 16.0),
+            child: Center(
+              child: Text(
+                'v0.0.1',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.color
+                      ?.withOpacity(0.7),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
