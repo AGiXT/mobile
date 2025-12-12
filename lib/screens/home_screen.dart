@@ -34,6 +34,9 @@ class _HomePageState extends State<HomePage> {
   final AIService aiService = AIService();
   final LocationService _locationService = LocationService();
 
+  // Static flag to prevent multiple instances from showing the glasses prompt dialog
+  static bool _isShowingGlassesPrompt = false;
+
   String? _userEmail;
   bool _isLoggedIn = true;
   bool _isSideButtonListenerAttached = false;
@@ -550,16 +553,29 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _maybePromptForGlasses() async {
-    if (_hasPromptedForGlasses || !mounted) {
+    // Use static flag to prevent multiple dialogs from different HomePage instances
+    // Set it immediately before any async operations to prevent race conditions
+    if (_hasPromptedForGlasses || _isShowingGlassesPrompt || !mounted) {
       return;
     }
+
+    // Claim the lock immediately before any async work
+    _isShowingGlassesPrompt = true;
+    _hasPromptedForGlasses = true;
 
     final shouldShow = await OnboardingService.shouldShowGlassesPrompt();
     if (!shouldShow || !mounted) {
+      _isShowingGlassesPrompt = false;
       return;
     }
 
-    _hasPromptedForGlasses = true;
+    // Mark as completed immediately to prevent the dialog from showing again
+    await OnboardingService.markGlassesPromptCompleted();
+
+    if (!mounted) {
+      _isShowingGlassesPrompt = false;
+      return;
+    }
 
     final wantsToConnect = await showDialog<bool>(
           context: context,
@@ -582,7 +598,7 @@ class _HomePageState extends State<HomePage> {
         ) ??
         false;
 
-    await OnboardingService.markGlassesPromptCompleted();
+    _isShowingGlassesPrompt = false;
 
     if (wantsToConnect && mounted) {
       _openGlassesSettings();
