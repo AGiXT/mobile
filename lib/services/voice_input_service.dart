@@ -1,0 +1,449 @@
+import 'dart:async';
+import 'dart:typed_data';
+import 'package:agixt/services/bluetooth_manager.dart';
+import 'package:agixt/services/watch_service.dart';
+import 'package:agixt/services/wake_word_service.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:io';
+
+/// Enum for voice input sources
+enum VoiceInputSource {
+  glasses, // Even Realities G1 glasses microphone
+  watch, // Pixel Watch microphone
+  phone, // Phone's built-in microphone
+}
+
+/// Service that manages voice input from multiple sources
+/// Priority: Glasses > Watch > Phone
+class VoiceInputService {
+  static final VoiceInputService singleton = VoiceInputService._internal();
+  factory VoiceInputService() => singleton;
+  VoiceInputService._internal();
+
+  // Dependencies
+  final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
+  final WatchService _watchService = WatchService.singleton;
+  final WakeWordService _wakeWordService = WakeWordService.singleton;
+
+  // Phone audio recorder
+  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
+  bool _recorderInitialized = false;
+
+  // Method channel for glasses microphone
+  static const MethodChannel _glassesAudioChannel =
+      MethodChannel('dev.agixt.agixt/glasses_audio');
+
+  // State
+  bool _isRecording = false;
+  VoiceInputSource? _activeSource;
+  String? _recordingPath;
+
+  // Settings
+  VoiceInputSource _preferredSource = VoiceInputSource.glasses;
+  bool _useWakeWord = false;
+
+  // Stream controllers
+  final StreamController<VoiceInputState> _stateController =
+      StreamController<VoiceInputState>.broadcast();
+  final StreamController<Uint8List> _audioChunkController =
+      StreamController<Uint8List>.broadcast();
+
+  // Public getters
+  bool get isRecording => _isRecording;
+  VoiceInputSource? get activeSource => _activeSource;
+  Stream<VoiceInputState> get stateStream => _stateController.stream;
+  Stream<Uint8List> get audioChunkStream => _audioChunkController.stream;
+
+  /// Initialize the voice input service
+  Future<void> initialize() async {
+    debugPrint('VoiceInputService: Initializing...');
+
+    // Load settings
+    final prefs = await SharedPreferences.getInstance();
+    final sourceStr = prefs.getString('voice_input_source') ?? 'glasses';
+    _preferredSource = VoiceInputSource.values.firstWhere(
+      (e) => e.name == sourceStr,
+      orElse: () => VoiceInputSource.glasses,
+    );
+    _useWakeWord = prefs.getBool('wake_word_enabled') ?? false;
+
+    // Initialize phone recorder
+    await _initializeRecorder();
+
+    // Set up glasses audio callback
+    _glassesAudioChannel.setMethodCallHandler(_handleGlassesAudioCall);
+
+    // Set up wake word callback
+    _wakeWordService.setOnWakeWordDetected(_handleWakeWordDetected);
+
+    debugPrint('VoiceInputService: Initialized with preferred source: $_preferredSource');
+  }
+
+  Future<void> _initializeRecorder() async {
+    if (_recorderInitialized) return;
+
+    try {
+      await _recorder.openRecorder();
+      _recorderInitialized = true;
+      debugPrint('VoiceInputService: Phone recorder initialized');
+    } catch (e) {
+      debugPrint('VoiceInputService: Failed to initialize phone recorder: $e');
+    }
+  }
+
+  /// Handle method calls from native glasses audio code
+  Future<dynamic> _handleGlassesAudioCall(MethodCall call) async {
+    switch (call.method) {
+      case 'onAudioData':
+        final audioData = call.arguments['audioData'] as Uint8List?;
+        if (audioData != null && _isRecording && _activeSource == VoiceInputSource.glasses) {
+          _audioChunkController.add(audioData);
+        }
+        return true;
+
+      case 'onRecordingComplete':
+        final audioData = call.arguments['audioData'] as Uint8List?;
+        if (_isRecording && _activeSource == VoiceInputSource.glasses) {
+          await _handleRecordingComplete(audioData);
+        }
+        return true;
+
+      default:
+        return null;
+    }
+  }
+
+  /// Handle wake word detection
+  void _handleWakeWordDetected(double confidence, String source) {
+    debugPrint('VoiceInputService: Wake word detected with confidence $confidence from $source');
+
+    // Start recording when wake word is detected
+    if (!_isRecording) {
+      startRecording();
+    }
+  }
+
+  /// Get the best available voice input source
+  VoiceInputSource getBestAvailableSource() {
+    // Check glasses first (highest priority)
+    if (_bluetoothManager.isConnected) {
+      return VoiceInputSource.glasses;
+    }
+
+    // Check watch second (fallback)
+    if (_watchService.isConnected) {
+      return VoiceInputSource.watch;
+    }
+
+    // Phone is always available
+    return VoiceInputSource.phone;
+  }
+
+  /// Check if a specific source is available
+  bool isSourceAvailable(VoiceInputSource source) {
+    switch (source) {
+      case VoiceInputSource.glasses:
+        return _bluetoothManager.isConnected;
+      case VoiceInputSource.watch:
+        return _watchService.isConnected;
+      case VoiceInputSource.phone:
+        return true;
+    }
+  }
+
+  /// Set the preferred voice input source
+  Future<void> setPreferredSource(VoiceInputSource source) async {
+    _preferredSource = source;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('voice_input_source', source.name);
+    debugPrint('VoiceInputService: Preferred source set to $source');
+  }
+
+  /// Start recording audio from the best available source
+  Future<bool> startRecording({
+    Duration maxDuration = const Duration(seconds: 10),
+    VoiceInputSource? forcedSource,
+  }) async {
+    if (_isRecording) {
+      debugPrint('VoiceInputService: Already recording');
+      return false;
+    }
+
+    // Determine which source to use
+    final source = forcedSource ?? _preferredSource;
+    VoiceInputSource actualSource;
+
+    // Check if preferred source is available, otherwise fall back
+    if (isSourceAvailable(source)) {
+      actualSource = source;
+    } else {
+      actualSource = getBestAvailableSource();
+      debugPrint('VoiceInputService: $source not available, falling back to $actualSource');
+    }
+
+    _activeSource = actualSource;
+    _isRecording = true;
+
+    _stateController.add(VoiceInputState(
+      isRecording: true,
+      source: actualSource,
+      status: VoiceInputStatus.recording,
+    ));
+
+    // Pause wake word detection during recording
+    if (_useWakeWord) {
+      await _wakeWordService.pause();
+    }
+
+    debugPrint('VoiceInputService: Starting recording from $actualSource');
+
+    try {
+      switch (actualSource) {
+        case VoiceInputSource.glasses:
+          return await _startGlassesRecording(maxDuration);
+        case VoiceInputSource.watch:
+          return await _startWatchRecording(maxDuration);
+        case VoiceInputSource.phone:
+          return await _startPhoneRecording(maxDuration);
+      }
+    } catch (e) {
+      debugPrint('VoiceInputService: Error starting recording: $e');
+      _isRecording = false;
+      _activeSource = null;
+
+      _stateController.add(VoiceInputState(
+        isRecording: false,
+        source: actualSource,
+        status: VoiceInputStatus.error,
+        error: e.toString(),
+      ));
+
+      return false;
+    }
+  }
+
+  /// Start recording from glasses microphone
+  Future<bool> _startGlassesRecording(Duration maxDuration) async {
+    try {
+      // Enable microphone on glasses
+      await _bluetoothManager.setMicrophone(true);
+
+      // Set up auto-stop timer
+      Timer(maxDuration, () {
+        if (_isRecording && _activeSource == VoiceInputSource.glasses) {
+          stopRecording();
+        }
+      });
+
+      return true;
+    } catch (e) {
+      debugPrint('VoiceInputService: Error starting glasses recording: $e');
+      return false;
+    }
+  }
+
+  /// Start recording from watch microphone
+  Future<bool> _startWatchRecording(Duration maxDuration) async {
+    try {
+      final audioData = await _watchService.startRecording(
+        maxDuration: maxDuration,
+        sampleRate: 16000,
+      );
+
+      if (audioData != null) {
+        await _handleRecordingComplete(audioData);
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('VoiceInputService: Error starting watch recording: $e');
+      return false;
+    }
+  }
+
+  /// Start recording from phone microphone
+  Future<bool> _startPhoneRecording(Duration maxDuration) async {
+    if (!_recorderInitialized) {
+      await _initializeRecorder();
+    }
+
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      _recordingPath = '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav';
+
+      await _recorder.startRecorder(
+        toFile: _recordingPath,
+        codec: Codec.pcm16WAV,
+        sampleRate: 16000,
+        numChannels: 1,
+      );
+
+      // Set up auto-stop timer
+      Timer(maxDuration, () {
+        if (_isRecording && _activeSource == VoiceInputSource.phone) {
+          stopRecording();
+        }
+      });
+
+      return true;
+    } catch (e) {
+      debugPrint('VoiceInputService: Error starting phone recording: $e');
+      return false;
+    }
+  }
+
+  /// Stop the current recording
+  Future<Uint8List?> stopRecording() async {
+    if (!_isRecording) {
+      return null;
+    }
+
+    debugPrint('VoiceInputService: Stopping recording from $_activeSource');
+
+    Uint8List? audioData;
+
+    try {
+      switch (_activeSource) {
+        case VoiceInputSource.glasses:
+          audioData = await _stopGlassesRecording();
+          break;
+        case VoiceInputSource.watch:
+          await _watchService.stopRecording();
+          // Audio data is returned via callback
+          break;
+        case VoiceInputSource.phone:
+          audioData = await _stopPhoneRecording();
+          break;
+        case null:
+          break;
+      }
+    } catch (e) {
+      debugPrint('VoiceInputService: Error stopping recording: $e');
+    }
+
+    _isRecording = false;
+    final source = _activeSource;
+    _activeSource = null;
+
+    _stateController.add(VoiceInputState(
+      isRecording: false,
+      source: source,
+      status: VoiceInputStatus.stopped,
+    ));
+
+    // Resume wake word detection
+    if (_useWakeWord) {
+      await _wakeWordService.resume();
+    }
+
+    return audioData;
+  }
+
+  /// Stop glasses recording
+  Future<Uint8List?> _stopGlassesRecording() async {
+    try {
+      await _bluetoothManager.setMicrophone(false);
+
+      // Get recorded audio from native code
+      final result = await _glassesAudioChannel.invokeMethod('getRecordedAudio');
+      if (result is Uint8List) {
+        return result;
+      }
+      return null;
+    } catch (e) {
+      debugPrint('VoiceInputService: Error stopping glasses recording: $e');
+      return null;
+    }
+  }
+
+  /// Stop phone recording
+  Future<Uint8List?> _stopPhoneRecording() async {
+    try {
+      await _recorder.stopRecorder();
+
+      if (_recordingPath != null) {
+        final file = File(_recordingPath!);
+        if (await file.exists()) {
+          final audioData = await file.readAsBytes();
+          await file.delete(); // Clean up temp file
+          return audioData;
+        }
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('VoiceInputService: Error stopping phone recording: $e');
+      return null;
+    }
+  }
+
+  /// Handle recording complete callback
+  Future<void> _handleRecordingComplete(Uint8List? audioData) async {
+    _isRecording = false;
+    final source = _activeSource;
+    _activeSource = null;
+
+    _stateController.add(VoiceInputState(
+      isRecording: false,
+      source: source,
+      status: VoiceInputStatus.complete,
+      audioData: audioData,
+    ));
+
+    // Resume wake word detection
+    if (_useWakeWord) {
+      await _wakeWordService.resume();
+    }
+  }
+
+  /// Get the display name for a voice input source
+  static String getSourceDisplayName(VoiceInputSource source) {
+    switch (source) {
+      case VoiceInputSource.glasses:
+        return 'Even Realities Glasses';
+      case VoiceInputSource.watch:
+        return 'Pixel Watch';
+      case VoiceInputSource.phone:
+        return 'Phone Microphone';
+    }
+  }
+
+  /// Dispose of the service
+  void dispose() {
+    _recorder.closeRecorder();
+    _stateController.close();
+    _audioChunkController.close();
+  }
+}
+
+/// Status of voice input
+enum VoiceInputStatus {
+  idle,
+  recording,
+  processing,
+  complete,
+  stopped,
+  error,
+}
+
+/// Voice input state
+class VoiceInputState {
+  final bool isRecording;
+  final VoiceInputSource? source;
+  final VoiceInputStatus status;
+  final Uint8List? audioData;
+  final String? error;
+
+  VoiceInputState({
+    required this.isRecording,
+    this.source,
+    required this.status,
+    this.audioData,
+    this.error,
+  });
+}

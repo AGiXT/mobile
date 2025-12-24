@@ -6,6 +6,7 @@ import 'package:agixt/models/g1/battery.dart';
 import 'package:agixt/screens/settings/dashboard_screen.dart';
 import 'package:agixt/screens/settings/location_screen.dart';
 import 'package:agixt/screens/settings/notifications_screen.dart';
+import 'package:agixt/screens/settings/voice_watch_settings_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/widgets/g1_battery_widget.dart';
 import 'package:agixt/widgets/glass_status.dart';
@@ -408,6 +409,19 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                   context,
                   MaterialPageRoute(
                       builder: (context) => const NotificationSettingsPage()),
+                );
+              },
+            ),
+            const Divider(height: 1),
+            _buildActionTile(
+              icon: Icons.record_voice_over_rounded,
+              title: 'Voice & Watch',
+              subtitle: 'Wake word, Pixel Watch, TTS and voice input settings.',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const VoiceWatchSettingsScreen()),
                 );
               },
             ),

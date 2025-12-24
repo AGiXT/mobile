@@ -94,6 +94,13 @@ flutter {
 dependencies {
   coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:1.2.2'
   // FFmpeg dependencies have been removed as we now use native speech recognition
+  
+  // Wearable Data Layer API for Pixel Watch / Wear OS connectivity
+  implementation 'com.google.android.gms:play-services-wearable:18.1.0'
+  
+  // Kotlin coroutines for async operations
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3'
+  implementation 'org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3'
 }
 
 subprojects {

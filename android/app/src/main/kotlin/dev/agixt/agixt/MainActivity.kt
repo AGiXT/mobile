@@ -31,6 +31,10 @@ class MainActivity: FlutterActivity() {
     private val TAG = "MainActivity"
     private var methodChannelInitialized = false
     private var pendingToken: String? = null
+    
+    // Voice & Watch handlers
+    private var wakeWordHandler: WakeWordHandler? = null
+    private var watchHandler: WatchHandler? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -128,6 +132,9 @@ class MainActivity: FlutterActivity() {
 
      override fun onDestroy() {
         super.onDestroy()
+        // Clean up handlers
+        wakeWordHandler?.destroy()
+        watchHandler?.destroy()
         BackgroundService.stopService(this@MainActivity, null)
     }
 
@@ -197,6 +204,13 @@ class MainActivity: FlutterActivity() {
         
         // Mark that the method channels are initialized
         methodChannelInitialized = true
+        
+        // Initialize Voice & Watch handlers
+        wakeWordHandler = WakeWordHandler(this, binaryMessenger)
+        wakeWordHandler?.initialize()
+        
+        watchHandler = WatchHandler(this, binaryMessenger)
+        watchHandler?.initialize()
         
         // Check if we have a pending token to send
         pendingToken?.let { token ->

@@ -1,15 +1,23 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:agixt/services/websocket_service.dart';
 import 'package:agixt/services/contacts_service.dart';
 import 'package:agixt/services/sms_service.dart';
 import 'package:agixt/services/location_service.dart';
 import 'package:agixt/services/permission_manager.dart';
+import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:device_calendar/device_calendar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Service that handles client-side commands from the AGiXT agent
 /// Similar to the CLI's execute_remote_command functionality but for mobile
+/// Enhanced with ESP32-style tools like capture_image
 class ClientCommandsService {
   static final ClientCommandsService _instance =
       ClientCommandsService._internal();
@@ -20,6 +28,11 @@ class ClientCommandsService {
   final ContactsService _contactsService = ContactsService();
   final SmsService _smsService = SmsService();
   final LocationService _locationService = LocationService();
+  final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
+
+  // Method channel for glasses camera access
+  static const MethodChannel _cameraChannel =
+      MethodChannel('dev.agixt.agixt/glasses_camera');
 
   StreamSubscription<RemoteCommandRequest>? _commandSubscription;
   bool _isListening = false;
@@ -80,30 +93,287 @@ class ClientCommandsService {
     Map<String, dynamic> args,
   ) async {
     switch (toolName) {
+      // ESP32-style tools
+      case 'capture_image':
+        return await _captureImage(args);
+      case 'get_device_capabilities':
+        return await _getDeviceCapabilities(args);
+
+      // Contact tools
       case 'get_contacts':
         return await _getContacts(args);
       case 'search_contacts':
         return await _searchContacts(args);
+
+      // Communication tools
       case 'send_sms':
         return await _sendSms(args);
+      case 'make_phone_call':
+        return await _makePhoneCall(args);
+      case 'mobile_send_email':
+        return await _sendEmail(args);
+
+      // Calendar tools
+      case 'get_calendar_events':
+        return await _getCalendarEvents(args);
+      case 'create_calendar_event':
+        return await _createCalendarEvent(args);
+      case 'get_calendars':
+        return await _getCalendars(args);
+
+      // Location/navigation tools
       case 'get_location':
         return await _getLocation(args);
       case 'open_maps':
       case 'navigate_to':
         return await _openMaps(args);
-      case 'make_phone_call':
-        return await _makePhoneCall(args);
+
+      // File operations (prefixed with mobile_ to avoid server-side conflicts)
+      case 'mobile_read_file':
+        return await _readFile(args);
+      case 'mobile_write_file':
+        return await _writeFile(args);
+      case 'mobile_list_files':
+        return await _listFiles(args);
+      case 'mobile_delete_file':
+        return await _deleteFile(args);
+      case 'mobile_get_storage_info':
+        return await _getStorageInfo(args);
+
+      // Clipboard tools (prefixed with mobile_ for device-specific operations)
+      case 'mobile_get_clipboard':
+        return await _getClipboard(args);
+      case 'mobile_set_clipboard':
+        return await _setClipboard(args);
+
+      // App control tools
+      case 'open_app':
+        return await _openApp(args);
+      case 'open_settings':
+        return await _openSettings(args);
+
+      // Device control tools
+      case 'set_flashlight':
+        return await _setFlashlight(args);
+      case 'get_battery_status':
+        return await _getBatteryStatus(args);
+      case 'set_alarm':
+        return await _setAlarm(args);
+      case 'set_timer':
+        return await _setTimer(args);
+
+      // Utility tools
       case 'open_url':
         return await _openUrl(args);
       case 'get_device_info':
         return await _getDeviceInfo(args);
+      case 'mobile_search_web':
+        return await _searchWeb(args);
+
+      // Glasses display tools
+      case 'display_on_glasses':
+        return await _displayOnGlasses(args);
+
+      // Notes/reminders (prefixed with mobile_ for device-local storage)
+      case 'mobile_save_note':
+        return await _saveNote(args);
+      case 'mobile_get_notes':
+        return await _getNotes(args);
+
       default:
         return {
-          'output': 'Unknown command: $toolName. Available commands: '
-              'get_contacts, search_contacts, send_sms, get_location, '
-              'open_maps, navigate_to, make_phone_call, open_url, get_device_info',
+          'output': 'Unknown command: $toolName. Use get_device_capabilities to see available commands.',
           'exit_code': 1,
         };
+    }
+  }
+
+  /// Capture an image using the smart glasses camera (ESP32-style tool)
+  /// This is the primary visual capture tool for the mobile app
+  Future<Map<String, dynamic>> _captureImage(Map<String, dynamic> args) async {
+    try {
+      final prompt = args['prompt'] as String? ?? 'Analyze this image';
+
+      // Check if glasses are connected
+      if (!_bluetoothManager.isConnected) {
+        return {
+          'output': jsonEncode({
+            'error': 'Glasses not connected',
+            'message':
+                'Cannot capture image - Even Realities glasses are not connected',
+          }),
+          'exit_code': 1,
+        };
+      }
+
+      debugPrint('ClientCommands: Capturing image with prompt: $prompt');
+
+      // Request image capture from glasses via native channel
+      try {
+        final result = await _cameraChannel.invokeMethod('captureImage', {
+          'prompt': prompt,
+        });
+
+        if (result is Map) {
+          final imageData = result['imageData'] as Uint8List?;
+          final width = result['width'] as int? ?? 0;
+          final height = result['height'] as int? ?? 0;
+
+          if (imageData != null && imageData.isNotEmpty) {
+            // Convert to base64 for the response
+            final base64Image = base64Encode(imageData);
+
+            return {
+              'output': jsonEncode({
+                'success': true,
+                'prompt': prompt,
+                'image_data': base64Image,
+                'image_size': imageData.length,
+                'width': width,
+                'height': height,
+                'format': 'jpeg',
+                'source': 'glasses_camera',
+              }),
+              'exit_code': 0,
+            };
+          }
+        }
+
+        return {
+          'output': jsonEncode({
+            'error': 'Capture failed',
+            'message': 'Failed to capture image from glasses camera',
+          }),
+          'exit_code': 1,
+        };
+      } on PlatformException catch (e) {
+        return {
+          'output': jsonEncode({
+            'error': 'Platform error',
+            'message': 'Camera not available: ${e.message}',
+          }),
+          'exit_code': 1,
+        };
+      } on MissingPluginException {
+        return {
+          'output': jsonEncode({
+            'error': 'Not implemented',
+            'message': 'Glasses camera capture not yet implemented on this platform',
+          }),
+          'exit_code': 1,
+        };
+      }
+    } catch (e) {
+      return {
+        'output': jsonEncode({
+          'error': 'Exception',
+          'message': 'Error capturing image: $e',
+        }),
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Get device capabilities (ESP32-style tool)
+  /// Returns what features are available on this mobile device
+  Future<Map<String, dynamic>> _getDeviceCapabilities(
+      Map<String, dynamic> args) async {
+    try {
+      final deviceInfo = DeviceInfoPlugin();
+      Map<String, dynamic> capabilities = {
+        'device_type': 'mobile',
+        'platform': Platform.operatingSystem,
+        'os_version': Platform.operatingSystemVersion,
+      };
+
+      // Get platform-specific info
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfo.androidInfo;
+        capabilities['manufacturer'] = androidInfo.manufacturer;
+        capabilities['model'] = androidInfo.model;
+        capabilities['android_version'] = androidInfo.version.release;
+        capabilities['sdk_version'] = androidInfo.version.sdkInt;
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfo.iosInfo;
+        capabilities['model'] = iosInfo.model;
+        capabilities['system_version'] = iosInfo.systemVersion;
+      }
+
+      // Check connected devices
+      capabilities['glasses_connected'] = _bluetoothManager.isConnected;
+      capabilities['glasses_type'] = 'Even Realities G1';
+
+      // Get available tools based on permissions
+      final contactsGranted =
+          await PermissionManager.isGroupGranted(AppPermission.contacts);
+      final smsGranted =
+          await PermissionManager.isGroupGranted(AppPermission.sms);
+      final locationGranted =
+          await PermissionManager.isGroupGranted(AppPermission.location);
+      final phoneGranted =
+          await PermissionManager.isGroupGranted(AppPermission.phone);
+
+      capabilities['available_tools'] = {
+        'capture_image': _bluetoothManager.isConnected,
+        'display_on_glasses': _bluetoothManager.isConnected,
+        'get_contacts': contactsGranted,
+        'search_contacts': contactsGranted,
+        'send_sms': smsGranted,
+        'make_phone_call': phoneGranted,
+        'get_location': locationGranted,
+        'open_maps': locationGranted,
+        'navigate_to': locationGranted,
+        'open_url': true,
+        'get_device_info': true,
+      };
+
+      return {
+        'output': jsonEncode(capabilities),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error getting device capabilities: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Display text on the connected glasses
+  Future<Map<String, dynamic>> _displayOnGlasses(
+      Map<String, dynamic> args) async {
+    try {
+      final message = args['message'] as String? ?? args['text'] as String?;
+      final durationMs = args['duration'] as int? ?? 5000;
+
+      if (message == null || message.isEmpty) {
+        return {
+          'output': 'Missing required parameter: message',
+          'exit_code': 1,
+        };
+      }
+
+      if (!_bluetoothManager.isConnected) {
+        return {
+          'output': 'Glasses not connected',
+          'exit_code': 1,
+        };
+      }
+
+      await _bluetoothManager.sendAIResponse(
+        message,
+        delay: Duration(milliseconds: durationMs),
+      );
+
+      return {
+        'output': 'Message displayed on glasses: "$message"',
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error displaying on glasses: $e',
+        'exit_code': 1,
+      };
     }
   }
 
@@ -483,6 +753,1022 @@ class ClientCommandsService {
     }
   }
 
+  /// Send an email using the default email app
+  Future<Map<String, dynamic>> _sendEmail(Map<String, dynamic> args) async {
+    try {
+      final to = args['to'] as String? ?? args['recipient'] as String?;
+      final subject = args['subject'] as String? ?? '';
+      final body = args['body'] as String? ?? args['message'] as String? ?? '';
+      final cc = args['cc'] as String?;
+      final bcc = args['bcc'] as String?;
+
+      if (to == null || to.isEmpty) {
+        return {
+          'output': 'Missing required parameter: to (email address)',
+          'exit_code': 1,
+        };
+      }
+
+      // If 'to' looks like a contact name, try to resolve email
+      String resolvedEmail = to;
+      if (!to.contains('@')) {
+        final contacts = await _contactsService.searchContacts(to);
+        if (contacts.isNotEmpty && contacts.first.emails.isNotEmpty) {
+          resolvedEmail = contacts.first.emails.first;
+        } else {
+          return {
+            'output': 'Could not find email for "$to". Please provide a valid email address.',
+            'exit_code': 1,
+          };
+        }
+      }
+
+      final uri = Uri(
+        scheme: 'mailto',
+        path: resolvedEmail,
+        queryParameters: {
+          if (subject.isNotEmpty) 'subject': subject,
+          if (body.isNotEmpty) 'body': body,
+          if (cc != null && cc.isNotEmpty) 'cc': cc,
+          if (bcc != null && bcc.isNotEmpty) 'bcc': bcc,
+        },
+      );
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+        return {
+          'output': 'Email composer opened for $resolvedEmail',
+          'exit_code': 0,
+        };
+      }
+
+      return {
+        'output': 'Could not open email app',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error sending email: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Get calendar events
+  Future<Map<String, dynamic>> _getCalendarEvents(Map<String, dynamic> args) async {
+    try {
+      final daysAhead = args['days_ahead'] as int? ?? 7;
+      final daysBefore = args['days_before'] as int? ?? 0;
+      final calendarId = args['calendar_id'] as String?;
+
+      final plugin = DeviceCalendarPlugin();
+      
+      // Get permission
+      var permissionsGranted = await plugin.hasPermissions();
+      if (permissionsGranted.isSuccess && !permissionsGranted.data!) {
+        permissionsGranted = await plugin.requestPermissions();
+        if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
+          return {
+            'output': 'Calendar permission not granted',
+            'exit_code': 1,
+          };
+        }
+      }
+
+      // Get calendars
+      final calendarsResult = await plugin.retrieveCalendars();
+      if (!calendarsResult.isSuccess || calendarsResult.data == null) {
+        return {
+          'output': 'Could not retrieve calendars',
+          'exit_code': 1,
+        };
+      }
+
+      final now = DateTime.now();
+      final startDate = now.subtract(Duration(days: daysBefore));
+      final endDate = now.add(Duration(days: daysAhead));
+
+      List<Map<String, dynamic>> allEvents = [];
+
+      for (final calendar in calendarsResult.data!) {
+        if (calendarId != null && calendar.id != calendarId) continue;
+
+        final eventsResult = await plugin.retrieveEvents(
+          calendar.id,
+          RetrieveEventsParams(
+            startDate: startDate,
+            endDate: endDate,
+          ),
+        );
+
+        if (eventsResult.isSuccess && eventsResult.data != null) {
+          for (final event in eventsResult.data!) {
+            allEvents.add({
+              'id': event.eventId,
+              'title': event.title,
+              'description': event.description,
+              'start': event.start?.toIso8601String(),
+              'end': event.end?.toIso8601String(),
+              'location': event.location,
+              'all_day': event.allDay,
+              'calendar': calendar.name,
+            });
+          }
+        }
+      }
+
+      // Sort by start time
+      allEvents.sort((a, b) {
+        final aStart = a['start'] as String?;
+        final bStart = b['start'] as String?;
+        if (aStart == null) return 1;
+        if (bStart == null) return -1;
+        return aStart.compareTo(bStart);
+      });
+
+      return {
+        'output': jsonEncode({
+          'events': allEvents,
+          'count': allEvents.length,
+          'date_range': {
+            'start': startDate.toIso8601String(),
+            'end': endDate.toIso8601String(),
+          },
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error getting calendar events: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Create a calendar event
+  Future<Map<String, dynamic>> _createCalendarEvent(Map<String, dynamic> args) async {
+    try {
+      final title = args['title'] as String?;
+      final description = args['description'] as String? ?? '';
+      final location = args['location'] as String?;
+      final startStr = args['start'] as String?;
+      final endStr = args['end'] as String?;
+      final allDay = args['all_day'] as bool? ?? false;
+      final calendarId = args['calendar_id'] as String?;
+
+      if (title == null || title.isEmpty) {
+        return {
+          'output': 'Missing required parameter: title',
+          'exit_code': 1,
+        };
+      }
+
+      if (startStr == null) {
+        return {
+          'output': 'Missing required parameter: start (ISO 8601 datetime)',
+          'exit_code': 1,
+        };
+      }
+
+      final plugin = DeviceCalendarPlugin();
+      
+      // Get permission
+      var permissionsGranted = await plugin.hasPermissions();
+      if (permissionsGranted.isSuccess && !permissionsGranted.data!) {
+        permissionsGranted = await plugin.requestPermissions();
+        if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
+          return {
+            'output': 'Calendar permission not granted',
+            'exit_code': 1,
+          };
+        }
+      }
+
+      // Get calendars
+      final calendarsResult = await plugin.retrieveCalendars();
+      if (!calendarsResult.isSuccess || calendarsResult.data == null || calendarsResult.data!.isEmpty) {
+        return {
+          'output': 'No calendars available',
+          'exit_code': 1,
+        };
+      }
+
+      // Select calendar
+      String targetCalendarId;
+      if (calendarId != null) {
+        targetCalendarId = calendarId;
+      } else {
+        // Use the first writable calendar
+        final writableCalendar = calendarsResult.data!.firstWhere(
+          (c) => !c.isReadOnly!,
+          orElse: () => calendarsResult.data!.first,
+        );
+        targetCalendarId = writableCalendar.id!;
+      }
+
+      final start = DateTime.parse(startStr);
+      final end = endStr != null ? DateTime.parse(endStr) : start.add(const Duration(hours: 1));
+
+      final event = Event(
+        targetCalendarId,
+        title: title,
+        description: description,
+        start: TZDateTime.from(start, local),
+        end: TZDateTime.from(end, local),
+        location: location,
+        allDay: allDay,
+      );
+
+      final result = await plugin.createOrUpdateEvent(event);
+      
+      if (result?.isSuccess == true && result?.data != null) {
+        return {
+          'output': jsonEncode({
+            'success': true,
+            'event_id': result!.data,
+            'title': title,
+            'start': start.toIso8601String(),
+            'end': end.toIso8601String(),
+          }),
+          'exit_code': 0,
+        };
+      }
+
+      return {
+        'output': 'Failed to create calendar event',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error creating calendar event: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Get list of available calendars
+  Future<Map<String, dynamic>> _getCalendars(Map<String, dynamic> args) async {
+    try {
+      final plugin = DeviceCalendarPlugin();
+      
+      var permissionsGranted = await plugin.hasPermissions();
+      if (permissionsGranted.isSuccess && !permissionsGranted.data!) {
+        permissionsGranted = await plugin.requestPermissions();
+        if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
+          return {
+            'output': 'Calendar permission not granted',
+            'exit_code': 1,
+          };
+        }
+      }
+
+      final calendarsResult = await plugin.retrieveCalendars();
+      if (!calendarsResult.isSuccess || calendarsResult.data == null) {
+        return {
+          'output': 'Could not retrieve calendars',
+          'exit_code': 1,
+        };
+      }
+
+      final calendars = calendarsResult.data!.map((c) => {
+        'id': c.id,
+        'name': c.name,
+        'account_name': c.accountName,
+        'account_type': c.accountType,
+        'is_read_only': c.isReadOnly,
+      }).toList();
+
+      return {
+        'output': jsonEncode({
+          'calendars': calendars,
+          'count': calendars.length,
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error getting calendars: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Read a file from device storage
+  Future<Map<String, dynamic>> _readFile(Map<String, dynamic> args) async {
+    try {
+      final filePath = args['path'] as String?;
+      final maxBytes = args['max_bytes'] as int? ?? 1024 * 100; // 100KB default
+
+      if (filePath == null || filePath.isEmpty) {
+        return {
+          'output': 'Missing required parameter: path',
+          'exit_code': 1,
+        };
+      }
+
+      // Resolve path within app's allowed directories
+      String resolvedPath;
+      if (filePath.startsWith('/')) {
+        // Absolute path - check if within allowed directories
+        final appDir = await getApplicationDocumentsDirectory();
+        final externalDir = await getExternalStorageDirectory();
+        
+        if (!filePath.startsWith(appDir.path) && 
+            (externalDir == null || !filePath.startsWith(externalDir.path))) {
+          return {
+            'output': 'Access denied: Path outside allowed directories',
+            'exit_code': 1,
+          };
+        }
+        resolvedPath = filePath;
+      } else {
+        // Relative path - resolve to app documents
+        final appDir = await getApplicationDocumentsDirectory();
+        resolvedPath = '${appDir.path}/$filePath';
+      }
+
+      final file = File(resolvedPath);
+      if (!await file.exists()) {
+        return {
+          'output': 'File not found: $filePath',
+          'exit_code': 1,
+        };
+      }
+
+      final stat = await file.stat();
+      if (stat.size > maxBytes) {
+        return {
+          'output': jsonEncode({
+            'error': 'File too large',
+            'size': stat.size,
+            'max_bytes': maxBytes,
+            'path': filePath,
+          }),
+          'exit_code': 1,
+        };
+      }
+
+      final content = await file.readAsString();
+      return {
+        'output': jsonEncode({
+          'path': filePath,
+          'content': content,
+          'size': stat.size,
+          'modified': stat.modified.toIso8601String(),
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error reading file: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Write content to a file
+  Future<Map<String, dynamic>> _writeFile(Map<String, dynamic> args) async {
+    try {
+      final filePath = args['path'] as String?;
+      final content = args['content'] as String?;
+      final append = args['append'] as bool? ?? false;
+
+      if (filePath == null || filePath.isEmpty) {
+        return {
+          'output': 'Missing required parameter: path',
+          'exit_code': 1,
+        };
+      }
+
+      if (content == null) {
+        return {
+          'output': 'Missing required parameter: content',
+          'exit_code': 1,
+        };
+      }
+
+      // Resolve to app documents directory
+      final appDir = await getApplicationDocumentsDirectory();
+      final resolvedPath = filePath.startsWith('/') 
+          ? filePath 
+          : '${appDir.path}/$filePath';
+
+      // Ensure within allowed directories
+      if (!resolvedPath.startsWith(appDir.path)) {
+        return {
+          'output': 'Access denied: Can only write to app documents directory',
+          'exit_code': 1,
+        };
+      }
+
+      final file = File(resolvedPath);
+      await file.parent.create(recursive: true);
+
+      if (append) {
+        await file.writeAsString(content, mode: FileMode.append);
+      } else {
+        await file.writeAsString(content);
+      }
+
+      final stat = await file.stat();
+      return {
+        'output': jsonEncode({
+          'success': true,
+          'path': filePath,
+          'size': stat.size,
+          'action': append ? 'appended' : 'written',
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error writing file: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// List files in a directory
+  Future<Map<String, dynamic>> _listFiles(Map<String, dynamic> args) async {
+    try {
+      final dirPath = args['path'] as String? ?? '';
+      final recursive = args['recursive'] as bool? ?? false;
+
+      final appDir = await getApplicationDocumentsDirectory();
+      final resolvedPath = dirPath.isEmpty 
+          ? appDir.path 
+          : (dirPath.startsWith('/') ? dirPath : '${appDir.path}/$dirPath');
+
+      final dir = Directory(resolvedPath);
+      if (!await dir.exists()) {
+        return {
+          'output': 'Directory not found: $dirPath',
+          'exit_code': 1,
+        };
+      }
+
+      final List<Map<String, dynamic>> files = [];
+      await for (final entity in dir.list(recursive: recursive)) {
+        final stat = await entity.stat();
+        final relativePath = entity.path.replaceFirst('${appDir.path}/', '');
+        files.add({
+          'path': relativePath,
+          'type': entity is File ? 'file' : 'directory',
+          'size': stat.size,
+          'modified': stat.modified.toIso8601String(),
+        });
+      }
+
+      return {
+        'output': jsonEncode({
+          'directory': dirPath.isEmpty ? '/' : dirPath,
+          'files': files,
+          'count': files.length,
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error listing files: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Delete a file
+  Future<Map<String, dynamic>> _deleteFile(Map<String, dynamic> args) async {
+    try {
+      final filePath = args['path'] as String?;
+
+      if (filePath == null || filePath.isEmpty) {
+        return {
+          'output': 'Missing required parameter: path',
+          'exit_code': 1,
+        };
+      }
+
+      final appDir = await getApplicationDocumentsDirectory();
+      final resolvedPath = filePath.startsWith('/') 
+          ? filePath 
+          : '${appDir.path}/$filePath';
+
+      // Ensure within allowed directories
+      if (!resolvedPath.startsWith(appDir.path)) {
+        return {
+          'output': 'Access denied: Can only delete files in app documents directory',
+          'exit_code': 1,
+        };
+      }
+
+      final file = File(resolvedPath);
+      if (!await file.exists()) {
+        return {
+          'output': 'File not found: $filePath',
+          'exit_code': 1,
+        };
+      }
+
+      await file.delete();
+      return {
+        'output': jsonEncode({
+          'success': true,
+          'deleted': filePath,
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error deleting file: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Get storage information
+  Future<Map<String, dynamic>> _getStorageInfo(Map<String, dynamic> args) async {
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final cacheDir = await getTemporaryDirectory();
+      final externalDir = await getExternalStorageDirectory();
+
+      return {
+        'output': jsonEncode({
+          'app_documents': appDir.path,
+          'cache': cacheDir.path,
+          'external': externalDir?.path,
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error getting storage info: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Get clipboard contents
+  Future<Map<String, dynamic>> _getClipboard(Map<String, dynamic> args) async {
+    try {
+      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      return {
+        'output': jsonEncode({
+          'text': data?.text ?? '',
+          'has_content': data?.text != null && data!.text!.isNotEmpty,
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error getting clipboard: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Set clipboard contents
+  Future<Map<String, dynamic>> _setClipboard(Map<String, dynamic> args) async {
+    try {
+      final text = args['text'] as String?;
+
+      if (text == null) {
+        return {
+          'output': 'Missing required parameter: text',
+          'exit_code': 1,
+        };
+      }
+
+      await Clipboard.setData(ClipboardData(text: text));
+      return {
+        'output': jsonEncode({
+          'success': true,
+          'copied_length': text.length,
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error setting clipboard: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Open a specific app
+  Future<Map<String, dynamic>> _openApp(Map<String, dynamic> args) async {
+    try {
+      final appName = args['app'] as String? ?? args['name'] as String?;
+      final packageName = args['package'] as String?;
+
+      if (appName == null && packageName == null) {
+        return {
+          'output': 'Missing required parameter: app or package',
+          'exit_code': 1,
+        };
+      }
+
+      // Common app URL schemes
+      final Map<String, String> appSchemes = {
+        'camera': 'intent://camera#Intent;end',
+        'calculator': 'intent://calculator#Intent;end',
+        'clock': 'intent://clock#Intent;end',
+        'calendar': 'content://com.android.calendar/time/',
+        'spotify': 'spotify:',
+        'youtube': 'vnd.youtube:',
+        'whatsapp': 'whatsapp://',
+        'instagram': 'instagram://',
+        'twitter': 'twitter://',
+        'facebook': 'fb://',
+        'maps': 'geo:',
+        'phone': 'tel:',
+        'sms': 'sms:',
+        'email': 'mailto:',
+        'settings': 'android.settings.SETTINGS',
+      };
+
+      String? scheme;
+      final appLower = appName?.toLowerCase() ?? '';
+      
+      for (final entry in appSchemes.entries) {
+        if (appLower.contains(entry.key)) {
+          scheme = entry.value;
+          break;
+        }
+      }
+
+      if (scheme != null) {
+        final uri = Uri.parse(scheme);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return {
+            'output': 'Opening $appName',
+            'exit_code': 0,
+          };
+        }
+      }
+
+      // Try launch by package name
+      if (packageName != null) {
+        final uri = Uri.parse('android-app://$packageName');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+          return {
+            'output': 'Opening app: $packageName',
+            'exit_code': 0,
+          };
+        }
+      }
+
+      return {
+        'output': 'Could not open app: ${appName ?? packageName}',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error opening app: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Open device settings
+  Future<Map<String, dynamic>> _openSettings(Map<String, dynamic> args) async {
+    try {
+      final settingsType = args['type'] as String? ?? 'main';
+
+      final Map<String, String> settingsUris = {
+        'main': 'android.settings.SETTINGS',
+        'wifi': 'android.settings.WIFI_SETTINGS',
+        'bluetooth': 'android.settings.BLUETOOTH_SETTINGS',
+        'location': 'android.settings.LOCATION_SOURCE_SETTINGS',
+        'display': 'android.settings.DISPLAY_SETTINGS',
+        'sound': 'android.settings.SOUND_SETTINGS',
+        'battery': 'android.settings.BATTERY_SAVER_SETTINGS',
+        'apps': 'android.settings.APPLICATION_SETTINGS',
+        'notification': 'android.settings.NOTIFICATION_SETTINGS',
+        'security': 'android.settings.SECURITY_SETTINGS',
+        'accessibility': 'android.settings.ACCESSIBILITY_SETTINGS',
+      };
+
+      final settingsUri = settingsUris[settingsType.toLowerCase()] ?? settingsUris['main']!;
+      final uri = Uri.parse('android-app://com.android.settings/#Intent;action=$settingsUri;end');
+
+      // Fallback for settings
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return {
+          'output': 'Opening $settingsType settings',
+          'exit_code': 0,
+        };
+      }
+
+      // Try simpler approach
+      final simpleUri = Uri.parse('package:com.android.settings');
+      if (await canLaunchUrl(simpleUri)) {
+        await launchUrl(simpleUri, mode: LaunchMode.externalApplication);
+        return {
+          'output': 'Opening settings',
+          'exit_code': 0,
+        };
+      }
+
+      return {
+        'output': 'Could not open settings',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error opening settings: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Control the flashlight
+  Future<Map<String, dynamic>> _setFlashlight(Map<String, dynamic> args) async {
+    try {
+      final enable = args['enable'] as bool? ?? args['on'] as bool? ?? true;
+
+      // Method channel for flashlight control
+      const channel = MethodChannel('dev.agixt.agixt/device_control');
+      
+      try {
+        await channel.invokeMethod('setFlashlight', {'enable': enable});
+        return {
+          'output': 'Flashlight ${enable ? "on" : "off"}',
+          'exit_code': 0,
+        };
+      } on MissingPluginException {
+        return {
+          'output': 'Flashlight control not implemented on this platform',
+          'exit_code': 1,
+        };
+      }
+    } catch (e) {
+      return {
+        'output': 'Error controlling flashlight: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Get battery status
+  Future<Map<String, dynamic>> _getBatteryStatus(Map<String, dynamic> args) async {
+    try {
+      const channel = MethodChannel('dev.agixt.agixt/device_control');
+      
+      try {
+        final result = await channel.invokeMethod('getBatteryStatus');
+        return {
+          'output': jsonEncode(result),
+          'exit_code': 0,
+        };
+      } on MissingPluginException {
+        // Fallback to basic info
+        return {
+          'output': jsonEncode({
+            'note': 'Battery status not available',
+          }),
+          'exit_code': 0,
+        };
+      }
+    } catch (e) {
+      return {
+        'output': 'Error getting battery status: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Set an alarm
+  Future<Map<String, dynamic>> _setAlarm(Map<String, dynamic> args) async {
+    try {
+      final hour = args['hour'] as int?;
+      final minute = args['minute'] as int? ?? 0;
+      final message = args['message'] as String? ?? 'Alarm';
+
+      if (hour == null) {
+        return {
+          'output': 'Missing required parameter: hour',
+          'exit_code': 1,
+        };
+      }
+
+      // Use Android alarm intent
+      final uri = Uri.parse('android-app://com.google.android.deskclock/#Intent;'
+          'action=android.intent.action.SET_ALARM;'
+          'S.android.intent.extra.alarm.MESSAGE=$message;'
+          'i.android.intent.extra.alarm.HOUR=$hour;'
+          'i.android.intent.extra.alarm.MINUTES=$minute;'
+          'end');
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return {
+          'output': 'Setting alarm for ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
+          'exit_code': 0,
+        };
+      }
+
+      return {
+        'output': 'Could not set alarm - clock app not available',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error setting alarm: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Set a timer
+  Future<Map<String, dynamic>> _setTimer(Map<String, dynamic> args) async {
+    try {
+      final seconds = args['seconds'] as int? ?? 0;
+      final minutes = args['minutes'] as int? ?? 0;
+      final hours = args['hours'] as int? ?? 0;
+      final message = args['message'] as String? ?? 'Timer';
+
+      final totalSeconds = hours * 3600 + minutes * 60 + seconds;
+      if (totalSeconds <= 0) {
+        return {
+          'output': 'Timer duration must be greater than 0',
+          'exit_code': 1,
+        };
+      }
+
+      // Use Android timer intent
+      final uri = Uri.parse('android-app://com.google.android.deskclock/#Intent;'
+          'action=android.intent.action.SET_TIMER;'
+          'S.android.intent.extra.alarm.MESSAGE=$message;'
+          'i.android.intent.extra.alarm.LENGTH=$totalSeconds;'
+          'end');
+
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return {
+          'output': 'Setting timer for ${hours}h ${minutes}m ${seconds}s',
+          'exit_code': 0,
+        };
+      }
+
+      return {
+        'output': 'Could not set timer - clock app not available',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error setting timer: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Search the web
+  Future<Map<String, dynamic>> _searchWeb(Map<String, dynamic> args) async {
+    try {
+      final query = args['query'] as String?;
+      final engine = args['engine'] as String? ?? 'google';
+
+      if (query == null || query.isEmpty) {
+        return {
+          'output': 'Missing required parameter: query',
+          'exit_code': 1,
+        };
+      }
+
+      final encodedQuery = Uri.encodeComponent(query);
+      String searchUrl;
+
+      switch (engine.toLowerCase()) {
+        case 'google':
+          searchUrl = 'https://www.google.com/search?q=$encodedQuery';
+          break;
+        case 'bing':
+          searchUrl = 'https://www.bing.com/search?q=$encodedQuery';
+          break;
+        case 'duckduckgo':
+        case 'ddg':
+          searchUrl = 'https://duckduckgo.com/?q=$encodedQuery';
+          break;
+        default:
+          searchUrl = 'https://www.google.com/search?q=$encodedQuery';
+      }
+
+      final uri = Uri.parse(searchUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        return {
+          'output': 'Searching for: $query',
+          'exit_code': 0,
+        };
+      }
+
+      return {
+        'output': 'Could not open browser for search',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error searching web: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Save a note to local storage
+  Future<Map<String, dynamic>> _saveNote(Map<String, dynamic> args) async {
+    try {
+      final title = args['title'] as String?;
+      final content = args['content'] as String? ?? args['text'] as String?;
+
+      if (content == null || content.isEmpty) {
+        return {
+          'output': 'Missing required parameter: content',
+          'exit_code': 1,
+        };
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final notes = prefs.getStringList('agixt_notes') ?? [];
+      
+      final note = jsonEncode({
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'title': title ?? 'Note',
+        'content': content,
+        'created': DateTime.now().toIso8601String(),
+      });
+
+      notes.add(note);
+      await prefs.setStringList('agixt_notes', notes);
+
+      return {
+        'output': jsonEncode({
+          'success': true,
+          'message': 'Note saved',
+          'title': title ?? 'Note',
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error saving note: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
+  /// Get saved notes
+  Future<Map<String, dynamic>> _getNotes(Map<String, dynamic> args) async {
+    try {
+      final limit = args['limit'] as int? ?? 20;
+      final search = args['search'] as String?;
+
+      final prefs = await SharedPreferences.getInstance();
+      final notesJson = prefs.getStringList('agixt_notes') ?? [];
+      
+      List<Map<String, dynamic>> notes = notesJson
+          .map((n) => jsonDecode(n) as Map<String, dynamic>)
+          .toList();
+
+      // Filter by search if provided
+      if (search != null && search.isNotEmpty) {
+        final searchLower = search.toLowerCase();
+        notes = notes.where((n) {
+          final title = (n['title'] as String? ?? '').toLowerCase();
+          final content = (n['content'] as String? ?? '').toLowerCase();
+          return title.contains(searchLower) || content.contains(searchLower);
+        }).toList();
+      }
+
+      // Sort by created date (newest first)
+      notes.sort((a, b) {
+        final aCreated = a['created'] as String? ?? '';
+        final bCreated = b['created'] as String? ?? '';
+        return bCreated.compareTo(aCreated);
+      });
+
+      // Limit results
+      if (notes.length > limit) {
+        notes = notes.sublist(0, limit);
+      }
+
+      return {
+        'output': jsonEncode({
+          'notes': notes,
+          'count': notes.length,
+        }),
+        'exit_code': 0,
+      };
+    } catch (e) {
+      return {
+        'output': 'Error getting notes: $e',
+        'exit_code': 1,
+      };
+    }
+  }
+
   /// Check if a string looks like a phone number
   bool _isPhoneNumber(String input) {
     // Simple check - contains mostly digits and common phone chars
@@ -498,14 +1784,15 @@ class ClientCommandsService {
 }
 
 /// List of available client-side tools that can be sent to the AGiXT server
-/// This mirrors the CLI's cli_tools array format
+/// This mirrors the ESP32's client tools format for consistency
 class ClientSideTools {
   /// Get tool definitions filtered by granted permissions
   /// Only returns tools the user has actually granted access to
   static Future<List<Map<String, dynamic>>> getToolDefinitions() async {
     final List<Map<String, dynamic>> tools = [];
+    final bluetoothManager = BluetoothManager.singleton;
 
-    // Check permissions and add tools accordingly
+    // Check permissions and connection states
     final contactsGranted =
         await PermissionManager.isGroupGranted(AppPermission.contacts);
     final smsGranted =
@@ -514,8 +1801,84 @@ class ClientSideTools {
         await PermissionManager.isGroupGranted(AppPermission.location);
     final phoneGranted =
         await PermissionManager.isGroupGranted(AppPermission.phone);
+    final glassesConnected = bluetoothManager.isConnected;
 
-    // Contacts tools - requires contacts permission
+    // ============================================
+    // ESP32-style tools for glasses capabilities
+    // ============================================
+
+    // Tool: capture_image - Only available when glasses are connected
+    if (glassesConnected) {
+      tools.add({
+        'type': 'function',
+        'function': {
+          'name': 'capture_image',
+          'description': '''Capture an image using the smart glasses camera.
+
+Use this for visual tasks, taking pictures, or to see what the user is looking at.
+The image will be captured from the Even Realities G1 glasses camera.
+Always use this tool when you need to see something or verify visual state.''',
+          'parameters': {
+            'type': 'object',
+            'properties': {
+              'prompt': {
+                'type': 'string',
+                'description':
+                    'What to analyze in the captured image. Be specific about what you want to observe.',
+              },
+            },
+            'required': ['prompt'],
+          },
+        },
+      });
+
+      // Tool: display_on_glasses
+      tools.add({
+        'type': 'function',
+        'function': {
+          'name': 'display_on_glasses',
+          'description': '''Display a message on the user's smart glasses.
+
+Use this to show information, confirmations, or status updates on the glasses display.''',
+          'parameters': {
+            'type': 'object',
+            'properties': {
+              'message': {
+                'type': 'string',
+                'description': 'The message to display on the glasses',
+              },
+              'duration': {
+                'type': 'integer',
+                'description': 'How long to display the message in milliseconds (default: 5000)',
+              },
+            },
+            'required': ['message'],
+          },
+        },
+      });
+    }
+
+    // Tool: get_device_capabilities - Always available
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'get_device_capabilities',
+        'description': '''Get information about the mobile device and connected accessories.
+
+Returns details about the device, connected glasses, and available tool capabilities.
+Use this to understand what features are available before attempting other operations.''',
+        'parameters': {
+          'type': 'object',
+          'properties': {},
+          'required': [],
+        },
+      },
+    });
+
+    // ============================================
+    // Contact tools - require contacts permission
+    // ============================================
+
     if (contactsGranted) {
       tools.add({
         'type': 'function',
@@ -560,7 +1923,10 @@ Use this to find a specific contact before sending them a message or calling the
       });
     }
 
-    // SMS tool - requires SMS permission (and optionally contacts for name resolution)
+    // ============================================
+    // SMS tool - requires SMS permission
+    // ============================================
+
     if (smsGranted) {
       tools.add({
         'type': 'function',
@@ -589,7 +1955,10 @@ or a contact name (which will be resolved to their phone number).''',
       });
     }
 
-    // Location tool - requires location permission
+    // ============================================
+    // Location tools - require location permission
+    // ============================================
+
     if (locationGranted) {
       tools.add({
         'type': 'function',
@@ -607,7 +1976,6 @@ Use this when the user asks where they are or needs location-based assistance.''
         },
       });
 
-      // Maps/navigation doesn't require special permission, but location helps
       tools.add({
         'type': 'function',
         'function': {
@@ -646,7 +2014,10 @@ Can navigate to an address, place name, or specific coordinates.''',
       });
     }
 
+    // ============================================
     // Phone call tool - requires phone permission
+    // ============================================
+
     if (phoneGranted) {
       tools.add({
         'type': 'function',
@@ -670,7 +2041,10 @@ Can call a phone number directly or find a contact by name and call them.''',
       });
     }
 
-    // These tools don't require special permissions
+    // ============================================
+    // Utility tools - no special permissions
+    // ============================================
+
     tools.add({
       'type': 'function',
       'function': {
@@ -703,8 +2077,486 @@ Can call a phone number directly or find a contact by name and call them.''',
       },
     });
 
+    // ============================================
+    // Calendar tools - require calendar permission
+    // ============================================
+
+    final calendarGranted = await PermissionManager.isGroupGranted(AppPermission.calendar);
+    
+    if (calendarGranted) {
+      tools.add({
+        'type': 'function',
+        'function': {
+          'name': 'get_calendar_events',
+          'description': '''Get calendar events from the user's device.
+
+Returns upcoming events with title, time, location, and description.''',
+          'parameters': {
+            'type': 'object',
+            'properties': {
+              'days_ahead': {
+                'type': 'integer',
+                'description': 'Number of days ahead to fetch events. Default: 7',
+              },
+              'days_before': {
+                'type': 'integer',
+                'description': 'Number of days before today to include. Default: 0',
+              },
+              'calendar_id': {
+                'type': 'string',
+                'description': 'Specific calendar ID to query (optional)',
+              },
+            },
+            'required': [],
+          },
+        },
+      });
+
+      tools.add({
+        'type': 'function',
+        'function': {
+          'name': 'create_calendar_event',
+          'description': '''Create a new calendar event.
+
+Schedule meetings, reminders, or appointments on the user's calendar.''',
+          'parameters': {
+            'type': 'object',
+            'properties': {
+              'title': {
+                'type': 'string',
+                'description': 'Event title',
+              },
+              'start': {
+                'type': 'string',
+                'description': 'Start time in ISO 8601 format (e.g., 2024-01-15T10:00:00)',
+              },
+              'end': {
+                'type': 'string',
+                'description': 'End time in ISO 8601 format (optional, defaults to 1 hour after start)',
+              },
+              'description': {
+                'type': 'string',
+                'description': 'Event description or notes',
+              },
+              'location': {
+                'type': 'string',
+                'description': 'Event location',
+              },
+              'all_day': {
+                'type': 'boolean',
+                'description': 'Whether this is an all-day event',
+              },
+            },
+            'required': ['title', 'start'],
+          },
+        },
+      });
+
+      tools.add({
+        'type': 'function',
+        'function': {
+          'name': 'get_calendars',
+          'description': 'List all calendars available on the device.',
+          'parameters': {
+            'type': 'object',
+            'properties': {},
+            'required': [],
+          },
+        },
+      });
+    }
+
+    // ============================================
+    // Email tool - always available (uses mailto:)
+    // ============================================
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_send_email',
+        'description': '''Compose and send an email from the mobile device.
+
+Opens the email app with recipient, subject, and body pre-filled.
+Can use a contact name instead of email address.''',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'to': {
+              'type': 'string',
+              'description': 'Email address or contact name',
+            },
+            'subject': {
+              'type': 'string',
+              'description': 'Email subject line',
+            },
+            'body': {
+              'type': 'string',
+              'description': 'Email body content',
+            },
+            'cc': {
+              'type': 'string',
+              'description': 'CC recipients (comma-separated)',
+            },
+            'bcc': {
+              'type': 'string',
+              'description': 'BCC recipients (comma-separated)',
+            },
+          },
+          'required': ['to'],
+        },
+      },
+    });
+
+    // ============================================
+    // File operations - within app sandbox (prefixed with mobile_)
+    // ============================================
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_read_file',
+        'description': '''Read content from a file in mobile app storage.
+
+Read text files, notes, or data saved by the AI assistant.''',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'path': {
+              'type': 'string',
+              'description': 'File path (relative to app documents)',
+            },
+            'max_bytes': {
+              'type': 'integer',
+              'description': 'Maximum bytes to read. Default: 100KB',
+            },
+          },
+          'required': ['path'],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_write_file',
+        'description': '''Write content to a file in mobile app storage.
+
+Save text, notes, or data for later retrieval.''',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'path': {
+              'type': 'string',
+              'description': 'File path (relative to app documents)',
+            },
+            'content': {
+              'type': 'string',
+              'description': 'Content to write',
+            },
+            'append': {
+              'type': 'boolean',
+              'description': 'Append to existing file instead of overwriting. Default: false',
+            },
+          },
+          'required': ['path', 'content'],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_list_files',
+        'description': 'List files in mobile app storage directory.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'path': {
+              'type': 'string',
+              'description': 'Directory path (empty for root)',
+            },
+            'recursive': {
+              'type': 'boolean',
+              'description': 'Include subdirectories. Default: false',
+            },
+          },
+          'required': [],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_delete_file',
+        'description': 'Delete a file from mobile app storage.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'path': {
+              'type': 'string',
+              'description': 'File path to delete',
+            },
+          },
+          'required': ['path'],
+        },
+      },
+    });
+
+    // ============================================
+    // Clipboard tools - device clipboard (prefixed with mobile_)
+    // ============================================
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_get_clipboard',
+        'description': 'Get the current text content from the mobile device clipboard.',
+        'parameters': {
+          'type': 'object',
+          'properties': {},
+          'required': [],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_set_clipboard',
+        'description': 'Copy text to the mobile device clipboard.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'text': {
+              'type': 'string',
+              'description': 'Text to copy to clipboard',
+            },
+          },
+          'required': ['text'],
+        },
+      },
+    });
+
+    // ============================================
+    // App control tools - always available
+    // ============================================
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'open_app',
+        'description': '''Open an app on the device.
+
+Supports common apps: camera, calculator, calendar, spotify, youtube, etc.''',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'app': {
+              'type': 'string',
+              'description': 'App name (e.g., camera, calculator, spotify)',
+            },
+            'package': {
+              'type': 'string',
+              'description': 'Android package name (optional, for specific apps)',
+            },
+          },
+          'required': ['app'],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'open_settings',
+        'description': '''Open device settings.
+
+Can open specific settings panels like WiFi, Bluetooth, Display, etc.''',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'type': {
+              'type': 'string',
+              'description': 'Settings type: main, wifi, bluetooth, location, display, sound, battery, apps, notification, security, accessibility',
+              'enum': ['main', 'wifi', 'bluetooth', 'location', 'display', 'sound', 'battery', 'apps', 'notification', 'security', 'accessibility'],
+            },
+          },
+          'required': [],
+        },
+      },
+    });
+
+    // ============================================
+    // Alarm and Timer tools - always available
+    // ============================================
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'set_alarm',
+        'description': 'Set an alarm on the device clock app.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'hour': {
+              'type': 'integer',
+              'description': 'Hour (0-23)',
+            },
+            'minute': {
+              'type': 'integer',
+              'description': 'Minute (0-59). Default: 0',
+            },
+            'message': {
+              'type': 'string',
+              'description': 'Alarm label/message',
+            },
+          },
+          'required': ['hour'],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'set_timer',
+        'description': 'Set a countdown timer.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'hours': {
+              'type': 'integer',
+              'description': 'Hours. Default: 0',
+            },
+            'minutes': {
+              'type': 'integer',
+              'description': 'Minutes. Default: 0',
+            },
+            'seconds': {
+              'type': 'integer',
+              'description': 'Seconds. Default: 0',
+            },
+            'message': {
+              'type': 'string',
+              'description': 'Timer label',
+            },
+          },
+          'required': [],
+        },
+      },
+    });
+
+    // ============================================
+    // Search and utility tools (some prefixed with mobile_)
+    // ============================================
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_search_web',
+        'description': 'Search the web using a search engine from the mobile device.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'query': {
+              'type': 'string',
+              'description': 'Search query',
+            },
+            'engine': {
+              'type': 'string',
+              'description': 'Search engine: google, bing, duckduckgo. Default: google',
+              'enum': ['google', 'bing', 'duckduckgo'],
+            },
+          },
+          'required': ['query'],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'get_battery_status',
+        'description': 'Get the device battery level and charging status.',
+        'parameters': {
+          'type': 'object',
+          'properties': {},
+          'required': [],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'set_flashlight',
+        'description': 'Turn the device flashlight on or off.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'enable': {
+              'type': 'boolean',
+              'description': 'true to turn on, false to turn off',
+            },
+          },
+          'required': ['enable'],
+        },
+      },
+    });
+
+    // ============================================
+    // Notes/reminders - device local storage (prefixed with mobile_)
+    // ============================================
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_save_note',
+        'description': '''Save a note on the mobile device for later retrieval.
+
+Store quick notes, reminders, or information the user wants to remember.''',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'title': {
+              'type': 'string',
+              'description': 'Note title',
+            },
+            'content': {
+              'type': 'string',
+              'description': 'Note content',
+            },
+          },
+          'required': ['content'],
+        },
+      },
+    });
+
+    tools.add({
+      'type': 'function',
+      'function': {
+        'name': 'mobile_get_notes',
+        'description': 'Retrieve saved notes from the mobile device.',
+        'parameters': {
+          'type': 'object',
+          'properties': {
+            'limit': {
+              'type': 'integer',
+              'description': 'Maximum notes to return. Default: 20',
+            },
+            'search': {
+              'type': 'string',
+              'description': 'Search term to filter notes',
+            },
+          },
+          'required': [],
+        },
+      },
+    });
+
     debugPrint(
-        'ClientSideTools: Returning ${tools.length} tools based on permissions');
+        'ClientSideTools: Returning ${tools.length} tools based on permissions and connected devices');
     return tools;
   }
 }

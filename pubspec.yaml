@@ -80,6 +80,8 @@ dependencies:
   material_symbols_icons: ^4.2874.0
   # Flutter contacts for AI assistant to access device contacts
   flutter_contacts: ^1.1.9+2
+  # Text-to-speech for voice responses (watch, phone)
+  flutter_tts: ^4.0.2
 
 dependency_overrides:
   solana_wallet_adapter:
