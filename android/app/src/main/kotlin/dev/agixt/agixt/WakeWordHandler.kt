@@ -42,11 +42,11 @@ class WakeWordHandler(
                     setupSpeechRecognizer()
                     result.success(true)
                 }
-                "start" -> {
+                "startListening" -> {
                     startListening()
                     result.success(true)
                 }
-                "stop" -> {
+                "stopListening" -> {
                     stopListening()
                     result.success(true)
                 }

@@ -49,6 +49,9 @@ class TTSService {
   TTSMode get currentMode => _currentMode;
   String? get currentDevice => _currentDevice;
   TTSMode get preferredMode => _preferredMode;
+  double get rate => _rate;
+  double get pitch => _pitch;
+  double get volume => _volume;
   Stream<TTSState> get stateStream => _stateController.stream;
 
   /// Initialize the TTS service

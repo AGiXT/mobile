@@ -51,6 +51,19 @@ class WatchHandler(
                 "isConnected" -> {
                     result.success(isConnected)
                 }
+                "isWatchConnected" -> {
+                    // Return full connection info for Flutter
+                    scope.launch {
+                        checkWatchConnection()
+                        withContext(Dispatchers.Main) {
+                            result.success(mapOf(
+                                "connected" to isConnected,
+                                "watchId" to connectedNodeId,
+                                "watchName" to connectedNodeName
+                            ))
+                        }
+                    }
+                }
                 "getConnectedWatchName" -> {
                     result.success(connectedNodeName)
                 }

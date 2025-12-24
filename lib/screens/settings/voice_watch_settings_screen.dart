@@ -30,22 +30,41 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
   double _ttsRate = 1.0;
   double _ttsPitch = 1.0;
   double _ttsVolume = 1.0;
+  bool _isLoading = true;
+  bool _wakeWordAvailable = true;
 
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    _initializeAndLoadSettings();
   }
 
-  Future<void> _loadSettings() async {
-    setState(() {
-      _watchEnabled = _watchService.isEnabled;
-      _watchConnected = _watchService.isConnected;
-      _wakeWordEnabled = _wakeWordService.isEnabled;
-      _wakeWord = _wakeWordService.wakeWord;
-      _wakeWordSensitivity = _wakeWordService.sensitivity;
-      _ttsMode = _ttsService.preferredMode;
-    });
+  Future<void> _initializeAndLoadSettings() async {
+    // Ensure services are initialized before loading settings
+    try {
+      await _wakeWordService.initialize();
+      await _watchService.initialize();
+      await _ttsService.initialize();
+    } catch (e) {
+      debugPrint('VoiceWatchSettings: Error initializing services: $e');
+    }
+
+    // Load settings after initialization
+    if (mounted) {
+      setState(() {
+        _watchEnabled = _watchService.isEnabled;
+        _watchConnected = _watchService.isConnected;
+        _wakeWordEnabled = _wakeWordService.isEnabled;
+        _wakeWordAvailable = _wakeWordService.isInitialized;
+        _wakeWord = _wakeWordService.wakeWord;
+        _wakeWordSensitivity = _wakeWordService.sensitivity;
+        _ttsMode = _ttsService.preferredMode;
+        _ttsRate = _ttsService.rate;
+        _ttsPitch = _ttsService.pitch;
+        _ttsVolume = _ttsService.volume;
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -54,7 +73,9 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Voice & Watch Settings'), elevation: 0),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -65,17 +86,32 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
               theme,
               child: Column(
                 children: [
-                  _buildSwitchTile(
-                    theme,
-                    title: 'Enable Wake Word',
-                    subtitle: 'Say "$_wakeWord" to start voice input',
+                  SwitchListTile(
+                    title: const Text('Enable Wake Word'),
+                    subtitle: Text(
+                      _wakeWordAvailable
+                          ? 'Say "$_wakeWord" to start voice input'
+                          : 'Wake word detection not available on this device',
+                    ),
                     value: _wakeWordEnabled,
-                    onChanged: (value) async {
-                      await _wakeWordService.setEnabled(value);
-                      setState(() => _wakeWordEnabled = value);
-                    },
+                    onChanged: _wakeWordAvailable
+                        ? (value) async {
+                            await _wakeWordService.setEnabled(value);
+                            setState(() => _wakeWordEnabled = value);
+                          }
+                        : null,
                   ),
-                  if (_wakeWordEnabled) ...[
+                  if (!_wakeWordAvailable) ...[
+                    const Divider(height: 1),
+                    _buildInfoTile(
+                      theme,
+                      icon: Icons.warning_amber_rounded,
+                      text:
+                          'Wake word requires native speech recognition support. This may need additional setup.',
+                      color: theme.colorScheme.error,
+                    ),
+                  ],
+                  if (_wakeWordEnabled && _wakeWordAvailable) ...[
                     const Divider(height: 1),
                     _buildSliderTile(
                       theme,

@@ -67,6 +67,24 @@ class WakeWordService {
       onError: _handleEventError,
     );
 
+    // Check if speech recognition is available first
+    try {
+      final isAvailable = await _wakeWordChannel.invokeMethod('isAvailable');
+      if (isAvailable != true) {
+        debugPrint('WakeWordService: Speech recognition not available on this device');
+        _isInitialized = false;
+        return;
+      }
+    } on PlatformException catch (e) {
+      debugPrint('WakeWordService: Error checking availability: $e');
+      _isInitialized = false;
+      return;
+    } on MissingPluginException {
+      debugPrint('WakeWordService: Native handler not available');
+      _isInitialized = false;
+      return;
+    }
+
     // Initialize native wake word detector
     try {
       final result = await _wakeWordChannel.invokeMethod('initialize', {

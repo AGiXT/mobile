@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -73,6 +72,15 @@ class WatchService {
       _handleWatchEvent,
       onError: _handleEventError,
     );
+
+    // Initialize native watch handler
+    try {
+      await _watchChannel.invokeMethod('initialize');
+    } on PlatformException catch (e) {
+      debugPrint('WatchService: Error initializing native handler: $e');
+    } on MissingPluginException {
+      debugPrint('WatchService: Native watch handler not available');
+    }
 
     // Check if a watch is already connected
     await _checkWatchConnection();
