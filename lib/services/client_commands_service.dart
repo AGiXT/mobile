@@ -31,8 +31,9 @@ class ClientCommandsService {
   final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
 
   // Method channel for glasses camera access
-  static const MethodChannel _cameraChannel =
-      MethodChannel('dev.agixt.agixt/glasses_camera');
+  static const MethodChannel _cameraChannel = MethodChannel(
+    'dev.agixt.agixt/glasses_camera',
+  );
 
   StreamSubscription<RemoteCommandRequest>? _commandSubscription;
   bool _isListening = false;
@@ -182,7 +183,8 @@ class ClientCommandsService {
 
       default:
         return {
-          'output': 'Unknown command: $toolName. Use get_device_capabilities to see available commands.',
+          'output':
+              'Unknown command: $toolName. Use get_device_capabilities to see available commands.',
           'exit_code': 1,
         };
     }
@@ -258,7 +260,8 @@ class ClientCommandsService {
         return {
           'output': jsonEncode({
             'error': 'Not implemented',
-            'message': 'Glasses camera capture not yet implemented on this platform',
+            'message':
+                'Glasses camera capture not yet implemented on this platform',
           }),
           'exit_code': 1,
         };
@@ -277,7 +280,8 @@ class ClientCommandsService {
   /// Get device capabilities (ESP32-style tool)
   /// Returns what features are available on this mobile device
   Future<Map<String, dynamic>> _getDeviceCapabilities(
-      Map<String, dynamic> args) async {
+    Map<String, dynamic> args,
+  ) async {
     try {
       final deviceInfo = DeviceInfoPlugin();
       Map<String, dynamic> capabilities = {
@@ -304,14 +308,18 @@ class ClientCommandsService {
       capabilities['glasses_type'] = 'Even Realities G1';
 
       // Get available tools based on permissions
-      final contactsGranted =
-          await PermissionManager.isGroupGranted(AppPermission.contacts);
-      final smsGranted =
-          await PermissionManager.isGroupGranted(AppPermission.sms);
-      final locationGranted =
-          await PermissionManager.isGroupGranted(AppPermission.location);
-      final phoneGranted =
-          await PermissionManager.isGroupGranted(AppPermission.phone);
+      final contactsGranted = await PermissionManager.isGroupGranted(
+        AppPermission.contacts,
+      );
+      final smsGranted = await PermissionManager.isGroupGranted(
+        AppPermission.sms,
+      );
+      final locationGranted = await PermissionManager.isGroupGranted(
+        AppPermission.location,
+      );
+      final phoneGranted = await PermissionManager.isGroupGranted(
+        AppPermission.phone,
+      );
 
       capabilities['available_tools'] = {
         'capture_image': _bluetoothManager.isConnected,
@@ -327,10 +335,7 @@ class ClientCommandsService {
         'get_device_info': true,
       };
 
-      return {
-        'output': jsonEncode(capabilities),
-        'exit_code': 0,
-      };
+      return {'output': jsonEncode(capabilities), 'exit_code': 0};
     } catch (e) {
       return {
         'output': 'Error getting device capabilities: $e',
@@ -341,7 +346,8 @@ class ClientCommandsService {
 
   /// Display text on the connected glasses
   Future<Map<String, dynamic>> _displayOnGlasses(
-      Map<String, dynamic> args) async {
+    Map<String, dynamic> args,
+  ) async {
     try {
       final message = args['message'] as String? ?? args['text'] as String?;
       final durationMs = args['duration'] as int? ?? 5000;
@@ -354,10 +360,7 @@ class ClientCommandsService {
       }
 
       if (!_bluetoothManager.isConnected) {
-        return {
-          'output': 'Glasses not connected',
-          'exit_code': 1,
-        };
+        return {'output': 'Glasses not connected', 'exit_code': 1};
       }
 
       await _bluetoothManager.sendAIResponse(
@@ -370,10 +373,7 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error displaying on glasses: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error displaying on glasses: $e', 'exit_code': 1};
     }
   }
 
@@ -390,13 +390,14 @@ class ClientCommandsService {
         };
       }
 
-      final contactList = contacts.map((c) {
-        return {
-          'name': c.displayName,
-          'phones': c.phones,
-          'emails': c.emails,
-        };
-      }).toList();
+      final contactList =
+          contacts.map((c) {
+            return {
+              'name': c.displayName,
+              'phones': c.phones,
+              'emails': c.emails,
+            };
+          }).toList();
 
       return {
         'output': jsonEncode({
@@ -406,23 +407,18 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error getting contacts: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting contacts: $e', 'exit_code': 1};
     }
   }
 
   /// Search contacts by name
   Future<Map<String, dynamic>> _searchContacts(
-      Map<String, dynamic> args) async {
+    Map<String, dynamic> args,
+  ) async {
     try {
       final query = args['query'] as String?;
       if (query == null || query.isEmpty) {
-        return {
-          'output': 'Missing required parameter: query',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: query', 'exit_code': 1};
       }
 
       final contacts = await _contactsService.searchContacts(query);
@@ -434,13 +430,14 @@ class ClientCommandsService {
         };
       }
 
-      final contactList = contacts.map((c) {
-        return {
-          'name': c.displayName,
-          'phones': c.phones,
-          'emails': c.emails,
-        };
-      }).toList();
+      final contactList =
+          contacts.map((c) {
+            return {
+              'name': c.displayName,
+              'phones': c.phones,
+              'emails': c.emails,
+            };
+          }).toList();
 
       return {
         'output': jsonEncode({
@@ -451,20 +448,19 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error searching contacts: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error searching contacts: $e', 'exit_code': 1};
     }
   }
 
   /// Send an SMS message
   Future<Map<String, dynamic>> _sendSms(Map<String, dynamic> args) async {
     try {
-      final phoneNumber = args['phone_number'] as String? ??
+      final phoneNumber =
+          args['phone_number'] as String? ??
           args['to'] as String? ??
           args['recipient'] as String?;
-      final message = args['message'] as String? ??
+      final message =
+          args['message'] as String? ??
           args['body'] as String? ??
           args['text'] as String?;
 
@@ -490,7 +486,8 @@ class ClientCommandsService {
         if (contacts.isNotEmpty && contacts.first.phones.isNotEmpty) {
           resolvedNumber = contacts.first.phones.first;
           debugPrint(
-              'ClientCommands: Resolved "$phoneNumber" to "$resolvedNumber"');
+            'ClientCommands: Resolved "$phoneNumber" to "$resolvedNumber"',
+          );
         } else {
           return {
             'output':
@@ -517,10 +514,7 @@ class ClientCommandsService {
         };
       }
     } catch (e) {
-      return {
-        'output': 'Error sending SMS: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error sending SMS: $e', 'exit_code': 1};
     }
   }
 
@@ -566,17 +560,15 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error getting location: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting location: $e', 'exit_code': 1};
     }
   }
 
   /// Open Google Maps and optionally navigate to a destination
   Future<Map<String, dynamic>> _openMaps(Map<String, dynamic> args) async {
     try {
-      final destination = args['destination'] as String? ??
+      final destination =
+          args['destination'] as String? ??
           args['address'] as String? ??
           args['location'] as String?;
       final lat = args['latitude'] as double?;
@@ -590,11 +582,13 @@ class ClientCommandsService {
         // Navigate to address/place name
         final encodedDest = Uri.encodeComponent(destination);
         uri = Uri.parse(
-            'https://www.google.com/maps/dir/?api=1&destination=$encodedDest&travelmode=$mode');
+          'https://www.google.com/maps/dir/?api=1&destination=$encodedDest&travelmode=$mode',
+        );
       } else if (lat != null && lng != null) {
         // Navigate to coordinates
         uri = Uri.parse(
-            'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=$mode');
+          'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng&travelmode=$mode',
+        );
       } else {
         return {
           'output':
@@ -617,17 +611,15 @@ class ClientCommandsService {
         };
       }
     } catch (e) {
-      return {
-        'output': 'Error opening maps: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error opening maps: $e', 'exit_code': 1};
     }
   }
 
   /// Make a phone call
   Future<Map<String, dynamic>> _makePhoneCall(Map<String, dynamic> args) async {
     try {
-      final phoneNumber = args['phone_number'] as String? ??
+      final phoneNumber =
+          args['phone_number'] as String? ??
           args['number'] as String? ??
           args['to'] as String?;
 
@@ -656,21 +648,12 @@ class ClientCommandsService {
       final uri = Uri.parse('tel:$resolvedNumber');
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri);
-        return {
-          'output': 'Initiating call to $resolvedNumber',
-          'exit_code': 0,
-        };
+        return {'output': 'Initiating call to $resolvedNumber', 'exit_code': 0};
       } else {
-        return {
-          'output': 'Could not initiate phone call',
-          'exit_code': 1,
-        };
+        return {'output': 'Could not initiate phone call', 'exit_code': 1};
       }
     } catch (e) {
-      return {
-        'output': 'Error making phone call: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error making phone call: $e', 'exit_code': 1};
     }
   }
 
@@ -679,10 +662,7 @@ class ClientCommandsService {
     try {
       final urlStr = args['url'] as String?;
       if (urlStr == null || urlStr.isEmpty) {
-        return {
-          'output': 'Missing required parameter: url',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: url', 'exit_code': 1};
       }
 
       Uri uri;
@@ -692,29 +672,17 @@ class ClientCommandsService {
           uri = Uri.parse('https://$urlStr');
         }
       } catch (e) {
-        return {
-          'output': 'Invalid URL: $urlStr',
-          'exit_code': 1,
-        };
+        return {'output': 'Invalid URL: $urlStr', 'exit_code': 1};
       }
 
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return {
-          'output': 'Opening URL: $uri',
-          'exit_code': 0,
-        };
+        return {'output': 'Opening URL: $uri', 'exit_code': 0};
       } else {
-        return {
-          'output': 'Could not open URL: $uri',
-          'exit_code': 1,
-        };
+        return {'output': 'Could not open URL: $uri', 'exit_code': 1};
       }
     } catch (e) {
-      return {
-        'output': 'Error opening URL: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error opening URL: $e', 'exit_code': 1};
     }
   }
 
@@ -741,15 +709,9 @@ class ClientCommandsService {
         },
       };
 
-      return {
-        'output': jsonEncode(info),
-        'exit_code': 0,
-      };
+      return {'output': jsonEncode(info), 'exit_code': 0};
     } catch (e) {
-      return {
-        'output': 'Error getting device info: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting device info: $e', 'exit_code': 1};
     }
   }
 
@@ -777,7 +739,8 @@ class ClientCommandsService {
           resolvedEmail = contacts.first.emails.first;
         } else {
           return {
-            'output': 'Could not find email for "$to". Please provide a valid email address.',
+            'output':
+                'Could not find email for "$to". Please provide a valid email address.',
             'exit_code': 1,
           };
         }
@@ -802,46 +765,36 @@ class ClientCommandsService {
         };
       }
 
-      return {
-        'output': 'Could not open email app',
-        'exit_code': 1,
-      };
+      return {'output': 'Could not open email app', 'exit_code': 1};
     } catch (e) {
-      return {
-        'output': 'Error sending email: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error sending email: $e', 'exit_code': 1};
     }
   }
 
   /// Get calendar events
-  Future<Map<String, dynamic>> _getCalendarEvents(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getCalendarEvents(
+    Map<String, dynamic> args,
+  ) async {
     try {
       final daysAhead = args['days_ahead'] as int? ?? 7;
       final daysBefore = args['days_before'] as int? ?? 0;
       final calendarId = args['calendar_id'] as String?;
 
       final plugin = DeviceCalendarPlugin();
-      
+
       // Get permission
       var permissionsGranted = await plugin.hasPermissions();
       if (permissionsGranted.isSuccess && !permissionsGranted.data!) {
         permissionsGranted = await plugin.requestPermissions();
         if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
-          return {
-            'output': 'Calendar permission not granted',
-            'exit_code': 1,
-          };
+          return {'output': 'Calendar permission not granted', 'exit_code': 1};
         }
       }
 
       // Get calendars
       final calendarsResult = await plugin.retrieveCalendars();
       if (!calendarsResult.isSuccess || calendarsResult.data == null) {
-        return {
-          'output': 'Could not retrieve calendars',
-          'exit_code': 1,
-        };
+        return {'output': 'Could not retrieve calendars', 'exit_code': 1};
       }
 
       final now = DateTime.now();
@@ -855,10 +808,7 @@ class ClientCommandsService {
 
         final eventsResult = await plugin.retrieveEvents(
           calendar.id,
-          RetrieveEventsParams(
-            startDate: startDate,
-            endDate: endDate,
-          ),
+          RetrieveEventsParams(startDate: startDate, endDate: endDate),
         );
 
         if (eventsResult.isSuccess && eventsResult.data != null) {
@@ -898,15 +848,14 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error getting calendar events: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting calendar events: $e', 'exit_code': 1};
     }
   }
 
   /// Create a calendar event
-  Future<Map<String, dynamic>> _createCalendarEvent(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _createCalendarEvent(
+    Map<String, dynamic> args,
+  ) async {
     try {
       final title = args['title'] as String?;
       final description = args['description'] as String? ?? '';
@@ -917,10 +866,7 @@ class ClientCommandsService {
       final calendarId = args['calendar_id'] as String?;
 
       if (title == null || title.isEmpty) {
-        return {
-          'output': 'Missing required parameter: title',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: title', 'exit_code': 1};
       }
 
       if (startStr == null) {
@@ -931,26 +877,22 @@ class ClientCommandsService {
       }
 
       final plugin = DeviceCalendarPlugin();
-      
+
       // Get permission
       var permissionsGranted = await plugin.hasPermissions();
       if (permissionsGranted.isSuccess && !permissionsGranted.data!) {
         permissionsGranted = await plugin.requestPermissions();
         if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
-          return {
-            'output': 'Calendar permission not granted',
-            'exit_code': 1,
-          };
+          return {'output': 'Calendar permission not granted', 'exit_code': 1};
         }
       }
 
       // Get calendars
       final calendarsResult = await plugin.retrieveCalendars();
-      if (!calendarsResult.isSuccess || calendarsResult.data == null || calendarsResult.data!.isEmpty) {
-        return {
-          'output': 'No calendars available',
-          'exit_code': 1,
-        };
+      if (!calendarsResult.isSuccess ||
+          calendarsResult.data == null ||
+          calendarsResult.data!.isEmpty) {
+        return {'output': 'No calendars available', 'exit_code': 1};
       }
 
       // Select calendar
@@ -967,7 +909,10 @@ class ClientCommandsService {
       }
 
       final start = DateTime.parse(startStr);
-      final end = endStr != null ? DateTime.parse(endStr) : start.add(const Duration(hours: 1));
+      final end =
+          endStr != null
+              ? DateTime.parse(endStr)
+              : start.add(const Duration(hours: 1));
 
       final event = Event(
         targetCalendarId,
@@ -980,7 +925,7 @@ class ClientCommandsService {
       );
 
       final result = await plugin.createOrUpdateEvent(event);
-      
+
       if (result?.isSuccess == true && result?.data != null) {
         return {
           'output': jsonEncode({
@@ -994,15 +939,9 @@ class ClientCommandsService {
         };
       }
 
-      return {
-        'output': 'Failed to create calendar event',
-        'exit_code': 1,
-      };
+      return {'output': 'Failed to create calendar event', 'exit_code': 1};
     } catch (e) {
-      return {
-        'output': 'Error creating calendar event: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error creating calendar event: $e', 'exit_code': 1};
     }
   }
 
@@ -1010,33 +949,32 @@ class ClientCommandsService {
   Future<Map<String, dynamic>> _getCalendars(Map<String, dynamic> args) async {
     try {
       final plugin = DeviceCalendarPlugin();
-      
+
       var permissionsGranted = await plugin.hasPermissions();
       if (permissionsGranted.isSuccess && !permissionsGranted.data!) {
         permissionsGranted = await plugin.requestPermissions();
         if (!permissionsGranted.isSuccess || !permissionsGranted.data!) {
-          return {
-            'output': 'Calendar permission not granted',
-            'exit_code': 1,
-          };
+          return {'output': 'Calendar permission not granted', 'exit_code': 1};
         }
       }
 
       final calendarsResult = await plugin.retrieveCalendars();
       if (!calendarsResult.isSuccess || calendarsResult.data == null) {
-        return {
-          'output': 'Could not retrieve calendars',
-          'exit_code': 1,
-        };
+        return {'output': 'Could not retrieve calendars', 'exit_code': 1};
       }
 
-      final calendars = calendarsResult.data!.map((c) => {
-        'id': c.id,
-        'name': c.name,
-        'account_name': c.accountName,
-        'account_type': c.accountType,
-        'is_read_only': c.isReadOnly,
-      }).toList();
+      final calendars =
+          calendarsResult.data!
+              .map(
+                (c) => {
+                  'id': c.id,
+                  'name': c.name,
+                  'account_name': c.accountName,
+                  'account_type': c.accountType,
+                  'is_read_only': c.isReadOnly,
+                },
+              )
+              .toList();
 
       return {
         'output': jsonEncode({
@@ -1046,10 +984,7 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error getting calendars: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting calendars: $e', 'exit_code': 1};
     }
   }
 
@@ -1060,10 +995,7 @@ class ClientCommandsService {
       final maxBytes = args['max_bytes'] as int? ?? 1024 * 100; // 100KB default
 
       if (filePath == null || filePath.isEmpty) {
-        return {
-          'output': 'Missing required parameter: path',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: path', 'exit_code': 1};
       }
 
       // Resolve path within app's allowed directories
@@ -1072,8 +1004,8 @@ class ClientCommandsService {
         // Absolute path - check if within allowed directories
         final appDir = await getApplicationDocumentsDirectory();
         final externalDir = await getExternalStorageDirectory();
-        
-        if (!filePath.startsWith(appDir.path) && 
+
+        if (!filePath.startsWith(appDir.path) &&
             (externalDir == null || !filePath.startsWith(externalDir.path))) {
           return {
             'output': 'Access denied: Path outside allowed directories',
@@ -1089,10 +1021,7 @@ class ClientCommandsService {
 
       final file = File(resolvedPath);
       if (!await file.exists()) {
-        return {
-          'output': 'File not found: $filePath',
-          'exit_code': 1,
-        };
+        return {'output': 'File not found: $filePath', 'exit_code': 1};
       }
 
       final stat = await file.stat();
@@ -1119,10 +1048,7 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error reading file: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error reading file: $e', 'exit_code': 1};
     }
   }
 
@@ -1134,10 +1060,7 @@ class ClientCommandsService {
       final append = args['append'] as bool? ?? false;
 
       if (filePath == null || filePath.isEmpty) {
-        return {
-          'output': 'Missing required parameter: path',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: path', 'exit_code': 1};
       }
 
       if (content == null) {
@@ -1149,9 +1072,8 @@ class ClientCommandsService {
 
       // Resolve to app documents directory
       final appDir = await getApplicationDocumentsDirectory();
-      final resolvedPath = filePath.startsWith('/') 
-          ? filePath 
-          : '${appDir.path}/$filePath';
+      final resolvedPath =
+          filePath.startsWith('/') ? filePath : '${appDir.path}/$filePath';
 
       // Ensure within allowed directories
       if (!resolvedPath.startsWith(appDir.path)) {
@@ -1181,10 +1103,7 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error writing file: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error writing file: $e', 'exit_code': 1};
     }
   }
 
@@ -1195,16 +1114,14 @@ class ClientCommandsService {
       final recursive = args['recursive'] as bool? ?? false;
 
       final appDir = await getApplicationDocumentsDirectory();
-      final resolvedPath = dirPath.isEmpty 
-          ? appDir.path 
-          : (dirPath.startsWith('/') ? dirPath : '${appDir.path}/$dirPath');
+      final resolvedPath =
+          dirPath.isEmpty
+              ? appDir.path
+              : (dirPath.startsWith('/') ? dirPath : '${appDir.path}/$dirPath');
 
       final dir = Directory(resolvedPath);
       if (!await dir.exists()) {
-        return {
-          'output': 'Directory not found: $dirPath',
-          'exit_code': 1,
-        };
+        return {'output': 'Directory not found: $dirPath', 'exit_code': 1};
       }
 
       final List<Map<String, dynamic>> files = [];
@@ -1228,10 +1145,7 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error listing files: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error listing files: $e', 'exit_code': 1};
     }
   }
 
@@ -1241,51 +1155,41 @@ class ClientCommandsService {
       final filePath = args['path'] as String?;
 
       if (filePath == null || filePath.isEmpty) {
-        return {
-          'output': 'Missing required parameter: path',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: path', 'exit_code': 1};
       }
 
       final appDir = await getApplicationDocumentsDirectory();
-      final resolvedPath = filePath.startsWith('/') 
-          ? filePath 
-          : '${appDir.path}/$filePath';
+      final resolvedPath =
+          filePath.startsWith('/') ? filePath : '${appDir.path}/$filePath';
 
       // Ensure within allowed directories
       if (!resolvedPath.startsWith(appDir.path)) {
         return {
-          'output': 'Access denied: Can only delete files in app documents directory',
+          'output':
+              'Access denied: Can only delete files in app documents directory',
           'exit_code': 1,
         };
       }
 
       final file = File(resolvedPath);
       if (!await file.exists()) {
-        return {
-          'output': 'File not found: $filePath',
-          'exit_code': 1,
-        };
+        return {'output': 'File not found: $filePath', 'exit_code': 1};
       }
 
       await file.delete();
       return {
-        'output': jsonEncode({
-          'success': true,
-          'deleted': filePath,
-        }),
+        'output': jsonEncode({'success': true, 'deleted': filePath}),
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error deleting file: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error deleting file: $e', 'exit_code': 1};
     }
   }
 
   /// Get storage information
-  Future<Map<String, dynamic>> _getStorageInfo(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getStorageInfo(
+    Map<String, dynamic> args,
+  ) async {
     try {
       final appDir = await getApplicationDocumentsDirectory();
       final cacheDir = await getTemporaryDirectory();
@@ -1300,10 +1204,7 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error getting storage info: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting storage info: $e', 'exit_code': 1};
     }
   }
 
@@ -1319,10 +1220,7 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error getting clipboard: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting clipboard: $e', 'exit_code': 1};
     }
   }
 
@@ -1332,25 +1230,16 @@ class ClientCommandsService {
       final text = args['text'] as String?;
 
       if (text == null) {
-        return {
-          'output': 'Missing required parameter: text',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: text', 'exit_code': 1};
       }
 
       await Clipboard.setData(ClipboardData(text: text));
       return {
-        'output': jsonEncode({
-          'success': true,
-          'copied_length': text.length,
-        }),
+        'output': jsonEncode({'success': true, 'copied_length': text.length}),
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error setting clipboard: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error setting clipboard: $e', 'exit_code': 1};
     }
   }
 
@@ -1388,7 +1277,7 @@ class ClientCommandsService {
 
       String? scheme;
       final appLower = appName?.toLowerCase() ?? '';
-      
+
       for (final entry in appSchemes.entries) {
         if (appLower.contains(entry.key)) {
           scheme = entry.value;
@@ -1400,10 +1289,7 @@ class ClientCommandsService {
         final uri = Uri.parse(scheme);
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
-          return {
-            'output': 'Opening $appName',
-            'exit_code': 0,
-          };
+          return {'output': 'Opening $appName', 'exit_code': 0};
         }
       }
 
@@ -1412,10 +1298,7 @@ class ClientCommandsService {
         final uri = Uri.parse('android-app://$packageName');
         if (await canLaunchUrl(uri)) {
           await launchUrl(uri, mode: LaunchMode.externalApplication);
-          return {
-            'output': 'Opening app: $packageName',
-            'exit_code': 0,
-          };
+          return {'output': 'Opening app: $packageName', 'exit_code': 0};
         }
       }
 
@@ -1424,10 +1307,7 @@ class ClientCommandsService {
         'exit_code': 1,
       };
     } catch (e) {
-      return {
-        'output': 'Error opening app: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error opening app: $e', 'exit_code': 1};
     }
   }
 
@@ -1450,37 +1330,28 @@ class ClientCommandsService {
         'accessibility': 'android.settings.ACCESSIBILITY_SETTINGS',
       };
 
-      final settingsUri = settingsUris[settingsType.toLowerCase()] ?? settingsUris['main']!;
-      final uri = Uri.parse('android-app://com.android.settings/#Intent;action=$settingsUri;end');
+      final settingsUri =
+          settingsUris[settingsType.toLowerCase()] ?? settingsUris['main']!;
+      final uri = Uri.parse(
+        'android-app://com.android.settings/#Intent;action=$settingsUri;end',
+      );
 
       // Fallback for settings
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return {
-          'output': 'Opening $settingsType settings',
-          'exit_code': 0,
-        };
+        return {'output': 'Opening $settingsType settings', 'exit_code': 0};
       }
 
       // Try simpler approach
       final simpleUri = Uri.parse('package:com.android.settings');
       if (await canLaunchUrl(simpleUri)) {
         await launchUrl(simpleUri, mode: LaunchMode.externalApplication);
-        return {
-          'output': 'Opening settings',
-          'exit_code': 0,
-        };
+        return {'output': 'Opening settings', 'exit_code': 0};
       }
 
-      return {
-        'output': 'Could not open settings',
-        'exit_code': 1,
-      };
+      return {'output': 'Could not open settings', 'exit_code': 1};
     } catch (e) {
-      return {
-        'output': 'Error opening settings: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error opening settings: $e', 'exit_code': 1};
     }
   }
 
@@ -1491,7 +1362,7 @@ class ClientCommandsService {
 
       // Method channel for flashlight control
       const channel = MethodChannel('dev.agixt.agixt/device_control');
-      
+
       try {
         await channel.invokeMethod('setFlashlight', {'enable': enable});
         return {
@@ -1505,38 +1376,29 @@ class ClientCommandsService {
         };
       }
     } catch (e) {
-      return {
-        'output': 'Error controlling flashlight: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error controlling flashlight: $e', 'exit_code': 1};
     }
   }
 
   /// Get battery status
-  Future<Map<String, dynamic>> _getBatteryStatus(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getBatteryStatus(
+    Map<String, dynamic> args,
+  ) async {
     try {
       const channel = MethodChannel('dev.agixt.agixt/device_control');
-      
+
       try {
         final result = await channel.invokeMethod('getBatteryStatus');
-        return {
-          'output': jsonEncode(result),
-          'exit_code': 0,
-        };
+        return {'output': jsonEncode(result), 'exit_code': 0};
       } on MissingPluginException {
         // Fallback to basic info
         return {
-          'output': jsonEncode({
-            'note': 'Battery status not available',
-          }),
+          'output': jsonEncode({'note': 'Battery status not available'}),
           'exit_code': 0,
         };
       }
     } catch (e) {
-      return {
-        'output': 'Error getting battery status: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting battery status: $e', 'exit_code': 1};
     }
   }
 
@@ -1548,24 +1410,24 @@ class ClientCommandsService {
       final message = args['message'] as String? ?? 'Alarm';
 
       if (hour == null) {
-        return {
-          'output': 'Missing required parameter: hour',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: hour', 'exit_code': 1};
       }
 
       // Use Android alarm intent
-      final uri = Uri.parse('android-app://com.google.android.deskclock/#Intent;'
-          'action=android.intent.action.SET_ALARM;'
-          'S.android.intent.extra.alarm.MESSAGE=$message;'
-          'i.android.intent.extra.alarm.HOUR=$hour;'
-          'i.android.intent.extra.alarm.MINUTES=$minute;'
-          'end');
+      final uri = Uri.parse(
+        'android-app://com.google.android.deskclock/#Intent;'
+        'action=android.intent.action.SET_ALARM;'
+        'S.android.intent.extra.alarm.MESSAGE=$message;'
+        'i.android.intent.extra.alarm.HOUR=$hour;'
+        'i.android.intent.extra.alarm.MINUTES=$minute;'
+        'end',
+      );
 
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
         return {
-          'output': 'Setting alarm for ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
+          'output':
+              'Setting alarm for ${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}',
           'exit_code': 0,
         };
       }
@@ -1575,10 +1437,7 @@ class ClientCommandsService {
         'exit_code': 1,
       };
     } catch (e) {
-      return {
-        'output': 'Error setting alarm: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error setting alarm: $e', 'exit_code': 1};
     }
   }
 
@@ -1599,11 +1458,13 @@ class ClientCommandsService {
       }
 
       // Use Android timer intent
-      final uri = Uri.parse('android-app://com.google.android.deskclock/#Intent;'
-          'action=android.intent.action.SET_TIMER;'
-          'S.android.intent.extra.alarm.MESSAGE=$message;'
-          'i.android.intent.extra.alarm.LENGTH=$totalSeconds;'
-          'end');
+      final uri = Uri.parse(
+        'android-app://com.google.android.deskclock/#Intent;'
+        'action=android.intent.action.SET_TIMER;'
+        'S.android.intent.extra.alarm.MESSAGE=$message;'
+        'i.android.intent.extra.alarm.LENGTH=$totalSeconds;'
+        'end',
+      );
 
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -1618,10 +1479,7 @@ class ClientCommandsService {
         'exit_code': 1,
       };
     } catch (e) {
-      return {
-        'output': 'Error setting timer: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error setting timer: $e', 'exit_code': 1};
     }
   }
 
@@ -1632,10 +1490,7 @@ class ClientCommandsService {
       final engine = args['engine'] as String? ?? 'google';
 
       if (query == null || query.isEmpty) {
-        return {
-          'output': 'Missing required parameter: query',
-          'exit_code': 1,
-        };
+        return {'output': 'Missing required parameter: query', 'exit_code': 1};
       }
 
       final encodedQuery = Uri.encodeComponent(query);
@@ -1659,21 +1514,12 @@ class ClientCommandsService {
       final uri = Uri.parse(searchUrl);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
-        return {
-          'output': 'Searching for: $query',
-          'exit_code': 0,
-        };
+        return {'output': 'Searching for: $query', 'exit_code': 0};
       }
 
-      return {
-        'output': 'Could not open browser for search',
-        'exit_code': 1,
-      };
+      return {'output': 'Could not open browser for search', 'exit_code': 1};
     } catch (e) {
-      return {
-        'output': 'Error searching web: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error searching web: $e', 'exit_code': 1};
     }
   }
 
@@ -1692,7 +1538,7 @@ class ClientCommandsService {
 
       final prefs = await SharedPreferences.getInstance();
       final notes = prefs.getStringList('agixt_notes') ?? [];
-      
+
       final note = jsonEncode({
         'id': DateTime.now().millisecondsSinceEpoch.toString(),
         'title': title ?? 'Note',
@@ -1712,10 +1558,7 @@ class ClientCommandsService {
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error saving note: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error saving note: $e', 'exit_code': 1};
     }
   }
 
@@ -1727,19 +1570,20 @@ class ClientCommandsService {
 
       final prefs = await SharedPreferences.getInstance();
       final notesJson = prefs.getStringList('agixt_notes') ?? [];
-      
-      List<Map<String, dynamic>> notes = notesJson
-          .map((n) => jsonDecode(n) as Map<String, dynamic>)
-          .toList();
+
+      List<Map<String, dynamic>> notes =
+          notesJson.map((n) => jsonDecode(n) as Map<String, dynamic>).toList();
 
       // Filter by search if provided
       if (search != null && search.isNotEmpty) {
         final searchLower = search.toLowerCase();
-        notes = notes.where((n) {
-          final title = (n['title'] as String? ?? '').toLowerCase();
-          final content = (n['content'] as String? ?? '').toLowerCase();
-          return title.contains(searchLower) || content.contains(searchLower);
-        }).toList();
+        notes =
+            notes.where((n) {
+              final title = (n['title'] as String? ?? '').toLowerCase();
+              final content = (n['content'] as String? ?? '').toLowerCase();
+              return title.contains(searchLower) ||
+                  content.contains(searchLower);
+            }).toList();
       }
 
       // Sort by created date (newest first)
@@ -1755,17 +1599,11 @@ class ClientCommandsService {
       }
 
       return {
-        'output': jsonEncode({
-          'notes': notes,
-          'count': notes.length,
-        }),
+        'output': jsonEncode({'notes': notes, 'count': notes.length}),
         'exit_code': 0,
       };
     } catch (e) {
-      return {
-        'output': 'Error getting notes: $e',
-        'exit_code': 1,
-      };
+      return {'output': 'Error getting notes: $e', 'exit_code': 1};
     }
   }
 
@@ -1793,14 +1631,18 @@ class ClientSideTools {
     final bluetoothManager = BluetoothManager.singleton;
 
     // Check permissions and connection states
-    final contactsGranted =
-        await PermissionManager.isGroupGranted(AppPermission.contacts);
-    final smsGranted =
-        await PermissionManager.isGroupGranted(AppPermission.sms);
-    final locationGranted =
-        await PermissionManager.isGroupGranted(AppPermission.location);
-    final phoneGranted =
-        await PermissionManager.isGroupGranted(AppPermission.phone);
+    final contactsGranted = await PermissionManager.isGroupGranted(
+      AppPermission.contacts,
+    );
+    final smsGranted = await PermissionManager.isGroupGranted(
+      AppPermission.sms,
+    );
+    final locationGranted = await PermissionManager.isGroupGranted(
+      AppPermission.location,
+    );
+    final phoneGranted = await PermissionManager.isGroupGranted(
+      AppPermission.phone,
+    );
     final glassesConnected = bluetoothManager.isConnected;
 
     // ============================================
@@ -1849,7 +1691,8 @@ Use this to show information, confirmations, or status updates on the glasses di
               },
               'duration': {
                 'type': 'integer',
-                'description': 'How long to display the message in milliseconds (default: 5000)',
+                'description':
+                    'How long to display the message in milliseconds (default: 5000)',
               },
             },
             'required': ['message'],
@@ -1863,15 +1706,12 @@ Use this to show information, confirmations, or status updates on the glasses di
       'type': 'function',
       'function': {
         'name': 'get_device_capabilities',
-        'description': '''Get information about the mobile device and connected accessories.
+        'description':
+            '''Get information about the mobile device and connected accessories.
 
 Returns details about the device, connected glasses, and available tool capabilities.
 Use this to understand what features are available before attempting other operations.''',
-        'parameters': {
-          'type': 'object',
-          'properties': {},
-          'required': [],
-        },
+        'parameters': {'type': 'object', 'properties': {}, 'required': []},
       },
     });
 
@@ -1968,11 +1808,7 @@ or a contact name (which will be resolved to their phone number).''',
 
 Returns latitude, longitude, altitude, accuracy, speed, and heading.
 Use this when the user asks where they are or needs location-based assistance.''',
-          'parameters': {
-            'type': 'object',
-            'properties': {},
-            'required': [],
-          },
+          'parameters': {'type': 'object', 'properties': {}, 'required': []},
         },
       });
 
@@ -2053,10 +1889,7 @@ Can call a phone number directly or find a contact by name and call them.''',
         'parameters': {
           'type': 'object',
           'properties': {
-            'url': {
-              'type': 'string',
-              'description': 'The URL to open',
-            },
+            'url': {'type': 'string', 'description': 'The URL to open'},
           },
           'required': ['url'],
         },
@@ -2069,11 +1902,7 @@ Can call a phone number directly or find a contact by name and call them.''',
         'name': 'get_device_info',
         'description':
             'Get information about the device and available capabilities.',
-        'parameters': {
-          'type': 'object',
-          'properties': {},
-          'required': [],
-        },
+        'parameters': {'type': 'object', 'properties': {}, 'required': []},
       },
     });
 
@@ -2081,8 +1910,10 @@ Can call a phone number directly or find a contact by name and call them.''',
     // Calendar tools - require calendar permission
     // ============================================
 
-    final calendarGranted = await PermissionManager.isGroupGranted(AppPermission.calendar);
-    
+    final calendarGranted = await PermissionManager.isGroupGranted(
+      AppPermission.calendar,
+    );
+
     if (calendarGranted) {
       tools.add({
         'type': 'function',
@@ -2096,11 +1927,13 @@ Returns upcoming events with title, time, location, and description.''',
             'properties': {
               'days_ahead': {
                 'type': 'integer',
-                'description': 'Number of days ahead to fetch events. Default: 7',
+                'description':
+                    'Number of days ahead to fetch events. Default: 7',
               },
               'days_before': {
                 'type': 'integer',
-                'description': 'Number of days before today to include. Default: 0',
+                'description':
+                    'Number of days before today to include. Default: 0',
               },
               'calendar_id': {
                 'type': 'string',
@@ -2122,26 +1955,22 @@ Schedule meetings, reminders, or appointments on the user's calendar.''',
           'parameters': {
             'type': 'object',
             'properties': {
-              'title': {
-                'type': 'string',
-                'description': 'Event title',
-              },
+              'title': {'type': 'string', 'description': 'Event title'},
               'start': {
                 'type': 'string',
-                'description': 'Start time in ISO 8601 format (e.g., 2024-01-15T10:00:00)',
+                'description':
+                    'Start time in ISO 8601 format (e.g., 2024-01-15T10:00:00)',
               },
               'end': {
                 'type': 'string',
-                'description': 'End time in ISO 8601 format (optional, defaults to 1 hour after start)',
+                'description':
+                    'End time in ISO 8601 format (optional, defaults to 1 hour after start)',
               },
               'description': {
                 'type': 'string',
                 'description': 'Event description or notes',
               },
-              'location': {
-                'type': 'string',
-                'description': 'Event location',
-              },
+              'location': {'type': 'string', 'description': 'Event location'},
               'all_day': {
                 'type': 'boolean',
                 'description': 'Whether this is an all-day event',
@@ -2157,11 +1986,7 @@ Schedule meetings, reminders, or appointments on the user's calendar.''',
         'function': {
           'name': 'get_calendars',
           'description': 'List all calendars available on the device.',
-          'parameters': {
-            'type': 'object',
-            'properties': {},
-            'required': [],
-          },
+          'parameters': {'type': 'object', 'properties': {}, 'required': []},
         },
       });
     }
@@ -2185,14 +2010,8 @@ Can use a contact name instead of email address.''',
               'type': 'string',
               'description': 'Email address or contact name',
             },
-            'subject': {
-              'type': 'string',
-              'description': 'Email subject line',
-            },
-            'body': {
-              'type': 'string',
-              'description': 'Email body content',
-            },
+            'subject': {'type': 'string', 'description': 'Email subject line'},
+            'body': {'type': 'string', 'description': 'Email body content'},
             'cc': {
               'type': 'string',
               'description': 'CC recipients (comma-separated)',
@@ -2249,13 +2068,11 @@ Save text, notes, or data for later retrieval.''',
               'type': 'string',
               'description': 'File path (relative to app documents)',
             },
-            'content': {
-              'type': 'string',
-              'description': 'Content to write',
-            },
+            'content': {'type': 'string', 'description': 'Content to write'},
             'append': {
               'type': 'boolean',
-              'description': 'Append to existing file instead of overwriting. Default: false',
+              'description':
+                  'Append to existing file instead of overwriting. Default: false',
             },
           },
           'required': ['path', 'content'],
@@ -2293,10 +2110,7 @@ Save text, notes, or data for later retrieval.''',
         'parameters': {
           'type': 'object',
           'properties': {
-            'path': {
-              'type': 'string',
-              'description': 'File path to delete',
-            },
+            'path': {'type': 'string', 'description': 'File path to delete'},
           },
           'required': ['path'],
         },
@@ -2311,12 +2125,9 @@ Save text, notes, or data for later retrieval.''',
       'type': 'function',
       'function': {
         'name': 'mobile_get_clipboard',
-        'description': 'Get the current text content from the mobile device clipboard.',
-        'parameters': {
-          'type': 'object',
-          'properties': {},
-          'required': [],
-        },
+        'description':
+            'Get the current text content from the mobile device clipboard.',
+        'parameters': {'type': 'object', 'properties': {}, 'required': []},
       },
     });
 
@@ -2358,7 +2169,8 @@ Supports common apps: camera, calculator, calendar, spotify, youtube, etc.''',
             },
             'package': {
               'type': 'string',
-              'description': 'Android package name (optional, for specific apps)',
+              'description':
+                  'Android package name (optional, for specific apps)',
             },
           },
           'required': ['app'],
@@ -2378,8 +2190,21 @@ Can open specific settings panels like WiFi, Bluetooth, Display, etc.''',
           'properties': {
             'type': {
               'type': 'string',
-              'description': 'Settings type: main, wifi, bluetooth, location, display, sound, battery, apps, notification, security, accessibility',
-              'enum': ['main', 'wifi', 'bluetooth', 'location', 'display', 'sound', 'battery', 'apps', 'notification', 'security', 'accessibility'],
+              'description':
+                  'Settings type: main, wifi, bluetooth, location, display, sound, battery, apps, notification, security, accessibility',
+              'enum': [
+                'main',
+                'wifi',
+                'bluetooth',
+                'location',
+                'display',
+                'sound',
+                'battery',
+                'apps',
+                'notification',
+                'security',
+                'accessibility',
+              ],
             },
           },
           'required': [],
@@ -2399,18 +2224,12 @@ Can open specific settings panels like WiFi, Bluetooth, Display, etc.''',
         'parameters': {
           'type': 'object',
           'properties': {
-            'hour': {
-              'type': 'integer',
-              'description': 'Hour (0-23)',
-            },
+            'hour': {'type': 'integer', 'description': 'Hour (0-23)'},
             'minute': {
               'type': 'integer',
               'description': 'Minute (0-59). Default: 0',
             },
-            'message': {
-              'type': 'string',
-              'description': 'Alarm label/message',
-            },
+            'message': {'type': 'string', 'description': 'Alarm label/message'},
           },
           'required': ['hour'],
         },
@@ -2425,10 +2244,7 @@ Can open specific settings panels like WiFi, Bluetooth, Display, etc.''',
         'parameters': {
           'type': 'object',
           'properties': {
-            'hours': {
-              'type': 'integer',
-              'description': 'Hours. Default: 0',
-            },
+            'hours': {'type': 'integer', 'description': 'Hours. Default: 0'},
             'minutes': {
               'type': 'integer',
               'description': 'Minutes. Default: 0',
@@ -2437,10 +2253,7 @@ Can open specific settings panels like WiFi, Bluetooth, Display, etc.''',
               'type': 'integer',
               'description': 'Seconds. Default: 0',
             },
-            'message': {
-              'type': 'string',
-              'description': 'Timer label',
-            },
+            'message': {'type': 'string', 'description': 'Timer label'},
           },
           'required': [],
         },
@@ -2455,17 +2268,16 @@ Can open specific settings panels like WiFi, Bluetooth, Display, etc.''',
       'type': 'function',
       'function': {
         'name': 'mobile_search_web',
-        'description': 'Search the web using a search engine from the mobile device.',
+        'description':
+            'Search the web using a search engine from the mobile device.',
         'parameters': {
           'type': 'object',
           'properties': {
-            'query': {
-              'type': 'string',
-              'description': 'Search query',
-            },
+            'query': {'type': 'string', 'description': 'Search query'},
             'engine': {
               'type': 'string',
-              'description': 'Search engine: google, bing, duckduckgo. Default: google',
+              'description':
+                  'Search engine: google, bing, duckduckgo. Default: google',
               'enum': ['google', 'bing', 'duckduckgo'],
             },
           },
@@ -2479,11 +2291,7 @@ Can open specific settings panels like WiFi, Bluetooth, Display, etc.''',
       'function': {
         'name': 'get_battery_status',
         'description': 'Get the device battery level and charging status.',
-        'parameters': {
-          'type': 'object',
-          'properties': {},
-          'required': [],
-        },
+        'parameters': {'type': 'object', 'properties': {}, 'required': []},
       },
     });
 
@@ -2519,14 +2327,8 @@ Store quick notes, reminders, or information the user wants to remember.''',
         'parameters': {
           'type': 'object',
           'properties': {
-            'title': {
-              'type': 'string',
-              'description': 'Note title',
-            },
-            'content': {
-              'type': 'string',
-              'description': 'Note content',
-            },
+            'title': {'type': 'string', 'description': 'Note title'},
+            'content': {'type': 'string', 'description': 'Note content'},
           },
           'required': ['content'],
         },
@@ -2556,7 +2358,8 @@ Store quick notes, reminders, or information the user wants to remember.''',
     });
 
     debugPrint(
-        'ClientSideTools: Returning ${tools.length} tools based on permissions and connected devices');
+      'ClientSideTools: Returning ${tools.length} tools based on permissions and connected devices',
+    );
     return tools;
   }
 }

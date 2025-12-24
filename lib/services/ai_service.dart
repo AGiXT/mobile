@@ -15,8 +15,9 @@ import 'package:flutter/services.dart'; // Import Services
 
 class AIService {
   // MethodChannel for button events from native code
-  static const MethodChannel _buttonEventsChannel =
-      MethodChannel('dev.agixt.agixt/button_events');
+  static const MethodChannel _buttonEventsChannel = MethodChannel(
+    'dev.agixt.agixt/button_events',
+  );
 
   static final AIService singleton = AIService._internal();
   final BluetoothManager _bluetoothManager = BluetoothManager.singleton;
@@ -136,7 +137,10 @@ class AIService {
   }
 
   /// Process recorded audio from any source
-  Future<void> _processRecordedAudio(Uint8List audioData, VoiceInputSource? source) async {
+  Future<void> _processRecordedAudio(
+    Uint8List audioData,
+    VoiceInputSource? source,
+  ) async {
     try {
       await _showProcessingMessage();
 
@@ -261,7 +265,8 @@ class AIService {
   /// Handle activity updates (thinking, reflection, etc.)
   void _handleActivityUpdate(ActivityUpdate activity) {
     debugPrint(
-        'AIService: Activity [${activity.type}]: ${activity.content.substring(0, activity.content.length > 50 ? 50 : activity.content.length)}...');
+      'AIService: Activity [${activity.type}]: ${activity.content.substring(0, activity.content.length > 50 ? 50 : activity.content.length)}...',
+    );
 
     // Optionally show activity on glasses
     if (activity.type == 'thinking' && !activity.isComplete) {
@@ -289,7 +294,8 @@ class AIService {
         break;
       default:
         debugPrint(
-            'Unknown method call from button events channel: ${call.method}');
+          'Unknown method call from button events channel: ${call.method}',
+        );
     }
   }
 

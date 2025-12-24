@@ -93,8 +93,9 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
   void _startConnectionStatusTracking() {
     final bluetoothManager = BluetoothManager();
     _isConnected = bluetoothManager.isConnected;
-    _connectionSubscription =
-        bluetoothManager.connectionStatusStream.listen((connected) {
+    _connectionSubscription = bluetoothManager.connectionStatusStream.listen((
+      connected,
+    ) {
       if (!mounted) {
         return;
       }
@@ -163,10 +164,7 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
     required int? batteryPercentage,
   }) {
     final gradient = LinearGradient(
-      colors: [
-        theme.colorScheme.primary,
-        theme.colorScheme.primaryContainer,
-      ],
+      colors: [theme.colorScheme.primary, theme.colorScheme.primaryContainer],
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
     );
@@ -211,8 +209,9 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                     Text(
                       'Keep your Even Realities G1 glasses connected and tuned to your day.',
                       style: theme.textTheme.bodyMedium?.copyWith(
-                        color:
-                            theme.colorScheme.onPrimary.withValues(alpha: 0.9),
+                        color: theme.colorScheme.onPrimary.withValues(
+                          alpha: 0.9,
+                        ),
                       ),
                     ),
                   ],
@@ -226,23 +225,27 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
             runSpacing: 12,
             children: [
               _StatusChip(
-                icon: isConnected
-                    ? Icons.check_circle_rounded
-                    : Icons.portable_wifi_off_rounded,
+                icon:
+                    isConnected
+                        ? Icons.check_circle_rounded
+                        : Icons.portable_wifi_off_rounded,
                 label: isConnected ? 'Connected' : 'Disconnected',
-                tone: isConnected
-                    ? theme.colorScheme.secondary
-                    : theme.colorScheme.error,
+                tone:
+                    isConnected
+                        ? theme.colorScheme.secondary
+                        : theme.colorScheme.error,
                 onColor: theme.colorScheme.onSecondary,
               ),
               _StatusChip(
-                icon: _batteryStatus.isAnyCharging
-                    ? Icons.bolt_rounded
-                    : Icons.battery_5_bar_rounded,
-                label: batteryPercentage != null
-                    ? '$batteryPercentage%'
-                        '${_batteryStatus.isAnyCharging ? ' · Charging' : ''}'
-                    : 'Battery unavailable',
+                icon:
+                    _batteryStatus.isAnyCharging
+                        ? Icons.bolt_rounded
+                        : Icons.battery_5_bar_rounded,
+                label:
+                    batteryPercentage != null
+                        ? '$batteryPercentage%'
+                            '${_batteryStatus.isAnyCharging ? ' · Charging' : ''}'
+                        : 'Battery unavailable',
                 tone: theme.colorScheme.surface.withValues(alpha: 0.25),
                 onColor: theme.colorScheme.onPrimary,
               ),
@@ -306,10 +309,7 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
             ),
             if (_isConnected) ...[
               const SizedBox(height: 20),
-              G1BatteryWidget(
-                batteryStatus: _batteryStatus,
-                showDetails: true,
-              ),
+              G1BatteryWidget(batteryStatus: _batteryStatus, showDetails: true),
             ],
           ],
         ),
@@ -395,7 +395,8 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const DashboardSettingsPage()),
+                    builder: (context) => const DashboardSettingsPage(),
+                  ),
                 );
               },
             ),
@@ -408,7 +409,8 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const NotificationSettingsPage()),
+                    builder: (context) => const NotificationSettingsPage(),
+                  ),
                 );
               },
             ),
@@ -421,7 +423,8 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const VoiceWatchSettingsScreen()),
+                    builder: (context) => const VoiceWatchSettingsScreen(),
+                  ),
                 );
               },
             ),
@@ -434,7 +437,8 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                      builder: (context) => const LocationSettingsScreen()),
+                    builder: (context) => const LocationSettingsScreen(),
+                  ),
                 );
               },
             ),
@@ -460,15 +464,13 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
           color: theme.colorScheme.primary.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Icon(
-          icon,
-          color: theme.colorScheme.primary,
-        ),
+        child: Icon(icon, color: theme.colorScheme.primary),
       ),
       title: Text(
         title,
-        style:
-            theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
       ),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.chevron_right),
@@ -519,10 +521,7 @@ class _StatusChip extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             label,
-            style: TextStyle(
-              color: onColor,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: onColor, fontWeight: FontWeight.w600),
           ),
         ],
       ),

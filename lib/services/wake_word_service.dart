@@ -12,10 +12,12 @@ class WakeWordService {
   WakeWordService._internal();
 
   // Method channel for native wake word detection
-  static const MethodChannel _wakeWordChannel =
-      MethodChannel('dev.agixt.agixt/wake_word');
-  static const EventChannel _wakeWordEventsChannel =
-      EventChannel('dev.agixt.agixt/wake_word_events');
+  static const MethodChannel _wakeWordChannel = MethodChannel(
+    'dev.agixt.agixt/wake_word',
+  );
+  static const EventChannel _wakeWordEventsChannel = EventChannel(
+    'dev.agixt.agixt/wake_word_events',
+  );
 
   // Settings
   bool _isEnabled = false;
@@ -60,9 +62,10 @@ class WakeWordService {
     _wakeWordChannel.setMethodCallHandler(_handleMethodCall);
 
     // Set up event channel listener
-    _eventSubscription = _wakeWordEventsChannel
-        .receiveBroadcastStream()
-        .listen(_handleWakeWordEvent, onError: _handleEventError);
+    _eventSubscription = _wakeWordEventsChannel.receiveBroadcastStream().listen(
+      _handleWakeWordEvent,
+      onError: _handleEventError,
+    );
 
     // Initialize native wake word detector
     try {
@@ -77,7 +80,8 @@ class WakeWordService {
       _isInitialized = false;
     } on MissingPluginException {
       debugPrint(
-          'WakeWordService: Wake word detection not available on this platform');
+        'WakeWordService: Wake word detection not available on this platform',
+      );
       _isInitialized = false;
     }
 
@@ -109,10 +113,9 @@ class WakeWordService {
       case 'onError':
         final error = call.arguments['error'] as String?;
         debugPrint('WakeWordService: Error - $error');
-        _eventController.add(WakeWordEvent(
-          type: WakeWordEventType.error,
-          error: error,
-        ));
+        _eventController.add(
+          WakeWordEvent(type: WakeWordEventType.error, error: error),
+        );
         return true;
 
       default:
@@ -134,7 +137,9 @@ class WakeWordService {
 
         case 'listening_state_changed':
           _isListening = event['isListening'] == true;
-          debugPrint('WakeWordService: Listening state changed to $_isListening');
+          debugPrint(
+            'WakeWordService: Listening state changed to $_isListening',
+          );
           break;
 
         case 'audio_level':
@@ -146,22 +151,24 @@ class WakeWordService {
 
   void _handleEventError(dynamic error) {
     debugPrint('WakeWordService: Event channel error: $error');
-    _eventController.add(WakeWordEvent(
-      type: WakeWordEventType.error,
-      error: error.toString(),
-    ));
+    _eventController.add(
+      WakeWordEvent(type: WakeWordEventType.error, error: error.toString()),
+    );
   }
 
   /// Handle wake word detection
   void _handleWakeWordDetection(double confidence, String source) {
     debugPrint(
-        'WakeWordService: Wake word detected! confidence=$confidence, source=$source');
+      'WakeWordService: Wake word detected! confidence=$confidence, source=$source',
+    );
 
-    _eventController.add(WakeWordEvent(
-      type: WakeWordEventType.detected,
-      confidence: confidence,
-      source: source,
-    ));
+    _eventController.add(
+      WakeWordEvent(
+        type: WakeWordEventType.detected,
+        confidence: confidence,
+        source: source,
+      ),
+    );
 
     // Call the callback if set
     _onWakeWordDetected?.call(confidence, source);
@@ -244,11 +251,14 @@ class WakeWordService {
       _isListening = result == true;
       debugPrint('WakeWordService: Started listening = $_isListening');
 
-      _eventController.add(WakeWordEvent(
-        type: _isListening
-            ? WakeWordEventType.listeningStarted
-            : WakeWordEventType.error,
-      ));
+      _eventController.add(
+        WakeWordEvent(
+          type:
+              _isListening
+                  ? WakeWordEventType.listeningStarted
+                  : WakeWordEventType.error,
+        ),
+      );
 
       return _isListening;
     } on PlatformException catch (e) {
@@ -266,9 +276,9 @@ class WakeWordService {
       _isListening = false;
       debugPrint('WakeWordService: Stopped listening');
 
-      _eventController.add(WakeWordEvent(
-        type: WakeWordEventType.listeningStopped,
-      ));
+      _eventController.add(
+        WakeWordEvent(type: WakeWordEventType.listeningStopped),
+      );
     } on PlatformException catch (e) {
       debugPrint('WakeWordService: Error stopping listening: $e');
     }
@@ -322,12 +332,7 @@ class WakeWordService {
 typedef WakeWordCallback = void Function(double confidence, String source);
 
 /// Types of wake word events
-enum WakeWordEventType {
-  detected,
-  listeningStarted,
-  listeningStopped,
-  error,
-}
+enum WakeWordEventType { detected, listeningStarted, listeningStopped, error }
 
 /// Wake word event
 class WakeWordEvent {
@@ -336,10 +341,5 @@ class WakeWordEvent {
   final String? source; // 'phone', 'glasses', 'watch'
   final String? error;
 
-  WakeWordEvent({
-    required this.type,
-    this.confidence,
-    this.source,
-    this.error,
-  });
+  WakeWordEvent({required this.type, this.confidence, this.source, this.error});
 }

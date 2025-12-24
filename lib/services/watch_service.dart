@@ -13,10 +13,12 @@ class WatchService {
   WatchService._internal();
 
   // Method channels for native Wear OS communication
-  static const MethodChannel _watchChannel =
-      MethodChannel('dev.agixt.agixt/watch');
-  static const EventChannel _watchEventsChannel =
-      EventChannel('dev.agixt.agixt/watch_events');
+  static const MethodChannel _watchChannel = MethodChannel(
+    'dev.agixt.agixt/watch',
+  );
+  static const EventChannel _watchEventsChannel = EventChannel(
+    'dev.agixt.agixt/watch_events',
+  );
 
   // Connection state
   bool _isConnected = false;
@@ -67,9 +69,10 @@ class WatchService {
     _watchChannel.setMethodCallHandler(_handleMethodCall);
 
     // Set up event channel listener
-    _eventSubscription = _watchEventsChannel
-        .receiveBroadcastStream()
-        .listen(_handleWatchEvent, onError: _handleEventError);
+    _eventSubscription = _watchEventsChannel.receiveBroadcastStream().listen(
+      _handleWatchEvent,
+      onError: _handleEventError,
+    );
 
     // Check if a watch is already connected
     await _checkWatchConnection();
@@ -168,12 +171,15 @@ class WatchService {
 
         if (_isConnected) {
           debugPrint(
-              'WatchService: Watch connected - $_connectedWatchName ($_connectedWatchId)');
-          _connectionStateController.add(WatchConnectionState(
-            isConnected: true,
-            watchId: _connectedWatchId,
-            watchName: _connectedWatchName,
-          ));
+            'WatchService: Watch connected - $_connectedWatchName ($_connectedWatchId)',
+          );
+          _connectionStateController.add(
+            WatchConnectionState(
+              isConnected: true,
+              watchId: _connectedWatchId,
+              watchName: _connectedWatchName,
+            ),
+          );
         }
       }
     } on PlatformException catch (e) {
@@ -191,11 +197,13 @@ class WatchService {
     _connectedWatchId = watchId;
     _connectedWatchName = watchName;
 
-    _connectionStateController.add(WatchConnectionState(
-      isConnected: true,
-      watchId: watchId,
-      watchName: watchName,
-    ));
+    _connectionStateController.add(
+      WatchConnectionState(
+        isConnected: true,
+        watchId: watchId,
+        watchName: watchName,
+      ),
+    );
   }
 
   void _handleWatchDisconnected() {
@@ -210,23 +218,21 @@ class WatchService {
     }
     _isRecording = false;
 
-    _connectionStateController.add(WatchConnectionState(
-      isConnected: false,
-      watchId: null,
-      watchName: null,
-    ));
+    _connectionStateController.add(
+      WatchConnectionState(isConnected: false, watchId: null, watchName: null),
+    );
   }
 
   void _handleAudioData(Uint8List audioData) {
-    _audioDataController.add(WatchAudioData(
-      data: audioData,
-      timestamp: DateTime.now(),
-    ));
+    _audioDataController.add(
+      WatchAudioData(data: audioData, timestamp: DateTime.now()),
+    );
   }
 
   void _handleAudioRecordingComplete(Uint8List? audioData) {
     debugPrint(
-        'WatchService: Audio recording complete, ${audioData?.length ?? 0} bytes');
+      'WatchService: Audio recording complete, ${audioData?.length ?? 0} bytes',
+    );
     _isRecording = false;
 
     if (_audioCompleter != null && !_audioCompleter!.isCompleted) {
@@ -237,20 +243,15 @@ class WatchService {
   void _handleTTSComplete() {
     debugPrint('WatchService: TTS complete');
     _isSpeaking = false;
-    _ttsStateController.add(WatchTTSState(
-      isSpeaking: false,
-      isComplete: true,
-    ));
+    _ttsStateController.add(WatchTTSState(isSpeaking: false, isComplete: true));
   }
 
   void _handleTTSError(String? error) {
     debugPrint('WatchService: TTS error: $error');
     _isSpeaking = false;
-    _ttsStateController.add(WatchTTSState(
-      isSpeaking: false,
-      isComplete: true,
-      error: error,
-    ));
+    _ttsStateController.add(
+      WatchTTSState(isSpeaking: false, isComplete: true, error: error),
+    );
   }
 
   /// Enable or disable watch connectivity
@@ -262,11 +263,13 @@ class WatchService {
     debugPrint('WatchService: Enabled set to $enabled');
 
     // Update connection state
-    _connectionStateController.add(WatchConnectionState(
-      isConnected: _isConnected && enabled,
-      watchId: enabled ? _connectedWatchId : null,
-      watchName: enabled ? _connectedWatchName : null,
-    ));
+    _connectionStateController.add(
+      WatchConnectionState(
+        isConnected: _isConnected && enabled,
+        watchId: enabled ? _connectedWatchId : null,
+        watchName: enabled ? _connectedWatchName : null,
+      ),
+    );
   }
 
   /// Start recording audio from the watch microphone
@@ -361,7 +364,9 @@ class WatchService {
     try {
       await _watchChannel.invokeMethod('stopSpeaking');
       _isSpeaking = false;
-      _ttsStateController.add(WatchTTSState(isSpeaking: false, isComplete: true));
+      _ttsStateController.add(
+        WatchTTSState(isSpeaking: false, isComplete: true),
+      );
     } on PlatformException catch (e) {
       debugPrint('WatchService: Error stopping TTS: $e');
     }
@@ -450,10 +455,7 @@ class WatchAudioData {
   final Uint8List data;
   final DateTime timestamp;
 
-  WatchAudioData({
-    required this.data,
-    required this.timestamp,
-  });
+  WatchAudioData({required this.data, required this.timestamp});
 }
 
 /// TTS state

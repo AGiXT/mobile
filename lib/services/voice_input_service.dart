@@ -34,8 +34,9 @@ class VoiceInputService {
   bool _recorderInitialized = false;
 
   // Method channel for glasses microphone
-  static const MethodChannel _glassesAudioChannel =
-      MethodChannel('dev.agixt.agixt/glasses_audio');
+  static const MethodChannel _glassesAudioChannel = MethodChannel(
+    'dev.agixt.agixt/glasses_audio',
+  );
 
   // State
   bool _isRecording = false;
@@ -80,7 +81,9 @@ class VoiceInputService {
     // Set up wake word callback
     _wakeWordService.setOnWakeWordDetected(_handleWakeWordDetected);
 
-    debugPrint('VoiceInputService: Initialized with preferred source: $_preferredSource');
+    debugPrint(
+      'VoiceInputService: Initialized with preferred source: $_preferredSource',
+    );
   }
 
   Future<void> _initializeRecorder() async {
@@ -100,7 +103,9 @@ class VoiceInputService {
     switch (call.method) {
       case 'onAudioData':
         final audioData = call.arguments['audioData'] as Uint8List?;
-        if (audioData != null && _isRecording && _activeSource == VoiceInputSource.glasses) {
+        if (audioData != null &&
+            _isRecording &&
+            _activeSource == VoiceInputSource.glasses) {
           _audioChunkController.add(audioData);
         }
         return true;
@@ -119,7 +124,9 @@ class VoiceInputService {
 
   /// Handle wake word detection
   void _handleWakeWordDetected(double confidence, String source) {
-    debugPrint('VoiceInputService: Wake word detected with confidence $confidence from $source');
+    debugPrint(
+      'VoiceInputService: Wake word detected with confidence $confidence from $source',
+    );
 
     // Start recording when wake word is detected
     if (!_isRecording) {
@@ -182,17 +189,21 @@ class VoiceInputService {
       actualSource = source;
     } else {
       actualSource = getBestAvailableSource();
-      debugPrint('VoiceInputService: $source not available, falling back to $actualSource');
+      debugPrint(
+        'VoiceInputService: $source not available, falling back to $actualSource',
+      );
     }
 
     _activeSource = actualSource;
     _isRecording = true;
 
-    _stateController.add(VoiceInputState(
-      isRecording: true,
-      source: actualSource,
-      status: VoiceInputStatus.recording,
-    ));
+    _stateController.add(
+      VoiceInputState(
+        isRecording: true,
+        source: actualSource,
+        status: VoiceInputStatus.recording,
+      ),
+    );
 
     // Pause wake word detection during recording
     if (_useWakeWord) {
@@ -215,12 +226,14 @@ class VoiceInputService {
       _isRecording = false;
       _activeSource = null;
 
-      _stateController.add(VoiceInputState(
-        isRecording: false,
-        source: actualSource,
-        status: VoiceInputStatus.error,
-        error: e.toString(),
-      ));
+      _stateController.add(
+        VoiceInputState(
+          isRecording: false,
+          source: actualSource,
+          status: VoiceInputStatus.error,
+          error: e.toString(),
+        ),
+      );
 
       return false;
     }
@@ -274,7 +287,8 @@ class VoiceInputService {
 
     try {
       final directory = await getApplicationDocumentsDirectory();
-      _recordingPath = '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav';
+      _recordingPath =
+          '${directory.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav';
 
       await _recorder.startRecorder(
         toFile: _recordingPath,
@@ -330,11 +344,13 @@ class VoiceInputService {
     final source = _activeSource;
     _activeSource = null;
 
-    _stateController.add(VoiceInputState(
-      isRecording: false,
-      source: source,
-      status: VoiceInputStatus.stopped,
-    ));
+    _stateController.add(
+      VoiceInputState(
+        isRecording: false,
+        source: source,
+        status: VoiceInputStatus.stopped,
+      ),
+    );
 
     // Resume wake word detection
     if (_useWakeWord) {
@@ -350,7 +366,9 @@ class VoiceInputService {
       await _bluetoothManager.setMicrophone(false);
 
       // Get recorded audio from native code
-      final result = await _glassesAudioChannel.invokeMethod('getRecordedAudio');
+      final result = await _glassesAudioChannel.invokeMethod(
+        'getRecordedAudio',
+      );
       if (result is Uint8List) {
         return result;
       }
@@ -388,12 +406,14 @@ class VoiceInputService {
     final source = _activeSource;
     _activeSource = null;
 
-    _stateController.add(VoiceInputState(
-      isRecording: false,
-      source: source,
-      status: VoiceInputStatus.complete,
-      audioData: audioData,
-    ));
+    _stateController.add(
+      VoiceInputState(
+        isRecording: false,
+        source: source,
+        status: VoiceInputStatus.complete,
+        audioData: audioData,
+      ),
+    );
 
     // Resume wake word detection
     if (_useWakeWord) {
@@ -422,14 +442,7 @@ class VoiceInputService {
 }
 
 /// Status of voice input
-enum VoiceInputStatus {
-  idle,
-  recording,
-  processing,
-  complete,
-  stopped,
-  error,
-}
+enum VoiceInputStatus { idle, recording, processing, complete, stopped, error }
 
 /// Voice input state
 class VoiceInputState {

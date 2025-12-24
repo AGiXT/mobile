@@ -53,10 +53,7 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Voice & Watch Settings'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Voice & Watch Settings'), elevation: 0),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -83,9 +80,10 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
                     _buildSliderTile(
                       theme,
                       title: 'Sensitivity',
-                      subtitle: _wakeWordSensitivity < 0.3
-                          ? 'Low (fewer false positives)'
-                          : _wakeWordSensitivity > 0.7
+                      subtitle:
+                          _wakeWordSensitivity < 0.3
+                              ? 'Low (fewer false positives)'
+                              : _wakeWordSensitivity > 0.7
                               ? 'High (more responsive)'
                               : 'Medium',
                       value: _wakeWordSensitivity,
@@ -116,9 +114,10 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
                   _buildSwitchTile(
                     theme,
                     title: 'Enable Watch Support',
-                    subtitle: _watchConnected
-                        ? 'Connected: ${_watchService.connectedWatchName ?? "Pixel Watch"}'
-                        : 'Allow connection to Pixel Watch',
+                    subtitle:
+                        _watchConnected
+                            ? 'Connected: ${_watchService.connectedWatchName ?? "Pixel Watch"}'
+                            : 'Allow connection to Pixel Watch',
                     value: _watchEnabled,
                     onChanged: (value) async {
                       await _watchService.setEnabled(value);
@@ -151,7 +150,10 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
 
             // Voice Input Source Section
             _buildSectionHeader(
-                theme, 'Voice Input Source', Icons.settings_voice_rounded),
+              theme,
+              'Voice Input Source',
+              Icons.settings_voice_rounded,
+            ),
             _buildCard(
               theme,
               child: Column(
@@ -212,7 +214,10 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
 
             // Text-to-Speech Section
             _buildSectionHeader(
-                theme, 'Text-to-Speech', Icons.record_voice_over_rounded),
+              theme,
+              'Text-to-Speech',
+              Icons.record_voice_over_rounded,
+            ),
             _buildCard(
               theme,
               child: Column(
@@ -236,9 +241,10 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
                     _buildSliderTile(
                       theme,
                       title: 'Speech Rate',
-                      subtitle: _ttsRate < 0.8
-                          ? 'Slow'
-                          : _ttsRate > 1.2
+                      subtitle:
+                          _ttsRate < 0.8
+                              ? 'Slow'
+                              : _ttsRate > 1.2
                               ? 'Fast'
                               : 'Normal',
                       value: _ttsRate,
@@ -253,9 +259,10 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
                     _buildSliderTile(
                       theme,
                       title: 'Pitch',
-                      subtitle: _ttsPitch < 0.8
-                          ? 'Lower'
-                          : _ttsPitch > 1.2
+                      subtitle:
+                          _ttsPitch < 0.8
+                              ? 'Lower'
+                              : _ttsPitch > 1.2
                               ? 'Higher'
                               : 'Normal',
                       value: _ttsPitch,
@@ -351,10 +358,7 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: theme.colorScheme.outlineVariant,
-          width: 1,
-        ),
+        side: BorderSide(color: theme.colorScheme.outlineVariant, width: 1),
       ),
       child: child,
     );
@@ -390,12 +394,7 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(subtitle),
-          Slider(
-            value: value,
-            min: min,
-            max: max,
-            onChanged: onChanged,
-          ),
+          Slider(value: value, min: min, max: max, onChanged: onChanged),
         ],
       ),
     );
@@ -413,15 +412,11 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
     return RadioListTile<T>(
       title: Text(
         title,
-        style: TextStyle(
-          color: enabled ? null : theme.disabledColor,
-        ),
+        style: TextStyle(color: enabled ? null : theme.disabledColor),
       ),
       subtitle: Text(
         subtitle,
-        style: TextStyle(
-          color: enabled ? null : theme.disabledColor,
-        ),
+        style: TextStyle(color: enabled ? null : theme.disabledColor),
       ),
       value: value,
       groupValue: groupValue,
@@ -443,12 +438,13 @@ class _VoiceWatchSettingsScreenState extends State<VoiceWatchSettingsScreen> {
       subtitle: Text(subtitle),
       trailing: DropdownButton<T>(
         value: value,
-        items: items.map((item) {
-          return DropdownMenuItem<T>(
-            value: item,
-            child: Text(itemLabel(item)),
-          );
-        }).toList(),
+        items:
+            items.map((item) {
+              return DropdownMenuItem<T>(
+                value: item,
+                child: Text(itemLabel(item)),
+              );
+            }).toList(),
         onChanged: onChanged,
       ),
     );

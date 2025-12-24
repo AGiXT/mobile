@@ -221,12 +221,14 @@ class TTSService {
     _currentMode = effectiveMode;
     _isSpeaking = true;
 
-    _stateController.add(TTSState(
-      isSpeaking: true,
-      mode: effectiveMode,
-      device: effectiveMode == TTSMode.watch ? 'watch' : 'phone',
-      text: text,
-    ));
+    _stateController.add(
+      TTSState(
+        isSpeaking: true,
+        mode: effectiveMode,
+        device: effectiveMode == TTSMode.watch ? 'watch' : 'phone',
+        text: text,
+      ),
+    );
 
     debugPrint('TTSService: Speaking via $effectiveMode: "$text"');
 
@@ -303,11 +305,9 @@ class TTSService {
     _isSpeaking = false;
     _currentDevice = null;
 
-    _stateController.add(TTSState(
-      isSpeaking: false,
-      mode: _currentMode,
-      isComplete: true,
-    ));
+    _stateController.add(
+      TTSState(isSpeaking: false, mode: _currentMode, isComplete: true),
+    );
   }
 
   /// Handle speech completion
@@ -316,12 +316,14 @@ class TTSService {
     _isSpeaking = false;
     _currentDevice = null;
 
-    _stateController.add(TTSState(
-      isSpeaking: false,
-      mode: _currentMode,
-      device: device,
-      isComplete: true,
-    ));
+    _stateController.add(
+      TTSState(
+        isSpeaking: false,
+        mode: _currentMode,
+        device: device,
+        isComplete: true,
+      ),
+    );
   }
 
   /// Handle speech error
@@ -330,11 +332,9 @@ class TTSService {
     _isSpeaking = false;
     _currentDevice = null;
 
-    _stateController.add(TTSState(
-      isSpeaking: false,
-      mode: _currentMode,
-      error: error,
-    ));
+    _stateController.add(
+      TTSState(isSpeaking: false, mode: _currentMode, error: error),
+    );
   }
 
   /// Get available TTS modes based on connected devices
