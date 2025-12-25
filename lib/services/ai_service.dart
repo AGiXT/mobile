@@ -151,11 +151,19 @@ class AIService {
 
   /// Handle voice input state changes
   void _handleVoiceInputState(VoiceInputState state) {
-    debugPrint('AIService: Voice input state: ${state.status}');
+    debugPrint('AIService: Voice input state: ${state.status}, hasAudio: ${state.audioData != null}');
 
-    if (state.status == VoiceInputStatus.complete && state.audioData != null) {
+    // Process audio when recording completes with audio data
+    if ((state.status == VoiceInputStatus.complete || 
+         state.status == VoiceInputStatus.stopped) && 
+        state.audioData != null) {
       // Process the recorded audio
       _processRecordedAudio(state.audioData!, state.source);
+    } else if (state.status == VoiceInputStatus.stopped && state.audioData == null) {
+      // Recording stopped but no audio captured
+      debugPrint('AIService: Recording stopped with no audio data');
+      _isProcessing = false;
+      _showErrorMessage('No audio captured');
     }
   }
 
