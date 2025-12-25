@@ -71,7 +71,9 @@ class WakeWordService {
     try {
       final isAvailable = await _wakeWordChannel.invokeMethod('isAvailable');
       if (isAvailable != true) {
-        debugPrint('WakeWordService: Speech recognition not available on this device');
+        debugPrint(
+          'WakeWordService: Speech recognition not available on this device',
+        );
         _isInitialized = false;
         return;
       }

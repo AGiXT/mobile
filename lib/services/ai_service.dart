@@ -95,10 +95,24 @@ class AIService {
   void _handleWakeWordEvent(WakeWordEvent event) {
     if (event.type == WakeWordEventType.detected) {
       debugPrint('AIService: Wake word detected from ${event.source}');
+      // Provide haptic feedback
+      _playWakeWordFeedback();
       // Start voice recording when wake word is detected
       if (!_isProcessing) {
         _startVoiceRecording();
       }
+    }
+  }
+
+  /// Play feedback when wake word is detected
+  Future<void> _playWakeWordFeedback() async {
+    try {
+      // Haptic feedback using Flutter's built-in HapticFeedback
+      await HapticFeedback.mediumImpact();
+      // Also play system click sound
+      await SystemSound.play(SystemSoundType.click);
+    } catch (e) {
+      debugPrint('AIService: Error playing wake word feedback: $e');
     }
   }
 
@@ -171,6 +185,10 @@ class AIService {
       await _showErrorMessage('Error processing voice input');
     } finally {
       _isProcessing = false;
+      // Resume wake word listening if enabled
+      if (_wakeWordService.isEnabled) {
+        await _wakeWordService.resume();
+      }
     }
   }
 

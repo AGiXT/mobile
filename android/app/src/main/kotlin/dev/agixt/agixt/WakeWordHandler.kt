@@ -43,10 +43,12 @@ class WakeWordHandler(
                     result.success(true)
                 }
                 "startListening" -> {
+                    Log.i(TAG, "Flutter called startListening")
                     startListening()
                     result.success(true)
                 }
                 "stopListening" -> {
+                    Log.i(TAG, "Flutter called stopListening")
                     stopListening()
                     result.success(true)
                 }
@@ -194,12 +196,14 @@ class WakeWordHandler(
             return
         }
         
+        Log.i(TAG, "startListening() called - setting isListening=true, isPaused=false")
         isListening = true
         isPaused = false
         startRecognition()
     }
     
     private fun startRecognition() {
+        Log.i(TAG, "startRecognition() - speechRecognizer null? ${speechRecognizer == null}")
         if (speechRecognizer == null) {
             setupSpeechRecognizer()
         }
