@@ -41,6 +41,7 @@ class VoiceInputService {
   bool _isRecording = false;
   VoiceInputSource? _activeSource;
   String? _recordingPath;
+  Timer? _recordingTimer; // Timer for auto-stop
 
   // Settings
   VoiceInputSource _preferredSource = VoiceInputSource.glasses;
@@ -217,16 +218,23 @@ class VoiceInputService {
       // Reset voice collector buffer before starting
       _bluetoothReciever.voiceCollectorAI.reset();
       _bluetoothReciever.voiceCollectorAI.isRecording = true;
-      
+      debugPrint('VoiceInputService: voiceCollectorAI.isRecording set to true');
+
       // Enable microphone on glasses
       await _bluetoothManager.setMicrophone(true);
-      debugPrint('VoiceInputService: Glasses mic enabled, recording started');
+      debugPrint('VoiceInputService: Glasses mic enabled, recording started for $maxDuration');
 
-      // Set up auto-stop timer
-      Timer(maxDuration, () {
+      // Cancel any existing timer
+      _recordingTimer?.cancel();
+      
+      // Set up auto-stop timer with proper async handling
+      _recordingTimer = Timer(maxDuration, () async {
+        debugPrint('VoiceInputService: Timer fired, _isRecording=$_isRecording, _activeSource=$_activeSource');
         if (_isRecording && _activeSource == VoiceInputSource.glasses) {
           debugPrint('VoiceInputService: Auto-stopping glasses recording after $maxDuration');
-          stopRecording();
+          await stopRecording();
+        } else {
+          debugPrint('VoiceInputService: Timer fired but conditions not met for stop');
         }
       });
 
@@ -292,9 +300,16 @@ class VoiceInputService {
 
   /// Stop the current recording
   Future<Uint8List?> stopRecording() async {
+    debugPrint('VoiceInputService: stopRecording called, _isRecording=$_isRecording');
+    
     if (!_isRecording) {
+      debugPrint('VoiceInputService: Not recording, returning null');
       return null;
     }
+
+    // Cancel the recording timer
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
 
     debugPrint('VoiceInputService: Stopping recording from $_activeSource');
 
@@ -303,7 +318,9 @@ class VoiceInputService {
     try {
       switch (_activeSource) {
         case VoiceInputSource.glasses:
+          debugPrint('VoiceInputService: Calling _stopGlassesRecording');
           audioData = await _stopGlassesRecording();
+          debugPrint('VoiceInputService: _stopGlassesRecording returned ${audioData?.length ?? 0} bytes');
           break;
         case VoiceInputSource.watch:
           await _watchService.stopRecording();
@@ -323,12 +340,18 @@ class VoiceInputService {
     final source = _activeSource;
     _activeSource = null;
 
+    final status = audioData != null
+        ? VoiceInputStatus.complete
+        : VoiceInputStatus.stopped;
+    
+    debugPrint('VoiceInputService: Emitting state - status=$status, audioData=${audioData?.length ?? 0} bytes');
+
     // Use 'complete' status when we have audio data so AIService processes it
     _stateController.add(
       VoiceInputState(
         isRecording: false,
         source: source,
-        status: audioData != null ? VoiceInputStatus.complete : VoiceInputStatus.stopped,
+        status: status,
         audioData: audioData,
       ),
     );
@@ -343,30 +366,39 @@ class VoiceInputService {
 
   /// Stop glasses recording
   Future<Uint8List?> _stopGlassesRecording() async {
+    debugPrint('VoiceInputService: _stopGlassesRecording called');
     try {
       // Stop recording and disable mic
+      debugPrint('VoiceInputService: Setting voiceCollectorAI.isRecording = false');
       _bluetoothReciever.voiceCollectorAI.isRecording = false;
+      
+      debugPrint('VoiceInputService: Disabling glasses mic');
       await _bluetoothManager.setMicrophone(false);
 
       // Get all collected voice data (LC3 encoded)
-      final lc3Data = await _bluetoothReciever.voiceCollectorAI.getAllDataAndReset();
-      
+      debugPrint('VoiceInputService: Getting voice data from collector');
+      final lc3Data =
+          await _bluetoothReciever.voiceCollectorAI.getAllDataAndReset();
+
       if (lc3Data.isEmpty) {
-        debugPrint('VoiceInputService: No voice data collected from glasses');
+        debugPrint('VoiceInputService: No voice data collected from glasses (lc3Data is empty)');
         return null;
       }
-      
-      debugPrint('VoiceInputService: Got ${lc3Data.length} bytes of LC3 data from glasses');
-      
+
+      debugPrint(
+          'VoiceInputService: Got ${lc3Data.length} bytes of LC3 data from glasses');
+
       // Decode LC3 to PCM
+      debugPrint('VoiceInputService: Decoding LC3 to PCM');
       final pcmData = await LC3.decodeLC3(Uint8List.fromList(lc3Data));
-      
+
       if (pcmData.isEmpty) {
         debugPrint('VoiceInputService: LC3 decode returned empty PCM data');
         return null;
       }
-      
-      debugPrint('VoiceInputService: Decoded to ${pcmData.length} bytes of PCM audio');
+
+      debugPrint(
+          'VoiceInputService: Decoded to ${pcmData.length} bytes of PCM audio');
       return pcmData;
     } catch (e) {
       debugPrint('VoiceInputService: Error stopping glasses recording: $e');
