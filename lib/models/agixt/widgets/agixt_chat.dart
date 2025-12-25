@@ -23,12 +23,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// Event types for streaming chat with TTS
 enum ChatStreamEventType {
-  text,        // Text content chunk
+  text, // Text content chunk
   audioHeader, // Audio format info (sample rate, bits, channels)
-  audioChunk,  // PCM audio data
-  audioEnd,    // End of audio stream
-  done,        // Stream complete
-  error,       // Error occurred
+  audioChunk, // PCM audio data
+  audioEnd, // End of audio stream
+  done, // Stream complete
+  error, // Error occurred
 }
 
 /// Event from streaming chat with TTS
@@ -421,13 +421,15 @@ class AGiXTChatWidget implements AGiXTWidget {
   }
 
   /// Stream chat with interleaved TTS audio
-  /// 
+  ///
   /// This uses tts_mode=interleaved to get both text AND audio streaming
   /// in a single request. Yields ChatStreamEvent objects for text chunks,
   /// audio headers, audio data chunks, and completion.
-  /// 
+  ///
   /// Use this for watch voice input where we want to stream audio to the watch speaker.
-  Stream<ChatStreamEvent> sendChatMessageStreamingWithTTS(String message) async* {
+  Stream<ChatStreamEvent> sendChatMessageStreamingWithTTS(
+    String message,
+  ) async* {
     try {
       final jwt = await AuthService.getJwt();
       if (jwt == null) {
@@ -487,7 +489,9 @@ class AGiXTChatWidget implements AGiXTWidget {
         String fullResponse = '';
         String? newConversationId;
 
-        await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+        await for (final chunk in streamedResponse.stream.transform(
+          utf8.decoder,
+        )) {
           buffer += chunk;
 
           // Process complete SSE events
@@ -540,8 +544,10 @@ class AGiXTChatWidget implements AGiXTWidget {
                     final sampleRate = byteData.getUint32(0, Endian.little);
                     final bitsPerSample = byteData.getUint16(4, Endian.little);
                     final channels = byteData.getUint16(6, Endian.little);
-                    
-                    debugPrint('Audio header: $sampleRate Hz, $bitsPerSample-bit, $channels ch');
+
+                    debugPrint(
+                      'Audio header: $sampleRate Hz, $bitsPerSample-bit, $channels ch',
+                    );
                     yield ChatStreamEvent(
                       type: ChatStreamEventType.audioHeader,
                       sampleRate: sampleRate,
@@ -592,7 +598,8 @@ class AGiXTChatWidget implements AGiXTWidget {
       } else {
         yield ChatStreamEvent(
           type: ChatStreamEventType.error,
-          error: "Error: Unable to get response (${streamedResponse.statusCode})",
+          error:
+              "Error: Unable to get response (${streamedResponse.statusCode})",
         );
         client.close();
       }

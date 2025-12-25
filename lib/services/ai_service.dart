@@ -184,26 +184,28 @@ class AIService {
   }
 
   /// Process text input with TTS streaming to watch
-  /// 
+  ///
   /// This uses the interleaved TTS mode to stream both text and audio
   /// to the watch, allowing real-time audio playback on the watch speaker.
   Future<void> _processTextInputWithTTS(String text, {String? nodeId}) async {
     try {
       final responseBuffer = StringBuffer();
       bool audioHeaderSent = false;
-      
-      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(text)) {
+
+      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(
+        text,
+      )) {
         switch (event.type) {
           case ChatStreamEventType.text:
             if (event.text != null) {
               responseBuffer.write(event.text);
             }
             break;
-            
+
           case ChatStreamEventType.audioHeader:
             // Send audio format to watch
-            if (event.sampleRate != null && 
-                event.bitsPerSample != null && 
+            if (event.sampleRate != null &&
+                event.bitsPerSample != null &&
                 event.channels != null) {
               await _watchService.sendAudioHeader(
                 sampleRate: event.sampleRate!,
@@ -215,20 +217,23 @@ class AIService {
               debugPrint('AIService: Sent audio header to watch');
             }
             break;
-            
+
           case ChatStreamEventType.audioChunk:
             // Stream audio chunk to watch
             if (event.audioData != null && audioHeaderSent) {
-              await _watchService.sendAudioChunk(event.audioData!, nodeId: nodeId);
+              await _watchService.sendAudioChunk(
+                event.audioData!,
+                nodeId: nodeId,
+              );
             }
             break;
-            
+
           case ChatStreamEventType.audioEnd:
             // Signal end of audio
             await _watchService.sendAudioEnd(nodeId: nodeId);
             debugPrint('AIService: Sent audio end to watch');
             break;
-            
+
           case ChatStreamEventType.done:
             // Stream complete - send text response for display
             final response = responseBuffer.toString();
@@ -236,7 +241,7 @@ class AIService {
               await _watchService.sendChatResponse(response, nodeId: nodeId);
             }
             break;
-            
+
           case ChatStreamEventType.error:
             await _watchService.sendErrorToWatch(
               event.error ?? 'Unknown error',

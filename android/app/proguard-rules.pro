@@ -26,4 +26,11 @@
 
 # Vosk speech recognition (JNA required)
 -keep class com.sun.jna.* { *; }
+-keep class com.sun.jna.** { *; }
 -keepclassmembers class * extends com.sun.jna.* { public *; }
+
+# JNA references Java AWT classes that don't exist on Android - ignore them
+-dontwarn java.awt.**
+-dontwarn com.sun.jna.Native$AWT
+-dontwarn com.sun.jna.platform.win32.**
+-dontwarn com.sun.jna.platform.unix.**

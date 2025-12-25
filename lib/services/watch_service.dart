@@ -533,7 +533,9 @@ class WatchService {
     String? nodeId,
   }) async {
     if (!isConnected) {
-      debugPrint('WatchService: Cannot send audio header - watch not connected');
+      debugPrint(
+        'WatchService: Cannot send audio header - watch not connected',
+      );
       return false;
     }
 
