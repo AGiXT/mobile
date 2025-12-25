@@ -289,10 +289,20 @@ class AIService {
 
     _isProcessing = true;
 
+    // First pause wake word detection to release the phone microphone
+    // This must complete before we try to start recording
+    if (_wakeWordService.isEnabled) {
+      debugPrint('AIService: Pausing wake word detection...');
+      await _wakeWordService.pause();
+      // Give the audio system a moment to release resources
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
     // Show listening indicator
     await _showListeningIndicator();
 
     // Start recording from the best available source
+    debugPrint('AIService: Starting voice recording...');
     final success = await _voiceInputService.startRecording(
       maxDuration: const Duration(seconds: 10),
     );
@@ -301,6 +311,10 @@ class AIService {
       debugPrint('AIService: Failed to start recording');
       _isProcessing = false;
       await _showErrorMessage('Failed to start recording');
+      // Resume wake word detection since recording failed
+      if (_wakeWordService.isEnabled) {
+        await _wakeWordService.resume();
+      }
     }
   }
 

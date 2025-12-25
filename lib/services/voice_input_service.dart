@@ -78,8 +78,9 @@ class VoiceInputService {
     // Set up glasses audio callback
     _glassesAudioChannel.setMethodCallHandler(_handleGlassesAudioCall);
 
-    // Set up wake word callback
-    _wakeWordService.setOnWakeWordDetected(_handleWakeWordDetected);
+    // Note: Wake word callback is handled by AIService which coordinates
+    // the full flow (recording -> transcription -> AGiXT -> response)
+    // Do NOT set up a callback here to avoid race conditions
 
     debugPrint(
       'VoiceInputService: Initialized with preferred source: $_preferredSource',
@@ -122,17 +123,9 @@ class VoiceInputService {
     }
   }
 
-  /// Handle wake word detection
-  void _handleWakeWordDetected(double confidence, String source) {
-    debugPrint(
-      'VoiceInputService: Wake word detected with confidence $confidence from $source',
-    );
-
-    // Start recording when wake word is detected
-    if (!_isRecording) {
-      startRecording();
-    }
-  }
+  // Note: Wake word detection is handled by AIService which listens to
+  // WakeWordService.eventStream and coordinates the full voice input flow.
+  // This avoids race conditions from multiple listeners.
 
   /// Get the best available voice input source
   VoiceInputSource getBestAvailableSource() {
