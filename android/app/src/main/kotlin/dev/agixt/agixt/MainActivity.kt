@@ -133,7 +133,7 @@ class MainActivity: FlutterActivity() {
      override fun onDestroy() {
         super.onDestroy()
         // Clean up handlers
-        wakeWordHandler?.destroy()
+        // wakeWordHandler?.destroy()  // Now using Vosk in Flutter
         watchHandler?.destroy()
         BackgroundService.stopService(this@MainActivity, null)
     }
@@ -205,10 +205,12 @@ class MainActivity: FlutterActivity() {
         // Mark that the method channels are initialized
         methodChannelInitialized = true
         
-        // Initialize Voice & Watch handlers
-        wakeWordHandler = WakeWordHandler(this, binaryMessenger)
-        wakeWordHandler?.initialize()
+        // Wake word detection is now handled by Vosk in Flutter (pure Dart)
+        // Native WakeWordHandler is no longer needed
+        // wakeWordHandler = WakeWordHandler(this, binaryMessenger)
+        // wakeWordHandler?.initialize()
         
+        // Initialize Watch handler for Pixel Watch support
         watchHandler = WatchHandler(this, binaryMessenger)
         watchHandler?.initialize()
         

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/calendar.dart';
@@ -12,6 +13,7 @@ import 'package:agixt/services/secure_storage_service.dart';
 import 'package:agixt/services/location_service.dart'; // Import LocationService
 import 'package:agixt/services/client_commands_service.dart'; // Import ClientSideTools
 import 'package:device_calendar/device_calendar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart'; // Import Geolocator
 import 'package:hive/hive.dart';
@@ -230,6 +232,156 @@ class AGiXTChatWidget implements AGiXTWidget {
       debugPrint('Error sending direct chat message: $e');
       return "Error: Failed to communicate with AGiXT";
     }
+  }
+
+  /// Send chat message with streaming response
+  /// Returns a stream of response chunks as they arrive
+  Stream<String> sendChatMessageStreaming(String message) async* {
+    try {
+      final jwt = await AuthService.getJwt();
+      if (jwt == null) {
+        yield "Please login to use AGiXT chat.";
+        return;
+      }
+
+      final conversationId = await _getCurrentConversationId();
+      debugPrint('Using conversation ID for streaming chat: $conversationId');
+
+      // Build context data with timeout
+      String contextData = '';
+      try {
+        contextData = await _buildContextData().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {
+            debugPrint('Context building timed out');
+            return '';
+          },
+        );
+      } catch (e) {
+        debugPrint('Error building context data: $e');
+      }
+
+      // Get available tools
+      final availableTools = await ClientSideTools.getToolDefinitions();
+
+      final Map<String, dynamic> requestBody = {
+        "model": await _getAgentName(),
+        "messages": [
+          {
+            "role": "user",
+            "content": message,
+            if (contextData.isNotEmpty) "context": contextData,
+          },
+        ],
+        "user": conversationId,
+        "stream": true, // Enable streaming!
+        if (availableTools.isNotEmpty) "tools": availableTools,
+        if (availableTools.isNotEmpty) "tool_choice": "auto",
+      };
+
+      // Create streaming request
+      final client = http.Client();
+      final request = http.Request(
+        'POST',
+        Uri.parse('${AuthService.serverUrl}/v1/chat/completions'),
+      );
+      request.headers.addAll({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $jwt',
+        'Accept': 'text/event-stream',
+      });
+      request.body = jsonEncode(requestBody);
+
+      debugPrint('Sending streaming chat request...');
+      final streamedResponse = await client.send(request);
+
+      if (streamedResponse.statusCode == 200) {
+        String buffer = '';
+        String fullResponse = '';
+        String? newConversationId;
+
+        await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+          buffer += chunk;
+          
+          // Process complete SSE events (lines starting with "data: ")
+          while (buffer.contains('\n')) {
+            final newlineIndex = buffer.indexOf('\n');
+            final line = buffer.substring(0, newlineIndex).trim();
+            buffer = buffer.substring(newlineIndex + 1);
+
+            if (line.isEmpty) continue;
+            if (!line.startsWith('data: ')) continue;
+
+            final data = line.substring(6); // Remove "data: " prefix
+            
+            // Check for stream end
+            if (data == '[DONE]') {
+              debugPrint('Stream complete');
+              continue;
+            }
+
+            try {
+              final jsonData = jsonDecode(data);
+              
+              // Extract conversation ID from first chunk
+              if (newConversationId == null && jsonData['id'] != null) {
+                newConversationId = jsonData['id'].toString();
+                debugPrint('Got conversation ID from stream: $newConversationId');
+              }
+
+              // Extract content delta
+              if (jsonData['choices'] != null &&
+                  jsonData['choices'].isNotEmpty) {
+                final delta = jsonData['choices'][0]['delta'];
+                if (delta != null && delta['content'] != null) {
+                  final content = delta['content'].toString();
+                  fullResponse += content;
+                  yield content; // Yield each chunk as it arrives
+                }
+              }
+            } catch (e) {
+              // Skip malformed JSON chunks
+              debugPrint('Error parsing SSE chunk: $e');
+            }
+          }
+        }
+
+        // Save conversation ID after stream completes
+        if (newConversationId != null && newConversationId != '-') {
+          final cookieManager = CookieManager();
+          await cookieManager.saveAgixtConversationId(newConversationId);
+          debugPrint('Saved conversation ID: $newConversationId');
+          _navigateToConversation(newConversationId, jwt);
+        }
+
+        // Save the full interaction
+        if (fullResponse.isNotEmpty) {
+          await _saveInteraction(message, fullResponse);
+        }
+
+        client.close();
+      } else if (streamedResponse.statusCode == 401) {
+        await SessionManager.clearSession();
+        yield "Authentication expired. Please login again.";
+        client.close();
+      } else {
+        debugPrint('Streaming API Error: ${streamedResponse.statusCode}');
+        yield "Error: Unable to get response (${streamedResponse.statusCode})";
+        client.close();
+      }
+    } catch (e) {
+      debugPrint('Streaming chat error: $e');
+      yield "An error occurred while connecting to AGiXT.";
+    }
+  }
+
+  /// Convenience method to collect full streaming response as a single string
+  Future<String?> sendChatMessageStreamingFull(String message) async {
+    final buffer = StringBuffer();
+    await for (final chunk in sendChatMessageStreaming(message)) {
+      buffer.write(chunk);
+    }
+    return buffer.isEmpty ? null : buffer.toString();
   }
 
   // Navigate to the conversation in the WebView

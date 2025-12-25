@@ -93,14 +93,38 @@ class AIService {
 
   /// Handle wake word events
   void _handleWakeWordEvent(WakeWordEvent event) {
-    if (event.type == WakeWordEventType.detected) {
-      debugPrint('AIService: Wake word detected from ${event.source}');
-      // Provide haptic feedback
-      _playWakeWordFeedback();
-      // Start voice recording when wake word is detected
-      if (!_isProcessing) {
-        _startVoiceRecording();
-      }
+    switch (event.type) {
+      case WakeWordEventType.detected:
+        debugPrint('AIService: Wake word detected from ${event.source}');
+        // Provide haptic feedback
+        _playWakeWordFeedback();
+        // Start voice recording when wake word is detected
+        if (!_isProcessing) {
+          _startVoiceRecording();
+        }
+        break;
+
+      case WakeWordEventType.modelDownloadStarted:
+        debugPrint('AIService: Wake word model download started');
+        _showInfoMessage('Downloading speech model for wake word...');
+        break;
+
+      case WakeWordEventType.modelDownloadProgress:
+        final progress = ((event.progress ?? 0) * 100).toInt();
+        debugPrint('AIService: Wake word model download progress: $progress%');
+        break;
+
+      case WakeWordEventType.modelDownloadComplete:
+        debugPrint('AIService: Wake word model download complete');
+        _showInfoMessage('Wake word ready! Say "computer" to activate.');
+        break;
+
+      case WakeWordEventType.error:
+        debugPrint('AIService: Wake word error: ${event.error}');
+        break;
+
+      default:
+        break;
     }
   }
 
@@ -171,12 +195,22 @@ class AIService {
 
       debugPrint('AIService: Transcription: $transcription');
 
-      // Send transcribed text to AGiXT chat
-      final response = await _chatWidget.sendChatMessage(transcription);
+      // Send transcribed text to AGiXT chat with streaming for better responsiveness
+      final responseBuffer = StringBuffer();
+      
+      await for (final chunk in _chatWidget.sendChatMessageStreaming(transcription)) {
+        responseBuffer.write(chunk);
+        
+        // Stream chunks to connected devices as they arrive
+        // For glasses and watch, we accumulate and send at reasonable intervals
+        // For TTS, we'll wait for complete sentences
+      }
+      
+      final fullResponse = responseBuffer.toString();
 
-      if (response != null && response.isNotEmpty) {
-        // Output response based on connected devices
-        await _outputResponse(response);
+      if (fullResponse.isNotEmpty) {
+        // Output the full response (TTS and final display)
+        await _outputResponse(fullResponse);
       } else {
         await _showErrorMessage('No response from AGiXT');
       }
@@ -410,16 +444,22 @@ class AIService {
     }
   }
 
-  // Send message to AGiXT API and display response
+  // Send message to AGiXT API and display response (with streaming)
   Future<void> _sendMessageToAGiXT(String message) async {
     try {
       // Show sending message using AI response method
       await _bluetoothManager.sendAIResponse('Sending to AGiXT: "$message"');
 
-      // Get response using the AGiXTChatWidget
-      final response = await _chatWidget.sendChatMessage(message);
+      // Stream response from AGiXT for better responsiveness
+      final responseBuffer = StringBuffer();
+      
+      await for (final chunk in _chatWidget.sendChatMessageStreaming(message)) {
+        responseBuffer.write(chunk);
+      }
+      
+      final response = responseBuffer.toString();
 
-      if (response != null && response.isNotEmpty) {
+      if (response.isNotEmpty) {
         // Output response to appropriate devices
         await _outputResponse(response);
       } else {
@@ -513,6 +553,13 @@ class AIService {
     await _bluetoothManager.sendAIResponse('Error: $message');
     if (_watchService.isConnected) {
       await _watchService.displayMessage('Error: $message', durationMs: 5000);
+    }
+  }
+
+  Future<void> _showInfoMessage(String message) async {
+    await _bluetoothManager.sendAIResponse(message);
+    if (_watchService.isConnected) {
+      await _watchService.displayMessage(message, durationMs: 5000);
     }
   }
 
