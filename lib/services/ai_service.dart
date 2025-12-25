@@ -40,6 +40,7 @@ class AIService {
   StreamSubscription<ActivityUpdate>? _activitySubscription;
   StreamSubscription<WakeWordEvent>? _wakeWordSubscription;
   StreamSubscription<VoiceInputState>? _voiceInputSubscription;
+  StreamSubscription<WatchVoiceInput>? _watchVoiceInputSubscription;
   StringBuffer _streamingResponse = StringBuffer();
   bool _isStreaming = false;
 
@@ -82,6 +83,14 @@ class AIService {
         _handleVoiceInputState,
         onError: (error) {
           debugPrint('AIService: Voice input error: $error');
+        },
+      );
+
+      // Set up watch voice input listener
+      _watchVoiceInputSubscription = _watchService.voiceInputStream.listen(
+        _handleWatchVoiceInput,
+        onError: (error) {
+          debugPrint('AIService: Watch voice input error: $error');
         },
       );
 
@@ -150,6 +159,63 @@ class AIService {
     }
   }
 
+  /// Handle voice input from the Wear OS watch
+  Future<void> _handleWatchVoiceInput(WatchVoiceInput input) async {
+    debugPrint('AIService: Watch voice input: ${input.text}');
+
+    if (input.text.isEmpty) {
+      await _watchService.sendErrorToWatch(
+        'No speech detected',
+        nodeId: input.nodeId,
+      );
+      return;
+    }
+
+    try {
+      // Process the text directly (already transcribed on watch)
+      final response = await _processTextInput(input.text, isFromWatch: true);
+
+      // Send response back to watch
+      if (response != null && response.isNotEmpty) {
+        await _watchService.sendChatResponse(response, nodeId: input.nodeId);
+        // Also speak the response on the phone if TTS is enabled
+        await _ttsService.speak(response);
+      } else {
+        await _watchService.sendErrorToWatch(
+          'No response from AI',
+          nodeId: input.nodeId,
+        );
+      }
+    } catch (e) {
+      debugPrint('AIService: Error processing watch input: $e');
+      await _watchService.sendErrorToWatch(
+        'Error processing request',
+        nodeId: input.nodeId,
+      );
+    }
+  }
+
+  /// Process text input and return the response
+  Future<String?> _processTextInput(
+    String text, {
+    bool isFromWatch = false,
+  }) async {
+    try {
+      // Use streaming for better responsiveness
+      final responseBuffer = StringBuffer();
+      final stream = _chatWidget.sendChatMessageStreaming(text);
+
+      await for (final chunk in stream) {
+        responseBuffer.write(chunk);
+      }
+
+      return responseBuffer.toString();
+    } catch (e) {
+      debugPrint('AIService: Error processing text input: $e');
+      return null;
+    }
+  }
+
   /// Start voice recording from the best available source
   Future<void> _startVoiceRecording() async {
     if (_isProcessing) {
@@ -197,15 +263,17 @@ class AIService {
 
       // Send transcribed text to AGiXT chat with streaming for better responsiveness
       final responseBuffer = StringBuffer();
-      
-      await for (final chunk in _chatWidget.sendChatMessageStreaming(transcription)) {
+
+      await for (final chunk in _chatWidget.sendChatMessageStreaming(
+        transcription,
+      )) {
         responseBuffer.write(chunk);
-        
+
         // Stream chunks to connected devices as they arrive
         // For glasses and watch, we accumulate and send at reasonable intervals
         // For TTS, we'll wait for complete sentences
       }
-      
+
       final fullResponse = responseBuffer.toString();
 
       if (fullResponse.isNotEmpty) {
@@ -452,11 +520,11 @@ class AIService {
 
       // Stream response from AGiXT for better responsiveness
       final responseBuffer = StringBuffer();
-      
+
       await for (final chunk in _chatWidget.sendChatMessageStreaming(message)) {
         responseBuffer.write(chunk);
       }
-      
+
       final response = responseBuffer.toString();
 
       if (response.isNotEmpty) {
@@ -604,6 +672,7 @@ class AIService {
     _activitySubscription?.cancel();
     _wakeWordSubscription?.cancel();
     _voiceInputSubscription?.cancel();
+    _watchVoiceInputSubscription?.cancel();
     _clientCommandsService.dispose();
     _webSocketService.dispose();
     _voiceInputService.dispose();

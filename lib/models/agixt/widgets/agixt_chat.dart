@@ -300,9 +300,11 @@ class AGiXTChatWidget implements AGiXTWidget {
         String fullResponse = '';
         String? newConversationId;
 
-        await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+        await for (final chunk in streamedResponse.stream.transform(
+          utf8.decoder,
+        )) {
           buffer += chunk;
-          
+
           // Process complete SSE events (lines starting with "data: ")
           while (buffer.contains('\n')) {
             final newlineIndex = buffer.indexOf('\n');
@@ -313,7 +315,7 @@ class AGiXTChatWidget implements AGiXTWidget {
             if (!line.startsWith('data: ')) continue;
 
             final data = line.substring(6); // Remove "data: " prefix
-            
+
             // Check for stream end
             if (data == '[DONE]') {
               debugPrint('Stream complete');
@@ -322,11 +324,13 @@ class AGiXTChatWidget implements AGiXTWidget {
 
             try {
               final jsonData = jsonDecode(data);
-              
+
               // Extract conversation ID from first chunk
               if (newConversationId == null && jsonData['id'] != null) {
                 newConversationId = jsonData['id'].toString();
-                debugPrint('Got conversation ID from stream: $newConversationId');
+                debugPrint(
+                  'Got conversation ID from stream: $newConversationId',
+                );
               }
 
               // Extract content delta
@@ -570,9 +574,10 @@ class AGiXTChatWidget implements AGiXTWidget {
             if (event.start != null) {
               final start = event.start!.toLocal();
               final end = event.end?.toLocal();
-              final timeStr = end != null
-                  ? "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')} - ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}"
-                  : "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}";
+              final timeStr =
+                  end != null
+                      ? "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')} - ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')}"
+                      : "${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}";
 
               calendarEvents.add(
                 "$timeStr ${event.title ?? 'Untitled event'}${event.location != null && event.location!.isNotEmpty ? ' at ${event.location}' : ''}",
@@ -720,9 +725,10 @@ class AGiXTChatWidget implements AGiXTWidget {
           data = {
             'question': question,
             'answer': answer,
-            'timestamp': DateTime.fromMillisecondsSinceEpoch(
-              int.parse(timestamp),
-            ).toIso8601String(),
+            'timestamp':
+                DateTime.fromMillisecondsSinceEpoch(
+                  int.parse(timestamp),
+                ).toIso8601String(),
           };
           await _secureStorage.write(
             key: _interactionStorageKey,

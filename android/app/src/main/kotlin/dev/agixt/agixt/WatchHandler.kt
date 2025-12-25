@@ -25,12 +25,15 @@ class WatchHandler(
     // Capability and path constants
     private val AGIXT_WATCH_CAPABILITY = "agixt_watch"
     private val PATH_VOICE_COMMAND = "/voice_command"
+    private val PATH_VOICE_INPUT = "/voice_input"  // From Wear OS app
+    private val PATH_CHAT_RESPONSE = "/chat_response"  // Response to Wear OS app
     private val PATH_TTS_REQUEST = "/tts_request"
     private val PATH_DISPLAY_MESSAGE = "/display_message"
     private val PATH_START_RECORDING = "/start_recording"
     private val PATH_STOP_RECORDING = "/stop_recording"
     private val PATH_AUDIO_DATA = "/audio_data"
     private val PATH_CONNECTION_STATUS = "/connection_status"
+    private val PATH_ERROR = "/error"
     
     private lateinit var methodChannel: MethodChannel
     private var connectedNodeId: String? = null
@@ -106,6 +109,36 @@ class WatchHandler(
                     val messageData = "$duration|$message"
                     scope.launch {
                         val success = sendMessageToWatch(PATH_DISPLAY_MESSAGE, messageData.toByteArray())
+                        withContext(Dispatchers.Main) {
+                            result.success(success)
+                        }
+                    }
+                }
+                "sendChatResponse" -> {
+                    // Send chat response to Wear OS app
+                    val response = call.argument<String>("response") ?: ""
+                    val nodeId = call.argument<String>("nodeId")
+                    scope.launch {
+                        val success = if (nodeId != null) {
+                            sendMessageToNode(nodeId, PATH_CHAT_RESPONSE, response.toByteArray(Charsets.UTF_8))
+                        } else {
+                            sendMessageToWatch(PATH_CHAT_RESPONSE, response.toByteArray(Charsets.UTF_8))
+                        }
+                        withContext(Dispatchers.Main) {
+                            result.success(success)
+                        }
+                    }
+                }
+                "sendErrorToWatch" -> {
+                    // Send error message to Wear OS app
+                    val errorMessage = call.argument<String>("message") ?: "An error occurred"
+                    val nodeId = call.argument<String>("nodeId")
+                    scope.launch {
+                        val success = if (nodeId != null) {
+                            sendMessageToNode(nodeId, PATH_ERROR, errorMessage.toByteArray(Charsets.UTF_8))
+                        } else {
+                            sendMessageToWatch(PATH_ERROR, errorMessage.toByteArray(Charsets.UTF_8))
+                        }
                         withContext(Dispatchers.Main) {
                             result.success(success)
                         }
@@ -216,14 +249,18 @@ class WatchHandler(
             return false
         }
         
+        return sendMessageToNode(nodeId, path, data)
+    }
+    
+    private suspend fun sendMessageToNode(nodeId: String, path: String, data: ByteArray): Boolean {
         return try {
             Tasks.await(
                 Wearable.getMessageClient(context).sendMessage(nodeId, path, data)
             )
-            Log.d(TAG, "Message sent to watch: $path")
+            Log.d(TAG, "Message sent to node $nodeId: $path")
             true
         } catch (e: Exception) {
-            Log.e(TAG, "Error sending message to watch: ${e.message}")
+            Log.e(TAG, "Error sending message to node: ${e.message}")
             false
         }
     }
@@ -267,6 +304,15 @@ class WatchHandler(
                 val transcription = String(data)
                 methodChannel.invokeMethod("onVoiceCommand", mapOf(
                     "transcription" to transcription
+                ))
+            }
+            PATH_VOICE_INPUT -> {
+                // Voice input from Wear OS app - forward to Flutter for processing
+                val text = String(data, Charsets.UTF_8)
+                Log.d(TAG, "Voice input from watch: $text")
+                methodChannel.invokeMethod("onWatchVoiceInput", mapOf(
+                    "text" to text,
+                    "nodeId" to messageEvent.sourceNodeId
                 ))
             }
             PATH_AUDIO_DATA -> {

@@ -80,7 +80,9 @@ class WakeWordService {
     // Check if model exists, download if needed
     final modelPath = await _getModelPath();
     if (modelPath == null) {
-      debugPrint('WakeWordService: Model not found, will download when enabled');
+      debugPrint(
+        'WakeWordService: Model not found, will download when enabled',
+      );
       // Model will be downloaded when user enables wake word
       _isInitialized = true;
       return;
@@ -117,9 +119,9 @@ class WakeWordService {
 
     _isModelLoading = true;
     _modelDownloadProgress = 0.0;
-    _eventController.add(WakeWordEvent(
-      type: WakeWordEventType.modelDownloadStarted,
-    ));
+    _eventController.add(
+      WakeWordEvent(type: WakeWordEventType.modelDownloadStarted),
+    );
 
     try {
       debugPrint('WakeWordService: Downloading model from $_modelUrl');
@@ -150,10 +152,12 @@ class WakeWordService {
         downloaded += chunk.length;
         if (contentLength > 0) {
           _modelDownloadProgress = downloaded / contentLength;
-          _eventController.add(WakeWordEvent(
-            type: WakeWordEventType.modelDownloadProgress,
-            progress: _modelDownloadProgress,
-          ));
+          _eventController.add(
+            WakeWordEvent(
+              type: WakeWordEventType.modelDownloadProgress,
+              progress: _modelDownloadProgress,
+            ),
+          );
         }
       }
 
@@ -185,18 +189,20 @@ class WakeWordService {
 
       _isModelLoading = false;
       _modelDownloadProgress = 1.0;
-      _eventController.add(WakeWordEvent(
-        type: WakeWordEventType.modelDownloadComplete,
-      ));
+      _eventController.add(
+        WakeWordEvent(type: WakeWordEventType.modelDownloadComplete),
+      );
 
       return modelPath;
     } catch (e) {
       debugPrint('WakeWordService: Error downloading model: $e');
       _isModelLoading = false;
-      _eventController.add(WakeWordEvent(
-        type: WakeWordEventType.error,
-        error: 'Failed to download speech model: $e',
-      ));
+      _eventController.add(
+        WakeWordEvent(
+          type: WakeWordEventType.error,
+          error: 'Failed to download speech model: $e',
+        ),
+      );
       return null;
     }
   }
@@ -210,10 +216,12 @@ class WakeWordService {
       return true;
     } catch (e) {
       debugPrint('WakeWordService: Error loading model: $e');
-      _eventController.add(WakeWordEvent(
-        type: WakeWordEventType.error,
-        error: 'Failed to load speech model: $e',
-      ));
+      _eventController.add(
+        WakeWordEvent(
+          type: WakeWordEventType.error,
+          error: 'Failed to load speech model: $e',
+        ),
+      );
       return false;
     }
   }
@@ -230,7 +238,9 @@ class WakeWordService {
         sampleRate: 16000,
         grammar: [_wakeWord, 'hey computer', 'okay computer', 'hi computer'],
       );
-      debugPrint('WakeWordService: Recognizer created with grammar: [$_wakeWord]');
+      debugPrint(
+        'WakeWordService: Recognizer created with grammar: [$_wakeWord]',
+      );
       return true;
     } catch (e) {
       debugPrint('WakeWordService: Error creating recognizer: $e');
@@ -309,9 +319,7 @@ class WakeWordService {
       return;
     }
 
-    debugPrint(
-      'WakeWordService: Wake word detected! confidence=$confidence',
-    );
+    debugPrint('WakeWordService: Wake word detected! confidence=$confidence');
 
     _eventController.add(
       WakeWordEvent(
@@ -355,10 +363,12 @@ class WakeWordService {
       if (_model != null) {
         await startListening();
       } else {
-        _eventController.add(WakeWordEvent(
-          type: WakeWordEventType.error,
-          error: 'Speech model not available. Please try again.',
-        ));
+        _eventController.add(
+          WakeWordEvent(
+            type: WakeWordEventType.error,
+            error: 'Speech model not available. Please try again.',
+          ),
+        );
       }
     } else {
       await stopListening();
@@ -437,10 +447,12 @@ class WakeWordService {
       return true;
     } catch (e) {
       debugPrint('WakeWordService: Error starting listening: $e');
-      _eventController.add(WakeWordEvent(
-        type: WakeWordEventType.error,
-        error: 'Failed to start wake word detection: $e',
-      ));
+      _eventController.add(
+        WakeWordEvent(
+          type: WakeWordEventType.error,
+          error: 'Failed to start wake word detection: $e',
+        ),
+      );
       return false;
     }
   }

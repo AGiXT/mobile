@@ -128,6 +128,44 @@ class WatchService {
         debugPrint('WatchService: Wake word detected on watch');
         return true;
 
+      case 'onVoiceCommand':
+        // Voice command received from legacy watch app
+        final transcription = call.arguments['transcription'] as String?;
+        if (transcription != null && transcription.isNotEmpty) {
+          debugPrint('WatchService: Voice command: $transcription');
+          _handleVoiceInput(transcription, null);
+        }
+        return true;
+
+      case 'onWatchVoiceInput':
+        // Voice input from Wear OS app
+        final text = call.arguments['text'] as String?;
+        final nodeId = call.arguments['nodeId'] as String?;
+        if (text != null && text.isNotEmpty) {
+          debugPrint('WatchService: Watch voice input: $text (from $nodeId)');
+          _handleVoiceInput(text, nodeId);
+        }
+        return true;
+
+      case 'onConnectionChanged':
+        // Connection status changed
+        final connected = call.arguments['connected'] == true;
+        final nodeName = call.arguments['nodeName'] as String?;
+        if (connected) {
+          _handleWatchConnected(null, nodeName);
+        } else {
+          _handleWatchDisconnected();
+        }
+        return true;
+
+      case 'onAudioReceived':
+        // Audio data from watch
+        final audio = call.arguments['audio'];
+        if (audio is Uint8List) {
+          _handleAudioData(audio);
+        }
+        return true;
+
       default:
         debugPrint('WatchService: Unknown method call: ${call.method}');
         return null;
@@ -436,12 +474,64 @@ class WatchService {
     }
   }
 
+  // Stream for watch voice input
+  final StreamController<WatchVoiceInput> _voiceInputController =
+      StreamController<WatchVoiceInput>.broadcast();
+
+  Stream<WatchVoiceInput> get voiceInputStream => _voiceInputController.stream;
+
+  /// Handle voice input from the watch
+  void _handleVoiceInput(String text, String? nodeId) {
+    _voiceInputController.add(WatchVoiceInput(text: text, nodeId: nodeId));
+  }
+
+  /// Send a chat response to the Wear OS app
+  Future<bool> sendChatResponse(String response, {String? nodeId}) async {
+    if (!isConnected) {
+      debugPrint('WatchService: Cannot send response - watch not connected');
+      return false;
+    }
+
+    try {
+      final args = <String, dynamic>{'response': response};
+      if (nodeId != null) {
+        args['nodeId'] = nodeId;
+      }
+      final result = await _watchChannel.invokeMethod('sendChatResponse', args);
+      return result == true;
+    } on PlatformException catch (e) {
+      debugPrint('WatchService: Error sending chat response: $e');
+      return false;
+    }
+  }
+
+  /// Send an error message to the Wear OS app
+  Future<bool> sendErrorToWatch(String message, {String? nodeId}) async {
+    if (!isConnected) {
+      debugPrint('WatchService: Cannot send error - watch not connected');
+      return false;
+    }
+
+    try {
+      final args = <String, dynamic>{'message': message};
+      if (nodeId != null) {
+        args['nodeId'] = nodeId;
+      }
+      final result = await _watchChannel.invokeMethod('sendErrorToWatch', args);
+      return result == true;
+    } on PlatformException catch (e) {
+      debugPrint('WatchService: Error sending error to watch: $e');
+      return false;
+    }
+  }
+
   /// Dispose of the service
   void dispose() {
     _eventSubscription?.cancel();
     _connectionStateController.close();
     _audioDataController.close();
     _ttsStateController.close();
+    _voiceInputController.close();
   }
 }
 
@@ -477,4 +567,12 @@ class WatchTTSState {
     this.isComplete = false,
     this.error,
   });
+}
+
+/// Voice input from watch
+class WatchVoiceInput {
+  final String text;
+  final String? nodeId;
+
+  WatchVoiceInput({required this.text, this.nodeId});
 }
