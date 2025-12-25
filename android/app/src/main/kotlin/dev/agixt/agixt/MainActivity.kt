@@ -31,6 +31,7 @@ class MainActivity: FlutterActivity() {
     private val TAG = "MainActivity"
     private var methodChannelInitialized = false
     private var pendingToken: String? = null
+    private var pendingVoiceInput: Pair<String, String?>? = null
     
     // Voice & Watch handlers
     private var wakeWordHandler: WakeWordHandler? = null
@@ -75,6 +76,21 @@ class MainActivity: FlutterActivity() {
                             // Otherwise, store it for later sending once Flutter is initialized
                             pendingToken = token
                         }
+                    }
+                }
+            }
+            // Handle voice input from WearableMessageService
+            else if (WearableMessageService.ACTION_VOICE_INPUT == it.action) {
+                val text = it.getStringExtra(WearableMessageService.EXTRA_TEXT)
+                val nodeId = it.getStringExtra(WearableMessageService.EXTRA_NODE_ID)
+                if (!text.isNullOrEmpty()) {
+                    Log.d(TAG, "Voice input from watch intent: $text (from $nodeId)")
+                    if (methodChannelInitialized && watchHandler != null) {
+                        // Forward to WatchHandler which will send to Flutter
+                        watchHandler?.handleVoiceInputFromIntent(text, nodeId)
+                    } else {
+                        // Store for later processing
+                        pendingVoiceInput = Pair(text, nodeId)
                     }
                 }
             }
@@ -218,6 +234,13 @@ class MainActivity: FlutterActivity() {
         pendingToken?.let { token ->
             sendTokenToFlutter(token)
             pendingToken = null
+        }
+        
+        // Check if we have pending voice input to process
+        pendingVoiceInput?.let { (text, nodeId) ->
+            Log.d(TAG, "Processing pending voice input: $text")
+            watchHandler?.handleVoiceInputFromIntent(text, nodeId)
+            pendingVoiceInput = null
         }
         
         // Setup the new channel for button events

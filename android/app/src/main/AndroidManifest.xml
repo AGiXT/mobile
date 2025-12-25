@@ -88,6 +88,31 @@
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="dataSync|connectedDevice|location"
         />
+        
+        <!-- Wearable Listener Service - receives messages from Wear OS watch -->
+        <service
+            android:name="dev.agixt.agixt.WearableMessageService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/voice_input"
+                    android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/voice_command"
+                    android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/audio_data"
+                    android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/connection_status"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
         <service 
             android:label="notifications" 
             android:name="notification.listener.service.NotificationListener"

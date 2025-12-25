@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/models/agixt/calendar.dart';
 import 'package:agixt/models/agixt/checklist.dart';
@@ -19,6 +20,37 @@ import 'package:geolocator/geolocator.dart'; // Import Geolocator
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// Event types for streaming chat with TTS
+enum ChatStreamEventType {
+  text,        // Text content chunk
+  audioHeader, // Audio format info (sample rate, bits, channels)
+  audioChunk,  // PCM audio data
+  audioEnd,    // End of audio stream
+  done,        // Stream complete
+  error,       // Error occurred
+}
+
+/// Event from streaming chat with TTS
+class ChatStreamEvent {
+  final ChatStreamEventType type;
+  final String? text;
+  final Uint8List? audioData;
+  final int? sampleRate;
+  final int? bitsPerSample;
+  final int? channels;
+  final String? error;
+
+  ChatStreamEvent({
+    required this.type,
+    this.text,
+    this.audioData,
+    this.sampleRate,
+    this.bitsPerSample,
+    this.channels,
+    this.error,
+  });
+}
 
 class AGiXTChatWidget implements AGiXTWidget {
   static const String DEFAULT_MODEL = "XT";
@@ -386,6 +418,191 @@ class AGiXTChatWidget implements AGiXTWidget {
       buffer.write(chunk);
     }
     return buffer.isEmpty ? null : buffer.toString();
+  }
+
+  /// Stream chat with interleaved TTS audio
+  /// 
+  /// This uses tts_mode=interleaved to get both text AND audio streaming
+  /// in a single request. Yields ChatStreamEvent objects for text chunks,
+  /// audio headers, audio data chunks, and completion.
+  /// 
+  /// Use this for watch voice input where we want to stream audio to the watch speaker.
+  Stream<ChatStreamEvent> sendChatMessageStreamingWithTTS(String message) async* {
+    try {
+      final jwt = await AuthService.getJwt();
+      if (jwt == null) {
+        yield ChatStreamEvent(
+          type: ChatStreamEventType.error,
+          error: "Please login to use AGiXT chat.",
+        );
+        return;
+      }
+
+      final conversationId = await _getCurrentConversationId();
+      debugPrint('Using conversation ID for TTS streaming: $conversationId');
+
+      // Build context data with timeout
+      String contextData = '';
+      try {
+        contextData = await _buildContextData().timeout(
+          const Duration(seconds: 3),
+          onTimeout: () => '',
+        );
+      } catch (e) {
+        debugPrint('Error building context data: $e');
+      }
+
+      final Map<String, dynamic> requestBody = {
+        "model": await _getAgentName(),
+        "messages": [
+          {
+            "role": "user",
+            "content": message,
+            if (contextData.isNotEmpty) "context": contextData,
+          },
+        ],
+        "user": conversationId,
+        "stream": true,
+        "tts_mode": "interleaved", // Request TTS in the stream
+      };
+
+      // Create streaming request
+      final client = http.Client();
+      final request = http.Request(
+        'POST',
+        Uri.parse('${AuthService.serverUrl}/v1/chat/completions'),
+      );
+      request.headers.addAll({
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $jwt',
+        'Accept': 'text/event-stream',
+      });
+      request.body = jsonEncode(requestBody);
+
+      debugPrint('Sending TTS streaming chat request...');
+      final streamedResponse = await client.send(request);
+
+      if (streamedResponse.statusCode == 200) {
+        String buffer = '';
+        String fullResponse = '';
+        String? newConversationId;
+
+        await for (final chunk in streamedResponse.stream.transform(utf8.decoder)) {
+          buffer += chunk;
+
+          // Process complete SSE events
+          while (buffer.contains('\n')) {
+            final newlineIndex = buffer.indexOf('\n');
+            final line = buffer.substring(0, newlineIndex).trim();
+            buffer = buffer.substring(newlineIndex + 1);
+
+            if (line.isEmpty) continue;
+            if (!line.startsWith('data: ')) continue;
+
+            final data = line.substring(6);
+
+            if (data == '[DONE]') {
+              yield ChatStreamEvent(type: ChatStreamEventType.done);
+              continue;
+            }
+
+            try {
+              final jsonData = jsonDecode(data) as Map<String, dynamic>;
+              final objectType = jsonData['object'] as String?;
+
+              // Extract conversation ID from first chunk
+              if (newConversationId == null && jsonData['id'] != null) {
+                newConversationId = jsonData['id'].toString();
+              }
+
+              if (objectType == 'chat.completion.chunk') {
+                // Text chunk
+                final choices = jsonData['choices'] as List?;
+                if (choices != null && choices.isNotEmpty) {
+                  final delta = choices[0]['delta'] as Map<String, dynamic>?;
+                  if (delta != null && delta['content'] != null) {
+                    final content = delta['content'].toString();
+                    fullResponse += content;
+                    yield ChatStreamEvent(
+                      type: ChatStreamEventType.text,
+                      text: content,
+                    );
+                  }
+                }
+              } else if (objectType == 'audio.header') {
+                // Audio header with format info
+                final audioB64 = jsonData['audio'] as String?;
+                if (audioB64 != null) {
+                  final headerBytes = base64Decode(audioB64);
+                  if (headerBytes.length >= 8) {
+                    // Parse header: 4 bytes sample rate, 2 bytes bits, 2 bytes channels
+                    final byteData = ByteData.sublistView(headerBytes);
+                    final sampleRate = byteData.getUint32(0, Endian.little);
+                    final bitsPerSample = byteData.getUint16(4, Endian.little);
+                    final channels = byteData.getUint16(6, Endian.little);
+                    
+                    debugPrint('Audio header: $sampleRate Hz, $bitsPerSample-bit, $channels ch');
+                    yield ChatStreamEvent(
+                      type: ChatStreamEventType.audioHeader,
+                      sampleRate: sampleRate,
+                      bitsPerSample: bitsPerSample,
+                      channels: channels,
+                    );
+                  }
+                }
+              } else if (objectType == 'audio.chunk') {
+                // Audio data chunk
+                final audioB64 = jsonData['audio'] as String?;
+                if (audioB64 != null) {
+                  final audioData = base64Decode(audioB64);
+                  yield ChatStreamEvent(
+                    type: ChatStreamEventType.audioChunk,
+                    audioData: Uint8List.fromList(audioData),
+                  );
+                }
+              } else if (objectType == 'audio.end') {
+                yield ChatStreamEvent(type: ChatStreamEventType.audioEnd);
+              }
+            } catch (e) {
+              debugPrint('Error parsing TTS SSE chunk: $e');
+            }
+          }
+        }
+
+        // Save conversation ID
+        if (newConversationId != null && newConversationId != '-') {
+          final cookieManager = CookieManager();
+          await cookieManager.saveAgixtConversationId(newConversationId);
+          _navigateToConversation(newConversationId, jwt);
+        }
+
+        // Save interaction
+        if (fullResponse.isNotEmpty) {
+          await _saveInteraction(message, fullResponse);
+        }
+
+        client.close();
+      } else if (streamedResponse.statusCode == 401) {
+        await SessionManager.clearSession();
+        yield ChatStreamEvent(
+          type: ChatStreamEventType.error,
+          error: "Authentication expired. Please login again.",
+        );
+        client.close();
+      } else {
+        yield ChatStreamEvent(
+          type: ChatStreamEventType.error,
+          error: "Error: Unable to get response (${streamedResponse.statusCode})",
+        );
+        client.close();
+      }
+    } catch (e) {
+      debugPrint('TTS streaming chat error: $e');
+      yield ChatStreamEvent(
+        type: ChatStreamEventType.error,
+        error: "An error occurred while connecting to AGiXT.",
+      );
+    }
   }
 
   // Navigate to the conversation in the WebView

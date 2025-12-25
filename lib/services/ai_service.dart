@@ -172,25 +172,84 @@ class AIService {
     }
 
     try {
-      // Process the text directly (already transcribed on watch)
-      final response = await _processTextInput(input.text, isFromWatch: true);
-
-      // Send response back to watch
-      if (response != null && response.isNotEmpty) {
-        await _watchService.sendChatResponse(response, nodeId: input.nodeId);
-        // Also speak the response on the phone if TTS is enabled
-        await _ttsService.speak(response);
-      } else {
-        await _watchService.sendErrorToWatch(
-          'No response from AI',
-          nodeId: input.nodeId,
-        );
-      }
+      // Use TTS streaming to send audio to the watch speaker
+      await _processTextInputWithTTS(input.text, nodeId: input.nodeId);
     } catch (e) {
       debugPrint('AIService: Error processing watch input: $e');
       await _watchService.sendErrorToWatch(
         'Error processing request',
         nodeId: input.nodeId,
+      );
+    }
+  }
+
+  /// Process text input with TTS streaming to watch
+  /// 
+  /// This uses the interleaved TTS mode to stream both text and audio
+  /// to the watch, allowing real-time audio playback on the watch speaker.
+  Future<void> _processTextInputWithTTS(String text, {String? nodeId}) async {
+    try {
+      final responseBuffer = StringBuffer();
+      bool audioHeaderSent = false;
+      
+      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(text)) {
+        switch (event.type) {
+          case ChatStreamEventType.text:
+            if (event.text != null) {
+              responseBuffer.write(event.text);
+            }
+            break;
+            
+          case ChatStreamEventType.audioHeader:
+            // Send audio format to watch
+            if (event.sampleRate != null && 
+                event.bitsPerSample != null && 
+                event.channels != null) {
+              await _watchService.sendAudioHeader(
+                sampleRate: event.sampleRate!,
+                bitsPerSample: event.bitsPerSample!,
+                channels: event.channels!,
+                nodeId: nodeId,
+              );
+              audioHeaderSent = true;
+              debugPrint('AIService: Sent audio header to watch');
+            }
+            break;
+            
+          case ChatStreamEventType.audioChunk:
+            // Stream audio chunk to watch
+            if (event.audioData != null && audioHeaderSent) {
+              await _watchService.sendAudioChunk(event.audioData!, nodeId: nodeId);
+            }
+            break;
+            
+          case ChatStreamEventType.audioEnd:
+            // Signal end of audio
+            await _watchService.sendAudioEnd(nodeId: nodeId);
+            debugPrint('AIService: Sent audio end to watch');
+            break;
+            
+          case ChatStreamEventType.done:
+            // Stream complete - send text response for display
+            final response = responseBuffer.toString();
+            if (response.isNotEmpty) {
+              await _watchService.sendChatResponse(response, nodeId: nodeId);
+            }
+            break;
+            
+          case ChatStreamEventType.error:
+            await _watchService.sendErrorToWatch(
+              event.error ?? 'Unknown error',
+              nodeId: nodeId,
+            );
+            break;
+        }
+      }
+    } catch (e) {
+      debugPrint('AIService: Error in TTS streaming: $e');
+      await _watchService.sendErrorToWatch(
+        'Error processing request',
+        nodeId: nodeId,
       );
     }
   }

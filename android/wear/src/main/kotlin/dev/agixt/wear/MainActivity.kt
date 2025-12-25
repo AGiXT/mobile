@@ -1,5 +1,6 @@
 package dev.agixt.wear
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -35,6 +37,13 @@ fun AGiXTWearApp() {
     val viewModel: WearViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
     val messages by viewModel.messages.collectAsState()
+    val context = LocalContext.current
+    
+    // Function to launch voice input
+    val launchVoiceInput = {
+        val intent = Intent(context, VoiceInputActivity::class.java)
+        context.startActivity(intent)
+    }
     
     MaterialTheme {
         Scaffold(
@@ -49,7 +58,7 @@ fun AGiXTWearApp() {
             ) {
                 when (uiState) {
                     is WearUiState.Idle -> IdleScreen(
-                        onTapToSpeak = { viewModel.startVoiceInput() },
+                        onTapToSpeak = launchVoiceInput,
                         messages = messages
                     )
                     is WearUiState.Listening -> ListeningScreen()
@@ -60,7 +69,7 @@ fun AGiXTWearApp() {
                     )
                     is WearUiState.Error -> ErrorScreen(
                         message = (uiState as WearUiState.Error).message,
-                        onRetry = { viewModel.startVoiceInput() }
+                        onRetry = launchVoiceInput
                     )
                 }
             }

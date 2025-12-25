@@ -525,6 +525,73 @@ class WatchService {
     }
   }
 
+  /// Send audio header to watch (format info)
+  Future<bool> sendAudioHeader({
+    required int sampleRate,
+    required int bitsPerSample,
+    required int channels,
+    String? nodeId,
+  }) async {
+    if (!isConnected) {
+      debugPrint('WatchService: Cannot send audio header - watch not connected');
+      return false;
+    }
+
+    try {
+      final args = <String, dynamic>{
+        'sampleRate': sampleRate,
+        'bitsPerSample': bitsPerSample,
+        'channels': channels,
+      };
+      if (nodeId != null) {
+        args['nodeId'] = nodeId;
+      }
+      final result = await _watchChannel.invokeMethod('sendAudioHeader', args);
+      return result == true;
+    } on PlatformException catch (e) {
+      debugPrint('WatchService: Error sending audio header: $e');
+      return false;
+    }
+  }
+
+  /// Send audio chunk to watch for playback
+  Future<bool> sendAudioChunk(Uint8List audioData, {String? nodeId}) async {
+    if (!isConnected) {
+      return false;
+    }
+
+    try {
+      final args = <String, dynamic>{'audioData': audioData};
+      if (nodeId != null) {
+        args['nodeId'] = nodeId;
+      }
+      final result = await _watchChannel.invokeMethod('sendAudioChunk', args);
+      return result == true;
+    } on PlatformException catch (e) {
+      debugPrint('WatchService: Error sending audio chunk: $e');
+      return false;
+    }
+  }
+
+  /// Send audio end signal to watch
+  Future<bool> sendAudioEnd({String? nodeId}) async {
+    if (!isConnected) {
+      return false;
+    }
+
+    try {
+      final args = <String, dynamic>{};
+      if (nodeId != null) {
+        args['nodeId'] = nodeId;
+      }
+      final result = await _watchChannel.invokeMethod('sendAudioEnd', args);
+      return result == true;
+    } on PlatformException catch (e) {
+      debugPrint('WatchService: Error sending audio end: $e');
+      return false;
+    }
+  }
+
   /// Dispose of the service
   void dispose() {
     _eventSubscription?.cancel();
