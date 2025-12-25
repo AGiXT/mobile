@@ -38,6 +38,12 @@ android {
     buildFeatures {
         compose true
     }
+    
+    lint {
+        // Don't abort release build on lint errors (we test lint separately)
+        abortOnError false
+        checkReleaseBuilds false
+    }
 }
 
 dependencies {
@@ -65,6 +71,7 @@ dependencies {
     
     // Activity & Lifecycle
     implementation 'androidx.activity:activity-compose:1.8.2'
+    implementation 'androidx.fragment:fragment-ktx:1.6.2'  // Required for registerForActivityResult
     implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.7.0'
     implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0'
     
