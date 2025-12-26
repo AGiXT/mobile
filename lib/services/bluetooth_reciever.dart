@@ -298,8 +298,8 @@ class BluetoothReciever {
 
           final startTime = DateTime.now();
           try {
-            final transcription = await (await WhisperService.service())
-                .transcribe(pcm);
+            final transcription =
+                await (await WhisperService.service()).transcribe(pcm);
             final endTime = DateTime.now();
 
             debugPrint('[$side] Remote Transcription: $transcription');
@@ -351,11 +351,12 @@ class BluetoothReciever {
     debugPrint(
       '[$side] Received voice data chunk: seq=$seq, length=${voiceData.length}',
     );
-    
+
     final isLocalEnabled = await _isLocalTranscriptionEnabled();
     final isRecording = voiceCollectorAI.isRecording;
-    debugPrint('[$side] Voice data: isLocalEnabled=$isLocalEnabled, voiceCollectorAI.isRecording=$isRecording');
-    
+    debugPrint(
+        '[$side] Voice data: isLocalEnabled=$isLocalEnabled, voiceCollectorAI.isRecording=$isRecording');
+
     // Only add to buffer if using remote whisper (i.e., local is NOT enabled)
     if (!isLocalEnabled && isRecording) {
       debugPrint('[$side] Adding voice chunk to collector');

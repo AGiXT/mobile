@@ -13,6 +13,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'package:agixt/services/secure_storage_service.dart';
 import 'package:agixt/utils/url_security.dart';
+import 'package:agixt/models/agixt/auth/auth.dart';
 
 abstract class WhisperService {
   static Future<WhisperService> service() async {
@@ -116,36 +117,21 @@ class WhisperLocalService implements WhisperService {
 
   @override
   Future<String> transcribe(Uint8List voiceData) async {
-    final Directory documentDirectory =
-        await getApplicationDocumentsDirectory();
-    final String wavPath = '${documentDirectory.path}/${Uuid().v4()}.wav';
-
-    await _ensureInitialized();
-
+    // For pre-recorded audio (like from glasses), we need to use the remote API
+    // since native speech_to_text only works with live microphone input.
+    // Fall back to remote transcription using the AGiXT endpoint.
+    debugPrint('WhisperLocalService: Transcribing ${voiceData.length} bytes of pre-recorded audio');
+    
     try {
-      // We need to save the audio data to a file
-      await File(wavPath).writeAsBytes(voiceData);
-
-      // For devices that can't directly process the binary data through native APIs,
-      // we'll try to use the speech recognition on audio we can record
-
-      String result = '';
-
-      // Try to get a transcription using native speech recognition
-      // This is a fallback approach since we can't directly feed our voiceData to speech_to_text
-      result = await listenAndTranscribe() ?? 'No transcription available';
-
-      // Cleanup
-      try {
-        await File(wavPath).delete();
-      } catch (e) {
-        debugPrint('Error deleting temporary audio file: $e');
-      }
-
+      // Try to use the remote service for pre-recorded audio
+      final remoteService = WhisperRemoteService();
+      final result = await remoteService.transcribe(voiceData);
+      debugPrint('WhisperLocalService: Remote transcription result: $result');
       return result;
     } catch (e) {
-      debugPrint('Error in WhisperLocalService.transcribe: $e');
-      return 'Error transcribing audio';
+      debugPrint('WhisperLocalService: Remote transcription failed: $e');
+      // If remote fails, return error message
+      return 'Transcription failed: Configure Whisper API in settings';
     }
   }
 
@@ -166,10 +152,16 @@ class WhisperRemoteService implements WhisperService {
 
   Future<String?> getBaseURL() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('whisper_api_url');
+    final customUrl = prefs.getString('whisper_api_url');
+    if (customUrl != null && customUrl.isNotEmpty) {
+      return customUrl;
+    }
+    // Fall back to the AGiXT server URL if no separate whisper URL is configured
+    return AuthService.serverUrl;
   }
 
   Future<String?> getApiKey() async {
+    // First check for a dedicated whisper API key
     final storedKey = await _secureStorage.read(key: 'whisper_api_key');
     if (storedKey != null && storedKey.isNotEmpty) {
       return storedKey;
@@ -183,7 +175,8 @@ class WhisperRemoteService implements WhisperService {
       return legacyKey;
     }
 
-    return null;
+    // Fall back to the AGiXT JWT token if no separate API key is configured
+    return await AuthService.getJwt();
   }
 
   Future<String?> getModel() async {
@@ -199,7 +192,7 @@ class WhisperRemoteService implements WhisperService {
   Future<void> init() async {
     final url = await getBaseURL();
     if (url == null || url.isEmpty) {
-      throw Exception('No Whisper Remote URL set');
+      throw Exception('No transcription API URL available. Please log in to AGiXT or configure Whisper API URL in settings.');
     }
 
     final sanitizedUrl = UrlSecurity.sanitizeBaseUrl(
@@ -211,14 +204,14 @@ class WhisperRemoteService implements WhisperService {
 
     final apiKey = await getApiKey();
     if (apiKey == null || apiKey.isEmpty) {
-      throw Exception('No Whisper API key configured');
+      throw Exception('No API key available. Please log in to AGiXT or configure Whisper API key in settings.');
     }
     OpenAI.apiKey = apiKey;
   }
 
   @override
   Future<String> transcribe(Uint8List voiceData) async {
-    debugPrint('Transcribing voice data');
+    debugPrint('Transcribing voice data: ${voiceData.length} bytes');
     await init();
     final Directory documentDirectory =
         await getApplicationDocumentsDirectory();
@@ -272,25 +265,33 @@ class WhisperRemoteService implements WhisperService {
     final audioFile = File(wavPath);
     await audioFile.writeAsBytes(Uint8List.fromList(header));
 
-    final model = await getModel() ?? '';
-    if (model.isEmpty) {
-      throw Exception('No Whisper model configured');
+    // Model is optional - AGiXT will use its configured default model if not specified
+    final model = await getModel() ?? 'whisper-1';
+
+    try {
+      OpenAIAudioModel transcription =
+          await OpenAI.instance.audio.createTranscription(
+        file: audioFile,
+        model: model,
+        responseFormat: OpenAIAudioResponseFormat.json,
+        language: await getLanguage(),
+      );
+
+      // delete wav file
+      await File(wavPath).delete();
+
+      var text = transcription.text;
+      debugPrint('Transcription result: $text');
+
+      return text;
+    } catch (e) {
+      // Clean up on error
+      try {
+        await File(wavPath).delete();
+      } catch (_) {}
+      debugPrint('Transcription error: $e');
+      rethrow;
     }
-
-    OpenAIAudioModel transcription =
-        await OpenAI.instance.audio.createTranscription(
-      file: audioFile,
-      model: model,
-      responseFormat: OpenAIAudioResponseFormat.json,
-      language: await getLanguage(),
-    );
-
-    // delete wav file
-    await File(wavPath).delete();
-
-    var text = transcription.text;
-
-    return text;
   }
 
   @override

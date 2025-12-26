@@ -50,6 +50,15 @@ class WakeWordService {
   DateTime? _lastDetection;
   static const _detectionCooldown = Duration(seconds: 2);
 
+  // Minimum confidence threshold for wake word detection
+  // Vosk confidence ranges from 0.0 to 1.0
+  static const _minConfidenceThreshold = 0.75;
+
+  // Recent audio energy tracking for noise rejection
+  final List<double> _recentEnergies = [];
+  static const _energyWindowSize = 10;
+  static const _minEnergyRatio = 2.0; // Audio must be 2x above ambient noise
+
   // Model info - using small English model (~50MB)
   static const _modelUrl =
       'https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip';
@@ -233,13 +242,21 @@ class WakeWordService {
     try {
       // Use grammar mode for efficient wake word detection
       // Only listen for specific words, much more efficient than full speech recognition
+      // Include "[unk]" to allow Vosk to classify non-matching audio as unknown
+      // This prevents random noise from being forced to match "computer"
       _recognizer = await _vosk.createRecognizer(
         model: _model!,
         sampleRate: 16000,
-        grammar: [_wakeWord, 'hey computer', 'okay computer', 'hi computer'],
+        grammar: [
+          _wakeWord,
+          'hey computer',
+          'okay computer', 
+          'hi computer',
+          '[unk]',  // Unknown token for noise/non-matching audio
+        ],
       );
       debugPrint(
-        'WakeWordService: Recognizer created with grammar: [$_wakeWord]',
+        'WakeWordService: Recognizer created with grammar: [$_wakeWord, [unk]]',
       );
       return true;
     } catch (e) {
@@ -256,13 +273,10 @@ class WakeWordService {
       final json = jsonDecode(partial);
       final text = (json['partial'] as String?)?.toLowerCase() ?? '';
 
+      // Don't trigger on partial results - too prone to false positives
+      // We only log partials for debugging purposes
       if (text.isNotEmpty) {
-        debugPrint('WakeWordService: Partial: "$text"');
-
-        // Check if wake word is detected
-        if (_containsWakeWord(text)) {
-          _triggerWakeWord(0.8); // Partial result, slightly lower confidence
-        }
+        debugPrint('WakeWordService: Partial: "$text" (not triggering on partial)');
       }
     } catch (e) {
       // Ignore JSON parse errors
@@ -277,16 +291,49 @@ class WakeWordService {
       final json = jsonDecode(result);
       final text = (json['text'] as String?)?.toLowerCase() ?? '';
 
-      if (text.isNotEmpty) {
-        debugPrint('WakeWordService: Result: "$text"');
+      if (text.isEmpty) return;
 
-        // Check if wake word is detected
+      // Vosk returns confidence per word in the 'result' array
+      // Format: {"result":[{"conf":0.9,"word":"computer","start":0.1,"end":0.5}],"text":"computer"}
+      double maxConfidence = 0.0;
+      bool wakeWordFound = false;
+
+      final resultArray = json['result'] as List<dynamic>?;
+      if (resultArray != null) {
+        for (final wordInfo in resultArray) {
+          final word = (wordInfo['word'] as String?)?.toLowerCase() ?? '';
+          final conf = (wordInfo['conf'] as num?)?.toDouble() ?? 0.0;
+
+          debugPrint('WakeWordService: Word: "$word" conf: $conf');
+
+          // Check if this word matches our wake word
+          if (word == _wakeWord.toLowerCase() || 
+              word == 'hey' || word == 'okay' || word == 'hi') {
+            if (word == _wakeWord.toLowerCase()) {
+              wakeWordFound = true;
+              maxConfidence = conf > maxConfidence ? conf : maxConfidence;
+            }
+          }
+        }
+      } else {
+        // Fallback: no detailed result array, use text matching with lower confidence
+        debugPrint('WakeWordService: No result array, text: "$text"');
         if (_containsWakeWord(text)) {
-          _triggerWakeWord(1.0); // Final result, full confidence
+          wakeWordFound = true;
+          maxConfidence = 0.5; // Lower confidence when no detailed info
+        }
+      }
+
+      if (wakeWordFound) {
+        debugPrint('WakeWordService: Wake word found with confidence: $maxConfidence (threshold: $_minConfidenceThreshold)');
+        if (maxConfidence >= _minConfidenceThreshold) {
+          _triggerWakeWord(maxConfidence);
+        } else {
+          debugPrint('WakeWordService: Confidence too low, ignoring');
         }
       }
     } catch (e) {
-      // Ignore JSON parse errors
+      debugPrint('WakeWordService: Error parsing result: $e');
     }
   }
 
@@ -310,16 +357,20 @@ class WakeWordService {
     }
     _lastDetection = now;
 
-    // Apply sensitivity threshold
-    final threshold = 1.0 - _sensitivity;
-    if (confidence < threshold) {
+    // Calculate effective threshold based on sensitivity setting
+    // sensitivity 0.0 = very strict (threshold 0.95)
+    // sensitivity 0.5 = default (threshold 0.75)
+    // sensitivity 1.0 = lenient (threshold 0.55)
+    final effectiveThreshold = _minConfidenceThreshold + ((1.0 - _sensitivity) * 0.2);
+    
+    if (confidence < effectiveThreshold) {
       debugPrint(
-        'WakeWordService: Confidence $confidence below threshold $threshold',
+        'WakeWordService: Confidence $confidence below effective threshold $effectiveThreshold (sensitivity: $_sensitivity)',
       );
       return;
     }
 
-    debugPrint('WakeWordService: Wake word detected! confidence=$confidence');
+    debugPrint('WakeWordService: Wake word detected! confidence=$confidence, threshold=$effectiveThreshold');
 
     _eventController.add(
       WakeWordEvent(
