@@ -32,6 +32,7 @@ class MainActivity: FlutterActivity() {
     private var methodChannelInitialized = false
     private var pendingToken: String? = null
     private var pendingVoiceInput: Pair<String, String?>? = null
+    private var pendingAssistantLaunch = false
     
     // Voice & Watch handlers
     private var wakeWordHandler: WakeWordHandler? = null
@@ -79,6 +80,18 @@ class MainActivity: FlutterActivity() {
                     }
                 }
             }
+            // Handle assistant/voice mode intents
+            else if (it.getBooleanExtra("start_voice_input", false) || 
+                     it.getBooleanExtra("voice_mode", false) ||
+                     it.getBooleanExtra("from_assistant", false)) {
+                Log.d(TAG, "Assistant mode activated from intent")
+                if (methodChannelInitialized) {
+                    triggerVoiceInput()
+                } else {
+                    // Store flag to trigger voice input once initialized
+                    pendingAssistantLaunch = true
+                }
+            }
             // Handle voice input from WearableMessageService
             else if (WearableMessageService.ACTION_VOICE_INPUT == it.action) {
                 val text = it.getStringExtra(WearableMessageService.EXTRA_TEXT)
@@ -94,6 +107,13 @@ class MainActivity: FlutterActivity() {
                     }
                 }
             }
+        }
+    }
+    
+    private fun triggerVoiceInput() {
+        // Send message to Flutter to start voice input
+        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+            MethodChannel(messenger, CHANNEL).invokeMethod("startVoiceInput", null)
         }
     }
 
@@ -241,6 +261,13 @@ class MainActivity: FlutterActivity() {
             Log.d(TAG, "Processing pending voice input: $text")
             watchHandler?.handleVoiceInputFromIntent(text, nodeId)
             pendingVoiceInput = null
+        }
+        
+        // Check if we need to trigger voice input from assistant launch
+        if (pendingAssistantLaunch) {
+            Log.d(TAG, "Triggering pending assistant voice input")
+            triggerVoiceInput()
+            pendingAssistantLaunch = false
         }
         
         // Setup the new channel for button events

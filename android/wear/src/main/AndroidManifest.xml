@@ -39,6 +39,15 @@
                 <action android:name="android.intent.action.VOICE_COMMAND" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Support being set as default assistant on Wear OS -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <!-- Data Layer Listener Service (receives messages from phone) -->
