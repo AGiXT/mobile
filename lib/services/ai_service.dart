@@ -382,7 +382,8 @@ class AIService {
           case ChatStreamEventType.audioHeader:
             // Audio format info - could be used for local playback setup
             if (event.sampleRate != null) {
-              debugPrint('AIService: Audio header - ${event.sampleRate}Hz, ${event.bitsPerSample}bit, ${event.channels}ch');
+              debugPrint(
+                  'AIService: Audio header - ${event.sampleRate}Hz, ${event.bitsPerSample}bit, ${event.channels}ch');
               audioHeaderSent = true;
               // Send audio header to watch if connected
               if (_watchService.isConnected) {
@@ -397,7 +398,9 @@ class AIService {
 
           case ChatStreamEventType.audioChunk:
             // Stream audio to watch speaker
-            if (event.audioData != null && audioHeaderSent && _watchService.isConnected) {
+            if (event.audioData != null &&
+                audioHeaderSent &&
+                _watchService.isConnected) {
               await _watchService.sendAudioChunk(event.audioData!);
             }
             break;
@@ -664,24 +667,82 @@ class AIService {
     }
   }
 
-  // Send message to AGiXT API and display response (with streaming)
+  // Send message to AGiXT API and display response (with streaming TTS for watch)
   Future<void> _sendMessageToAGiXT(String message) async {
     try {
       // Show sending message using AI response method
-      await _bluetoothManager.sendAIResponse('Sending to AGiXT: "$message"');
+      await _bluetoothManager.sendAIResponse('Processing...');
 
-      // Stream response from AGiXT for better responsiveness
+      // Use streaming TTS to send audio to watch (like ESP32 does)
       final responseBuffer = StringBuffer();
+      bool audioHeaderSent = false;
 
-      await for (final chunk in _chatWidget.sendChatMessageStreaming(message)) {
-        responseBuffer.write(chunk);
+      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(
+        message,
+      )) {
+        switch (event.type) {
+          case ChatStreamEventType.text:
+            if (event.text != null) {
+              responseBuffer.write(event.text);
+              // Stream text to glasses as it arrives
+              if (_bluetoothManager.isConnected) {
+                await _bluetoothManager.sendText(event.text!);
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioHeader:
+            // Send audio format to watch
+            if (event.sampleRate != null) {
+              debugPrint(
+                  'AIService: Audio header - ${event.sampleRate}Hz, ${event.bitsPerSample}bit, ${event.channels}ch');
+              audioHeaderSent = true;
+              if (_watchService.isConnected) {
+                await _watchService.sendAudioHeader(
+                  sampleRate: event.sampleRate!,
+                  bitsPerSample: event.bitsPerSample ?? 16,
+                  channels: event.channels ?? 1,
+                );
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioChunk:
+            // Stream audio to watch speaker
+            if (event.audioData != null &&
+                audioHeaderSent &&
+                _watchService.isConnected) {
+              await _watchService.sendAudioChunk(event.audioData!);
+            }
+            break;
+
+          case ChatStreamEventType.audioEnd:
+            // Audio streaming complete
+            if (_watchService.isConnected) {
+              await _watchService.sendAudioEnd();
+            }
+            debugPrint('AIService: Audio streaming complete');
+            break;
+
+          case ChatStreamEventType.done:
+            debugPrint('AIService: Response complete');
+            break;
+
+          case ChatStreamEventType.error:
+            debugPrint('AIService: Stream error: ${event.error}');
+            break;
+        }
       }
 
       final response = responseBuffer.toString();
 
       if (response.isNotEmpty) {
-        // Output response to appropriate devices
-        await _outputResponse(response);
+        // Display final response on glasses
+        await _bluetoothManager.sendAIResponse(response);
+        // Display on watch
+        if (_watchService.isConnected) {
+          await _watchService.displayMessage(response, durationMs: 10000);
+        }
       } else {
         await _showErrorMessage('No response from AGiXT');
       }
@@ -734,17 +795,66 @@ class AIService {
   }
 
   /// Send message to AGiXT API directly without context (for background mode)
+  /// Uses streaming TTS for watch audio playback
   Future<void> _sendMessageToAGiXTDirect(String message) async {
     try {
-      // Show sending message using AI response method
-      await _bluetoothManager.sendAIResponse('Sending to AGiXT: "$message"');
+      // Show processing message
+      await _bluetoothManager.sendAIResponse('Processing...');
 
-      // Get response using a minimal chat request (no context to avoid blocking)
-      final response = await _chatWidget.sendChatMessageDirect(message);
+      // Use streaming TTS to send audio to watch (like foreground mode)
+      final responseBuffer = StringBuffer();
+      bool audioHeaderSent = false;
 
-      if (response != null && response.isNotEmpty) {
-        // Output response to appropriate devices
-        await _outputResponse(response);
+      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(
+        message,
+      )) {
+        switch (event.type) {
+          case ChatStreamEventType.text:
+            if (event.text != null) {
+              responseBuffer.write(event.text);
+            }
+            break;
+
+          case ChatStreamEventType.audioHeader:
+            if (event.sampleRate != null) {
+              audioHeaderSent = true;
+              if (_watchService.isConnected) {
+                await _watchService.sendAudioHeader(
+                  sampleRate: event.sampleRate!,
+                  bitsPerSample: event.bitsPerSample ?? 16,
+                  channels: event.channels ?? 1,
+                );
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioChunk:
+            if (event.audioData != null &&
+                audioHeaderSent &&
+                _watchService.isConnected) {
+              await _watchService.sendAudioChunk(event.audioData!);
+            }
+            break;
+
+          case ChatStreamEventType.audioEnd:
+            if (_watchService.isConnected) {
+              await _watchService.sendAudioEnd();
+            }
+            break;
+
+          case ChatStreamEventType.done:
+          case ChatStreamEventType.error:
+            break;
+        }
+      }
+
+      final response = responseBuffer.toString();
+
+      if (response.isNotEmpty) {
+        await _bluetoothManager.sendAIResponse(response);
+        if (_watchService.isConnected) {
+          await _watchService.displayMessage(response, durationMs: 10000);
+        }
       } else {
         await _showErrorMessage('No response from AGiXT');
       }

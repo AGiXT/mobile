@@ -250,9 +250,9 @@ class WakeWordService {
         grammar: [
           _wakeWord,
           'hey computer',
-          'okay computer', 
+          'okay computer',
           'hi computer',
-          '[unk]',  // Unknown token for noise/non-matching audio
+          '[unk]', // Unknown token for noise/non-matching audio
         ],
       );
       debugPrint(
@@ -276,7 +276,8 @@ class WakeWordService {
       // Don't trigger on partial results - too prone to false positives
       // We only log partials for debugging purposes
       if (text.isNotEmpty) {
-        debugPrint('WakeWordService: Partial: "$text" (not triggering on partial)');
+        debugPrint(
+            'WakeWordService: Partial: "$text" (not triggering on partial)');
       }
     } catch (e) {
       // Ignore JSON parse errors
@@ -307,8 +308,10 @@ class WakeWordService {
           debugPrint('WakeWordService: Word: "$word" conf: $conf');
 
           // Check if this word matches our wake word
-          if (word == _wakeWord.toLowerCase() || 
-              word == 'hey' || word == 'okay' || word == 'hi') {
+          if (word == _wakeWord.toLowerCase() ||
+              word == 'hey' ||
+              word == 'okay' ||
+              word == 'hi') {
             if (word == _wakeWord.toLowerCase()) {
               wakeWordFound = true;
               maxConfidence = conf > maxConfidence ? conf : maxConfidence;
@@ -325,7 +328,8 @@ class WakeWordService {
       }
 
       if (wakeWordFound) {
-        debugPrint('WakeWordService: Wake word found with confidence: $maxConfidence (threshold: $_minConfidenceThreshold)');
+        debugPrint(
+            'WakeWordService: Wake word found with confidence: $maxConfidence (threshold: $_minConfidenceThreshold)');
         if (maxConfidence >= _minConfidenceThreshold) {
           _triggerWakeWord(maxConfidence);
         } else {
@@ -361,8 +365,9 @@ class WakeWordService {
     // sensitivity 0.0 = very strict (threshold 0.95)
     // sensitivity 0.5 = default (threshold 0.75)
     // sensitivity 1.0 = lenient (threshold 0.55)
-    final effectiveThreshold = _minConfidenceThreshold + ((1.0 - _sensitivity) * 0.2);
-    
+    final effectiveThreshold =
+        _minConfidenceThreshold + ((1.0 - _sensitivity) * 0.2);
+
     if (confidence < effectiveThreshold) {
       debugPrint(
         'WakeWordService: Confidence $confidence below effective threshold $effectiveThreshold (sensitivity: $_sensitivity)',
@@ -370,7 +375,8 @@ class WakeWordService {
       return;
     }
 
-    debugPrint('WakeWordService: Wake word detected! confidence=$confidence, threshold=$effectiveThreshold');
+    debugPrint(
+        'WakeWordService: Wake word detected! confidence=$confidence, threshold=$effectiveThreshold');
 
     _eventController.add(
       WakeWordEvent(
@@ -475,14 +481,14 @@ class WakeWordService {
 
       // Subscribe to results
       _partialSubscription = _speechService!.onPartial().listen(
-        _handlePartialResult,
-        onError: (e) => debugPrint('WakeWordService: Partial error: $e'),
-      );
+            _handlePartialResult,
+            onError: (e) => debugPrint('WakeWordService: Partial error: $e'),
+          );
 
       _resultSubscription = _speechService!.onResult().listen(
-        _handleResult,
-        onError: (e) => debugPrint('WakeWordService: Result error: $e'),
-      );
+            _handleResult,
+            onError: (e) => debugPrint('WakeWordService: Result error: $e'),
+          );
 
       // Start listening
       await _speechService!.start();

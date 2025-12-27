@@ -120,8 +120,9 @@ class WhisperLocalService implements WhisperService {
     // For pre-recorded audio (like from glasses), we need to use the remote API
     // since native speech_to_text only works with live microphone input.
     // Fall back to remote transcription using the AGiXT endpoint.
-    debugPrint('WhisperLocalService: Transcribing ${voiceData.length} bytes of pre-recorded audio');
-    
+    debugPrint(
+        'WhisperLocalService: Transcribing ${voiceData.length} bytes of pre-recorded audio');
+
     try {
       // Try to use the remote service for pre-recorded audio
       final remoteService = WhisperRemoteService();
@@ -192,7 +193,8 @@ class WhisperRemoteService implements WhisperService {
   Future<void> init() async {
     final url = await getBaseURL();
     if (url == null || url.isEmpty) {
-      throw Exception('No transcription API URL available. Please log in to AGiXT or configure Whisper API URL in settings.');
+      throw Exception(
+          'No transcription API URL available. Please log in to AGiXT or configure Whisper API URL in settings.');
     }
 
     final sanitizedUrl = UrlSecurity.sanitizeBaseUrl(
@@ -204,7 +206,8 @@ class WhisperRemoteService implements WhisperService {
 
     final apiKey = await getApiKey();
     if (apiKey == null || apiKey.isEmpty) {
-      throw Exception('No API key available. Please log in to AGiXT or configure Whisper API key in settings.');
+      throw Exception(
+          'No API key available. Please log in to AGiXT or configure Whisper API key in settings.');
     }
     OpenAI.apiKey = apiKey;
   }
