@@ -377,87 +377,87 @@ class ClientCommandsService {
         // Visual/Glasses tools
         'capture_image': _bluetoothManager.isConnected,
         'display_on_glasses': _bluetoothManager.isConnected,
-        
+
         // Contact tools
         'get_contacts': contactsGranted,
         'search_contacts': contactsGranted,
-        
+
         // Communication tools
         'send_sms': smsGranted,
         'make_phone_call': phoneGranted,
         'mobile_send_email': true,
-        
+
         // Calendar tools
         'get_calendar_events': true,
         'create_calendar_event': true,
         'get_calendars': true,
-        
+
         // Location tools
         'get_location': locationGranted,
         'open_maps': locationGranted,
         'navigate_to': locationGranted,
-        
+
         // File tools
         'mobile_read_file': true,
         'mobile_write_file': true,
         'mobile_list_files': true,
         'mobile_delete_file': true,
         'mobile_get_storage_info': true,
-        
+
         // Clipboard tools
         'mobile_get_clipboard': true,
         'mobile_set_clipboard': true,
-        
+
         // App control
         'open_app': true,
         'open_settings': true,
         'open_url': true,
-        
+
         // Device control
         'set_flashlight': true,
         'get_battery_status': true,
         'set_alarm': true,
         'set_timer': true,
-        
+
         // Media control (digital assistant)
-        'media_control': true,  // play, pause, next, previous, stop
+        'media_control': true, // play, pause, next, previous, stop
         'get_media_info': true,
-        
+
         // Volume control (digital assistant)
         'set_volume': true,
         'get_volume': true,
-        'adjust_volume': true,  // up, down, mute, unmute
-        
+        'adjust_volume': true, // up, down, mute, unmute
+
         // Ringer mode
-        'set_ringer_mode': true,  // normal, vibrate, silent
+        'set_ringer_mode': true, // normal, vibrate, silent
         'get_ringer_mode': true,
-        
+
         // Brightness control
         'set_brightness': true,
         'get_brightness': true,
-        
+
         // Connectivity
-        'toggle_wifi': true,  // Opens settings panel on Android 10+
+        'toggle_wifi': true, // Opens settings panel on Android 10+
         'get_wifi_status': true,
-        'toggle_bluetooth': true,  // Opens settings on Android 12+
+        'toggle_bluetooth': true, // Opens settings on Android 12+
         'get_bluetooth_status': true,
-        
+
         // Do Not Disturb
         'set_do_not_disturb': true,
         'get_do_not_disturb_status': true,
-        
+
         // Screen control
         'wake_screen': true,
         'get_screen_status': true,
-        
+
         // System info
-        'get_system_info': true,  // Comprehensive device status
+        'get_system_info': true, // Comprehensive device status
         'get_device_info': true,
-        
+
         // Notes
         'mobile_save_note': true,
         'mobile_get_notes': true,
-        
+
         // Search
         'mobile_search_web': true,
       };
@@ -517,14 +517,13 @@ class ClientCommandsService {
         };
       }
 
-      final contactList =
-          contacts.map((c) {
-            return {
-              'name': c.displayName,
-              'phones': c.phones,
-              'emails': c.emails,
-            };
-          }).toList();
+      final contactList = contacts.map((c) {
+        return {
+          'name': c.displayName,
+          'phones': c.phones,
+          'emails': c.emails,
+        };
+      }).toList();
 
       return {
         'output': jsonEncode({
@@ -557,14 +556,13 @@ class ClientCommandsService {
         };
       }
 
-      final contactList =
-          contacts.map((c) {
-            return {
-              'name': c.displayName,
-              'phones': c.phones,
-              'emails': c.emails,
-            };
-          }).toList();
+      final contactList = contacts.map((c) {
+        return {
+          'name': c.displayName,
+          'phones': c.phones,
+          'emails': c.emails,
+        };
+      }).toList();
 
       return {
         'output': jsonEncode({
@@ -582,12 +580,10 @@ class ClientCommandsService {
   /// Send an SMS message
   Future<Map<String, dynamic>> _sendSms(Map<String, dynamic> args) async {
     try {
-      final phoneNumber =
-          args['phone_number'] as String? ??
+      final phoneNumber = args['phone_number'] as String? ??
           args['to'] as String? ??
           args['recipient'] as String?;
-      final message =
-          args['message'] as String? ??
+      final message = args['message'] as String? ??
           args['body'] as String? ??
           args['text'] as String?;
 
@@ -694,8 +690,7 @@ class ClientCommandsService {
   /// Open Google Maps and optionally navigate to a destination
   Future<Map<String, dynamic>> _openMaps(Map<String, dynamic> args) async {
     try {
-      final destination =
-          args['destination'] as String? ??
+      final destination = args['destination'] as String? ??
           args['address'] as String? ??
           args['location'] as String?;
       final lat = args['latitude'] as double?;
@@ -745,8 +740,7 @@ class ClientCommandsService {
   /// Make a phone call
   Future<Map<String, dynamic>> _makePhoneCall(Map<String, dynamic> args) async {
     try {
-      final phoneNumber =
-          args['phone_number'] as String? ??
+      final phoneNumber = args['phone_number'] as String? ??
           args['number'] as String? ??
           args['to'] as String?;
 
@@ -1036,10 +1030,9 @@ class ClientCommandsService {
       }
 
       final start = DateTime.parse(startStr);
-      final end =
-          endStr != null
-              ? DateTime.parse(endStr)
-              : start.add(const Duration(hours: 1));
+      final end = endStr != null
+          ? DateTime.parse(endStr)
+          : start.add(const Duration(hours: 1));
 
       final event = Event(
         targetCalendarId,
@@ -1090,18 +1083,17 @@ class ClientCommandsService {
         return {'output': 'Could not retrieve calendars', 'exit_code': 1};
       }
 
-      final calendars =
-          calendarsResult.data!
-              .map(
-                (c) => {
-                  'id': c.id,
-                  'name': c.name,
-                  'account_name': c.accountName,
-                  'account_type': c.accountType,
-                  'is_read_only': c.isReadOnly,
-                },
-              )
-              .toList();
+      final calendars = calendarsResult.data!
+          .map(
+            (c) => {
+              'id': c.id,
+              'name': c.name,
+              'account_name': c.accountName,
+              'account_type': c.accountType,
+              'is_read_only': c.isReadOnly,
+            },
+          )
+          .toList();
 
       return {
         'output': jsonEncode({
@@ -1241,10 +1233,9 @@ class ClientCommandsService {
       final recursive = args['recursive'] as bool? ?? false;
 
       final appDir = await getApplicationDocumentsDirectory();
-      final resolvedPath =
-          dirPath.isEmpty
-              ? appDir.path
-              : (dirPath.startsWith('/') ? dirPath : '${appDir.path}/$dirPath');
+      final resolvedPath = dirPath.isEmpty
+          ? appDir.path
+          : (dirPath.startsWith('/') ? dirPath : '${appDir.path}/$dirPath');
 
       final dir = Directory(resolvedPath);
       if (!await dir.exists()) {
@@ -1648,10 +1639,14 @@ class ClientCommandsService {
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'No media info available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'No media info available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'Media info not available on this platform'}),
+        'output':
+            jsonEncode({'note': 'Media info not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
@@ -1698,10 +1693,14 @@ class ClientCommandsService {
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'Volume info not available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'Volume info not available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'Volume control not available on this platform'}),
+        'output': jsonEncode(
+            {'note': 'Volume control not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
@@ -1767,10 +1766,14 @@ class ClientCommandsService {
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'Ringer mode not available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'Ringer mode not available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'Ringer mode not available on this platform'}),
+        'output':
+            jsonEncode({'note': 'Ringer mode not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
@@ -1811,10 +1814,14 @@ class ClientCommandsService {
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'Brightness info not available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'Brightness info not available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'Brightness control not available on this platform'}),
+        'output': jsonEncode(
+            {'note': 'Brightness control not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
@@ -1855,10 +1862,14 @@ class ClientCommandsService {
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'WiFi status not available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'WiFi status not available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'WiFi status not available on this platform'}),
+        'output':
+            jsonEncode({'note': 'WiFi status not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
@@ -1867,11 +1878,13 @@ class ClientCommandsService {
   }
 
   /// Toggle Bluetooth on/off
-  Future<Map<String, dynamic>> _toggleBluetooth(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _toggleBluetooth(
+      Map<String, dynamic> args) async {
     try {
       final enable = args['enable'] as bool?;
 
-      final result = await _deviceControlChannel.invokeMethod('toggleBluetooth', {
+      final result =
+          await _deviceControlChannel.invokeMethod('toggleBluetooth', {
         'enable': enable,
       });
 
@@ -1890,17 +1903,23 @@ class ClientCommandsService {
   }
 
   /// Get Bluetooth status
-  Future<Map<String, dynamic>> _getBluetoothStatus(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getBluetoothStatus(
+      Map<String, dynamic> args) async {
     try {
-      final result = await _deviceControlChannel.invokeMethod('getBluetoothStatus');
+      final result =
+          await _deviceControlChannel.invokeMethod('getBluetoothStatus');
 
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'Bluetooth status not available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'Bluetooth status not available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'Bluetooth status not available on this platform'}),
+        'output': jsonEncode(
+            {'note': 'Bluetooth status not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
@@ -1911,18 +1930,23 @@ class ClientCommandsService {
   // ==================== Do Not Disturb Tools ====================
 
   /// Set Do Not Disturb mode
-  Future<Map<String, dynamic>> _setDoNotDisturb(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _setDoNotDisturb(
+      Map<String, dynamic> args) async {
     try {
       final enable = args['enable'] as bool? ?? true;
 
-      final result = await _deviceControlChannel.invokeMethod('setDoNotDisturb', {
+      final result =
+          await _deviceControlChannel.invokeMethod('setDoNotDisturb', {
         'enable': enable,
       });
 
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': 'Do Not Disturb ${enable ? "enabled" : "disabled"}', 'exit_code': 0};
+      return {
+        'output': 'Do Not Disturb ${enable ? "enabled" : "disabled"}',
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
         'output': 'Do Not Disturb control not available on this platform',
@@ -1934,21 +1958,30 @@ class ClientCommandsService {
   }
 
   /// Get Do Not Disturb status
-  Future<Map<String, dynamic>> _getDoNotDisturbStatus(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getDoNotDisturbStatus(
+      Map<String, dynamic> args) async {
     try {
-      final result = await _deviceControlChannel.invokeMethod('getDoNotDisturbStatus');
+      final result =
+          await _deviceControlChannel.invokeMethod('getDoNotDisturbStatus');
 
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'DND status not available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'DND status not available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'Do Not Disturb not available on this platform'}),
+        'output': jsonEncode(
+            {'note': 'Do Not Disturb not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
-      return {'output': 'Error getting Do Not Disturb status: $e', 'exit_code': 1};
+      return {
+        'output': 'Error getting Do Not Disturb status: $e',
+        'exit_code': 1
+      };
     }
   }
 
@@ -1974,17 +2007,22 @@ class ClientCommandsService {
   }
 
   /// Get screen status (on/off, locked)
-  Future<Map<String, dynamic>> _getScreenStatus(Map<String, dynamic> args) async {
+  Future<Map<String, dynamic>> _getScreenStatus(
+      Map<String, dynamic> args) async {
     try {
       final result = await _deviceControlChannel.invokeMethod('isScreenOn');
 
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'Screen status not available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'Screen status not available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'Screen status not available on this platform'}),
+        'output': jsonEncode(
+            {'note': 'Screen status not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
@@ -2002,10 +2040,14 @@ class ClientCommandsService {
       if (result is Map) {
         return {'output': jsonEncode(result), 'exit_code': 0};
       }
-      return {'output': jsonEncode({'note': 'System info not available'}), 'exit_code': 0};
+      return {
+        'output': jsonEncode({'note': 'System info not available'}),
+        'exit_code': 0
+      };
     } on MissingPluginException {
       return {
-        'output': jsonEncode({'note': 'System info not available on this platform'}),
+        'output':
+            jsonEncode({'note': 'System info not available on this platform'}),
         'exit_code': 1,
       };
     } catch (e) {
@@ -2107,13 +2149,11 @@ class ClientCommandsService {
       // Filter by search if provided
       if (search != null && search.isNotEmpty) {
         final searchLower = search.toLowerCase();
-        notes =
-            notes.where((n) {
-              final title = (n['title'] as String? ?? '').toLowerCase();
-              final content = (n['content'] as String? ?? '').toLowerCase();
-              return title.contains(searchLower) ||
-                  content.contains(searchLower);
-            }).toList();
+        notes = notes.where((n) {
+          final title = (n['title'] as String? ?? '').toLowerCase();
+          final content = (n['content'] as String? ?? '').toLowerCase();
+          return title.contains(searchLower) || content.contains(searchLower);
+        }).toList();
       }
 
       // Sort by created date (newest first)

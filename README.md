@@ -3,12 +3,12 @@
 ![AGiXT_New](https://github.com/user-attachments/assets/14a5c1ae-6af8-4de8-a82e-f24ea52da23f)
 
 <p align="center">
-  <b>AI-Powered Assistant for Even Realities G1 Smart Glasses</b>
+  <b>AI-Powered Assistant for Even Realities G1 Smart Glasses & Pixel Watch</b>
 </p>
 
 ## 📱 Overview
 
-AGiXT Mobile is a cutting-edge Flutter application designed as the perfect companion for Even Realities G1 smart glasses. This app creates a seamless bridge between AI-powered intelligence and wearable technology, empowering users to interact with their digital world through natural voice commands, view real-time information on their glasses display, and manage their digital life effortlessly.
+AGiXT Mobile is a cutting-edge Flutter application designed as the perfect companion for Even Realities G1 smart glasses and Pixel Watch (Wear OS). This app creates a seamless bridge between AI-powered intelligence and wearable technology, empowering users to interact with their digital world through natural voice commands, view real-time information on their glasses display, and manage their digital life effortlessly. AGiXT can also be set as your default Android digital assistant for system-wide voice control.
 
 ## ✨ Key Features
 
@@ -19,10 +19,27 @@ AGiXT Mobile is a cutting-edge Flutter application designed as the perfect compa
 - **Stable Connection**: Maintains reliable connectivity even in challenging environments
 
 ### 🎤 Voice Recognition & AI Assistant
+- **Wake Word Detection**: Say "computer" to activate hands-free voice input
 - **Multi-Language Support**: On-device speech recognition for 14+ languages
 - **Real-Time Transcription**: Instant display of speech-to-text on glasses display
 - **AI-Powered Responses**: Natural language processing to understand and respond to user queries
 - **Context-Aware Assistance**: Remembers conversation history for more relevant interactions
+- **Streaming TTS**: Real-time audio response streaming to connected devices
+
+### ⌚ Pixel Watch (Wear OS) Support
+- **Native Watch App**: Dedicated Wear OS companion app for Pixel Watch
+- **Voice Input**: Speak directly to your watch for AI assistance
+- **Streaming Audio**: Hear AI responses through watch speaker in real-time
+- **Quick Tiles**: Access AGiXT from watch face tiles
+- **Complications**: At-a-glance status on supported watch faces
+- **Seamless Sync**: Automatic phone ↔ watch communication via Wearable Data Layer
+
+### 🤖 Android Digital Assistant
+- **Default Assistant**: Set AGiXT as your phone's default digital assistant
+- **System Integration**: Activate via long-press home, corner swipe, or voice
+- **Device Control**: Control media, volume, brightness, WiFi, Bluetooth, and more
+- **Do Not Disturb**: Manage focus modes with voice commands
+- **Screen Control**: Wake screen, check device status
 
 ### 📅 Calendar & Smart Planning
 - **Cross-Platform Integration**: Syncs with Google Calendar, Apple Calendar and other providers
@@ -80,7 +97,8 @@ AGiXT supports voice recognition, command processing, and translation in:
 - **Flutter SDK**: ^3.5.4
 - **iOS**: 13.0 or newer
 - **Android**: API level 21+ (Android 5.0+)
-- **Hardware**: Even Realities G1 smart glasses for full functionality
+- **Wear OS**: API level 30+ (Wear OS 3.0+) for Pixel Watch
+- **Hardware**: Even Realities G1 smart glasses and/or Pixel Watch for full functionality
 - **Bluetooth**: 5.0+ recommended for optimal performance
 
 ### Installation
@@ -122,6 +140,21 @@ If multiple wallets are installed, AGiXT filters the list to providers compatibl
 5. **Follow on-screen pairing instructions** to complete the setup
 6. **Verify connection** by checking the status indicator in the app
 
+### Setting Up Pixel Watch
+
+1. **Install the watch app** on your Pixel Watch (Wear OS 3.0+)
+2. **Open AGiXT** on your phone to establish the connection
+3. **Grant permissions** for microphone and speaker access on the watch
+4. **Add the tile** (optional): Swipe left on your watch face and add the AGiXT tile
+5. **Add complication** (optional): Long-press watch face to add AGiXT status
+
+### Setting AGiXT as Default Assistant
+
+1. **Open Android Settings** → Apps → Default apps → Digital assistant app
+2. **Select AGiXT** from the list of available assistants
+3. **Enable voice activation** to use wake word or system gestures
+4. **Test activation**: Long-press the home button to launch AGiXT
+
 ## 💻 Development
 
 ### Project Structure
@@ -148,6 +181,15 @@ On-device speech processing with real-time feedback and minimal latency, optimiz
 #### Background Service Architecture
 Maintains critical functionality even when the app is minimized, ensuring continuous glasses connectivity and timely notifications.
 
+#### Wake Word Detection
+On-device Vosk-based wake word detection with the trigger word "computer". Runs locally for privacy with configurable confidence thresholds.
+
+#### Pixel Watch Integration
+Native Wear OS companion app with Wearable Data Layer communication. Supports local speech recognition on watch, streaming TTS audio playback, tiles, and complications.
+
+#### Digital Assistant Handler
+System-level assistant integration via VoiceInteractionService. Handles device control commands for media, volume, brightness, connectivity, and focus modes.
+
 #### State Management
 Reactive programming model that ensures UI consistency across app and glasses displays.
 
@@ -155,11 +197,16 @@ Reactive programming model that ensures UI consistency across app and glasses di
 
 ### Voice Commands
 
+- **"Computer"** - Wake word to activate voice input (hands-free)
 - **"Hey AGiXT, what's my schedule today?"** - View today's calendar events
 - **"Take a note: pick up groceries after work"** - Create a new reminder
 - **"Translate 'Where is the train station?' to Japanese"** - Get instant translations
 - **"Show me the weather forecast"** - Display weather information
 - **"Read my latest messages"** - Review recent notifications
+- **"Play music"** / **"Pause"** / **"Next song"** - Media control
+- **"Set volume to 50%"** - Adjust device volume
+- **"Turn on Do Not Disturb"** - Enable focus mode
+- **"Turn off WiFi"** - Toggle connectivity
 
 ### Gesture Controls
 
@@ -167,6 +214,12 @@ The app also supports the G1 glasses' gesture recognition for hands-free interac
 - **Swipe right/left**: Navigate between dashboard cards
 - **Double tap**: Select or activate current item
 - **Swipe up/down**: Scroll through content
+
+### Watch Interactions
+
+- **Tap microphone icon**: Start voice input
+- **Swipe to tile**: Quick access to AGiXT
+- **Speak naturally**: Watch transcribes locally, sends to AI, streams audio response
 
 ## 🔒 Privacy & Security
 
