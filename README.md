@@ -180,4 +180,4 @@ The app also supports the G1 glasses' gesture recognition for hands-free interac
 
 - **GitHub Issues**: For bug reports and feature requests
 - **Discord**: Join our community at [AGiXT Discord](https://discord.gg/AGiXT)
-- **Documentation**: [AGiXT Docs](https://AGiXT.github.io/docs)
+- **Documentation**: [AGiXT Docs](https://agixt.com/docs)
