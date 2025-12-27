@@ -1,0 +1,21 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="180dp"
+    android:height="180dp"
+    android:viewportWidth="180"
+    android:viewportHeight="180">
+    
+    <!-- Background -->
+    <path
+        android:fillColor="#000000"
+        android:pathData="M0,0h180v180h-180z"/>
+    
+    <!-- Blue circle -->
+    <path
+        android:fillColor="#1A73E8"
+        android:pathData="M90,90m-70,0a70,70 0,1 1,140 0a70,70 0,1 1,-140 0"/>
+    
+    <!-- Mic icon -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M90,115c7.73,0 13.96,-6.26 13.96,-14L104,67c0,-7.73 -6.27,-14 -14,-14s-14,6.27 -14,14v34c0,7.74 6.27,14 14,14zM114.73,101c0,14 -11.86,23.8 -24.73,23.8s-24.73,-9.8 -24.73,-23.8L58,101c0,15.92 12.7,29.08 28,31.36V143h8v-10.64c15.3,-2.24 28,-15.4 28,-31.36h-7.27z"/>
+</vector>

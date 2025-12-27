@@ -31,10 +31,13 @@ class MainActivity: FlutterActivity() {
     private val TAG = "MainActivity"
     private var methodChannelInitialized = false
     private var pendingToken: String? = null
+    private var pendingVoiceInput: Pair<String, String?>? = null
+    private var pendingAssistantLaunch = false
     
     // Voice & Watch handlers
     private var wakeWordHandler: WakeWordHandler? = null
     private var watchHandler: WatchHandler? = null
+    private var deviceControlHandler: DeviceControlHandler? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -78,6 +81,40 @@ class MainActivity: FlutterActivity() {
                     }
                 }
             }
+            // Handle assistant/voice mode intents
+            else if (it.getBooleanExtra("start_voice_input", false) || 
+                     it.getBooleanExtra("voice_mode", false) ||
+                     it.getBooleanExtra("from_assistant", false)) {
+                Log.d(TAG, "Assistant mode activated from intent")
+                if (methodChannelInitialized) {
+                    triggerVoiceInput()
+                } else {
+                    // Store flag to trigger voice input once initialized
+                    pendingAssistantLaunch = true
+                }
+            }
+            // Handle voice input from WearableMessageService
+            else if (WearableMessageService.ACTION_VOICE_INPUT == it.action) {
+                val text = it.getStringExtra(WearableMessageService.EXTRA_TEXT)
+                val nodeId = it.getStringExtra(WearableMessageService.EXTRA_NODE_ID)
+                if (!text.isNullOrEmpty()) {
+                    Log.d(TAG, "Voice input from watch intent: $text (from $nodeId)")
+                    if (methodChannelInitialized && watchHandler != null) {
+                        // Forward to WatchHandler which will send to Flutter
+                        watchHandler?.handleVoiceInputFromIntent(text, nodeId)
+                    } else {
+                        // Store for later processing
+                        pendingVoiceInput = Pair(text, nodeId)
+                    }
+                }
+            }
+        }
+    }
+    
+    private fun triggerVoiceInput() {
+        // Send message to Flutter to start voice input
+        flutterEngine?.dartExecutor?.binaryMessenger?.let { messenger ->
+            MethodChannel(messenger, CHANNEL).invokeMethod("startVoiceInput", null)
         }
     }
 
@@ -133,8 +170,9 @@ class MainActivity: FlutterActivity() {
      override fun onDestroy() {
         super.onDestroy()
         // Clean up handlers
-        wakeWordHandler?.destroy()
+        // wakeWordHandler?.destroy()  // Now using Vosk in Flutter
         watchHandler?.destroy()
+        deviceControlHandler?.destroy()
         BackgroundService.stopService(this@MainActivity, null)
     }
 
@@ -205,17 +243,37 @@ class MainActivity: FlutterActivity() {
         // Mark that the method channels are initialized
         methodChannelInitialized = true
         
-        // Initialize Voice & Watch handlers
-        wakeWordHandler = WakeWordHandler(this, binaryMessenger)
-        wakeWordHandler?.initialize()
+        // Wake word detection is now handled by Vosk in Flutter (pure Dart)
+        // Native WakeWordHandler is no longer needed
+        // wakeWordHandler = WakeWordHandler(this, binaryMessenger)
+        // wakeWordHandler?.initialize()
         
+        // Initialize Watch handler for Pixel Watch support
         watchHandler = WatchHandler(this, binaryMessenger)
         watchHandler?.initialize()
+        
+        // Initialize Device Control handler for digital assistant capabilities
+        deviceControlHandler = DeviceControlHandler(this, binaryMessenger)
+        deviceControlHandler?.initialize()
         
         // Check if we have a pending token to send
         pendingToken?.let { token ->
             sendTokenToFlutter(token)
             pendingToken = null
+        }
+        
+        // Check if we have pending voice input to process
+        pendingVoiceInput?.let { (text, nodeId) ->
+            Log.d(TAG, "Processing pending voice input: $text")
+            watchHandler?.handleVoiceInputFromIntent(text, nodeId)
+            pendingVoiceInput = null
+        }
+        
+        // Check if we need to trigger voice input from assistant launch
+        if (pendingAssistantLaunch) {
+            Log.d(TAG, "Triggering pending assistant voice input")
+            triggerVoiceInput()
+            pendingAssistantLaunch = false
         }
         
         // Setup the new channel for button events

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Voice Interaction Service configuration for AGiXT default assistant -->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="dev.agixt.agixt.AGiXTVoiceInteractionSessionService"
+    android:recognitionService="dev.agixt.agixt.AGiXTVoiceInteractionService"
+    android:settingsActivity="dev.agixt.agixt.MainActivity"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true"
+    android:supportsLocalInteraction="true" />

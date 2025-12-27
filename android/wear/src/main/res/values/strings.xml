@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AGiXT</string>
+    <string name="tile_label">AGiXT Voice</string>
+    <string name="complication_label">AGiXT Status</string>
+    <string name="voice_prompt">Speak to AGiXT</string>
+    <string name="listening">Listening...</string>
+    <string name="processing">Processing...</string>
+    <string name="error_no_connection">Not connected to phone</string>
+    <string name="error_speech">Speech recognition failed</string>
+    <string name="tap_to_speak">Tap to speak</string>
+    <string name="wake_word_hint">Or say \"Computer\"</string>
+</resources>
