@@ -72,13 +72,17 @@ class VoiceInputActivity : ComponentActivity() {
             )
             putExtra(RecognizerIntent.EXTRA_PROMPT, prompt)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            // Auto-send when silence is detected (no checkmark required)
+            // Enable hands-free auto-send - critical for skipping the checkmark
             putExtra("android.speech.extra.DICTATION_MODE", true)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false) // Disable partial to avoid multiple callbacks
             // Shorter silence timeout for faster response
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 500L)
+            // Wear-specific: prefer offline recognition for speed
+            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            // Calling package helps with context
+            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, packageName)
         }
         
         try {

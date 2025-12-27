@@ -17,11 +17,12 @@ import '../services/bluetooth_manager.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key, this.forceNewChat = false, this.startVoiceInput = false});
+  const HomePage(
+      {super.key, this.forceNewChat = false, this.startVoiceInput = false});
 
   /// When true, forces a new chat instead of restoring the previous conversation
   final bool forceNewChat;
-  
+
   /// When true, automatically starts voice input after the page loads
   final bool startVoiceInput;
 
@@ -275,11 +276,12 @@ class _HomePageState extends State<HomePage> {
 
             // Set up location injection for the webview
             await _setupLocationInjection();
-            
+
             // Trigger voice input if launched from assistant
             if (widget.startVoiceInput && !_hasTriggeredAssistantVoiceInput) {
               _hasTriggeredAssistantVoiceInput = true;
-              debugPrint('Page loaded, triggering voice input from assistant launch');
+              debugPrint(
+                  'Page loaded, triggering voice input from assistant launch');
               // Small delay to ensure UI is ready
               Future.delayed(const Duration(milliseconds: 500), () {
                 if (mounted) {

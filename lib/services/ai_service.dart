@@ -327,7 +327,7 @@ class AIService {
       }
     }
   }
-  
+
   /// Public method to start voice input (for assistant/external triggers)
   /// This can be called when the app is launched as a digital assistant
   Future<void> startVoiceInput() async {

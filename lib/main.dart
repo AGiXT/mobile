@@ -517,14 +517,15 @@ class _AGiXTAppState extends State<AGiXTApp> {
       } catch (e) {
         debugPrint('Error setting up OAuth method channel: $e');
       }
-      
+
       // Set up method channel for assistant/voice input triggers from native
       try {
         const assistantChannel = MethodChannel('dev.agixt.agixt/channel');
         assistantChannel.setMethodCallHandler((call) async {
           try {
             if (call.method == 'startVoiceInput') {
-              debugPrint('Assistant trigger received from native - starting voice input');
+              debugPrint(
+                  'Assistant trigger received from native - starting voice input');
               // Navigate to home page and trigger voice input
               final navigator = AGiXTApp.navigatorKey.currentState;
               if (navigator != null) {
@@ -574,7 +575,8 @@ class _AGiXTAppState extends State<AGiXTApp> {
                 as Map<String, dynamic>?;
             final forceNewChat = args?['forceNewChat'] as bool? ?? false;
             final startVoiceInput = args?['startVoiceInput'] as bool? ?? false;
-            return HomePage(forceNewChat: forceNewChat, startVoiceInput: startVoiceInput);
+            return HomePage(
+                forceNewChat: forceNewChat, startVoiceInput: startVoiceInput);
           },
           '/login': (context) => const LoginScreen(),
           '/profile': (context) => const ProfileScreen(),
