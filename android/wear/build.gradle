@@ -4,6 +4,22 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose' version '2.1.0'
 }
 
+// Load keystore properties (shared with main app)
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+def useReleaseKeys = false
+
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+    def storeFilePath = keystoreProperties['storeFile']
+    if (storeFilePath) {
+        def storeFile = rootProject.file(storeFilePath)
+        if (storeFile.exists()) {
+            useReleaseKeys = true
+        }
+    }
+}
+
 android {
     namespace 'dev.agixt.wear'
     compileSdk 34
@@ -16,9 +32,24 @@ android {
         versionName "1.0.0"
     }
 
+    signingConfigs {
+        debug {
+            // Use debug keys by default
+        }
+        release {
+            if (useReleaseKeys) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled true
+            signingConfig useReleaseKeys ? signingConfigs.release : signingConfigs.debug
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {

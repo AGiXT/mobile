@@ -2,6 +2,7 @@ package dev.agixt.wear
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -23,17 +24,44 @@ import androidx.wear.compose.foundation.lazy.items
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
 
 class MainActivity : ComponentActivity() {
+    
+    companion object {
+        private const val TAG = "MainActivity"
+    }
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.d(TAG, "onCreate started")
         
-        setContent {
-            AGiXTWearApp()
+        try {
+            setContent {
+                AGiXTWearApp()
+            }
+            Log.d(TAG, "setContent completed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in setContent", e)
         }
+    }
+    
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "onResume")
+    }
+    
+    override fun onPause() {
+        super.onPause()
+        Log.d(TAG, "onPause")
+    }
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.d(TAG, "onDestroy")
     }
 }
 
 @Composable
 fun AGiXTWearApp() {
+    // ViewModel is initialized safely - errors are caught in the ViewModel itself
     val viewModel: WearViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsState()
     val messages by viewModel.messages.collectAsState()

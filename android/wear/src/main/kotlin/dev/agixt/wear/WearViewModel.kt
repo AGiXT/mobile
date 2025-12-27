@@ -37,18 +37,27 @@ class WearViewModel(application: Application) : AndroidViewModel(application) {
     private val _isPhoneConnected = MutableStateFlow(false)
     val isPhoneConnected: StateFlow<Boolean> = _isPhoneConnected.asStateFlow()
     
-    private val messageClient: MessageClient = Wearable.getMessageClient(application)
-    private val nodeClient: NodeClient = Wearable.getNodeClient(application)
-    private val capabilityClient: CapabilityClient = Wearable.getCapabilityClient(application)
+    private var messageClient: MessageClient? = null
+    private var nodeClient: NodeClient? = null
+    private var capabilityClient: CapabilityClient? = null
     
     init {
-        checkPhoneConnection()
+        Log.d(TAG, "ViewModel initializing...")
+        try {
+            messageClient = Wearable.getMessageClient(application)
+            nodeClient = Wearable.getNodeClient(application)
+            capabilityClient = Wearable.getCapabilityClient(application)
+            Log.d(TAG, "Wearable clients initialized successfully")
+            checkPhoneConnection()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize Wearable clients", e)
+        }
     }
     
     private fun checkPhoneConnection() {
         viewModelScope.launch {
             try {
-                val nodes = nodeClient.connectedNodes.await()
+                val nodes = nodeClient?.connectedNodes?.await() ?: emptyList()
                 _isPhoneConnected.value = nodes.isNotEmpty()
                 Log.d(TAG, "Connected nodes: ${nodes.size}")
             } catch (e: Exception) {
@@ -119,8 +128,11 @@ class WearViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     private suspend fun sendMessageToPhone(text: String): Boolean {
+        val nc = nodeClient ?: return false
+        val mc = messageClient ?: return false
+        
         return try {
-            val nodes = nodeClient.connectedNodes.await()
+            val nodes = nc.connectedNodes.await()
             if (nodes.isEmpty()) {
                 Log.w(TAG, "No connected nodes found")
                 return false
@@ -130,7 +142,7 @@ class WearViewModel(application: Application) : AndroidViewModel(application) {
             var sent = false
             for (node in nodes) {
                 try {
-                    messageClient.sendMessage(
+                    mc.sendMessage(
                         node.id,
                         VOICE_INPUT_PATH,
                         text.toByteArray(Charsets.UTF_8)
@@ -149,8 +161,10 @@ class WearViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     suspend fun getConnectedPhoneNode(): Node? {
+        val nc = nodeClient ?: return null
+        
         return try {
-            val nodes = nodeClient.connectedNodes.await()
+            val nodes = nc.connectedNodes.await()
             nodes.firstOrNull { it.isNearby }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get phone node", e)
