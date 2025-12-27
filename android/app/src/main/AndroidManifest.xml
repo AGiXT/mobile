@@ -38,6 +38,17 @@
     
     <!-- Voice Interaction Service permissions (for default assistant role) -->
     <uses-permission android:name="android.permission.BIND_VOICE_INTERACTION" />
+    
+    <!-- Device control permissions for digital assistant capabilities -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Ensure compatibility with different Android versions -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />

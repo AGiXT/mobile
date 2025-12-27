@@ -163,6 +163,58 @@ class ClientCommandsService {
       case 'set_timer':
         return await _setTimer(args);
 
+      // Media control tools (digital assistant capabilities)
+      case 'media_control':
+        return await _mediaControl(args);
+      case 'get_media_info':
+        return await _getMediaInfo(args);
+
+      // Volume control tools
+      case 'set_volume':
+        return await _setVolume(args);
+      case 'get_volume':
+        return await _getVolume(args);
+      case 'adjust_volume':
+        return await _adjustVolume(args);
+
+      // Ringer mode tools
+      case 'set_ringer_mode':
+        return await _setRingerMode(args);
+      case 'get_ringer_mode':
+        return await _getRingerMode(args);
+
+      // Brightness tools
+      case 'set_brightness':
+        return await _setBrightness(args);
+      case 'get_brightness':
+        return await _getBrightness(args);
+
+      // Connectivity tools
+      case 'toggle_wifi':
+        return await _toggleWifi(args);
+      case 'get_wifi_status':
+        return await _getWifiStatus(args);
+      case 'toggle_bluetooth':
+        return await _toggleBluetooth(args);
+      case 'get_bluetooth_status':
+        return await _getBluetoothStatus(args);
+
+      // Do Not Disturb tools
+      case 'set_do_not_disturb':
+        return await _setDoNotDisturb(args);
+      case 'get_do_not_disturb_status':
+        return await _getDoNotDisturbStatus(args);
+
+      // Screen control tools
+      case 'wake_screen':
+        return await _wakeScreen(args);
+      case 'get_screen_status':
+        return await _getScreenStatus(args);
+
+      // System info tools
+      case 'get_system_info':
+        return await _getSystemInfo(args);
+
       // Utility tools
       case 'open_url':
         return await _openUrl(args);
@@ -322,17 +374,92 @@ class ClientCommandsService {
       );
 
       capabilities['available_tools'] = {
+        // Visual/Glasses tools
         'capture_image': _bluetoothManager.isConnected,
         'display_on_glasses': _bluetoothManager.isConnected,
+        
+        // Contact tools
         'get_contacts': contactsGranted,
         'search_contacts': contactsGranted,
+        
+        // Communication tools
         'send_sms': smsGranted,
         'make_phone_call': phoneGranted,
+        'mobile_send_email': true,
+        
+        // Calendar tools
+        'get_calendar_events': true,
+        'create_calendar_event': true,
+        'get_calendars': true,
+        
+        // Location tools
         'get_location': locationGranted,
         'open_maps': locationGranted,
         'navigate_to': locationGranted,
+        
+        // File tools
+        'mobile_read_file': true,
+        'mobile_write_file': true,
+        'mobile_list_files': true,
+        'mobile_delete_file': true,
+        'mobile_get_storage_info': true,
+        
+        // Clipboard tools
+        'mobile_get_clipboard': true,
+        'mobile_set_clipboard': true,
+        
+        // App control
+        'open_app': true,
+        'open_settings': true,
         'open_url': true,
+        
+        // Device control
+        'set_flashlight': true,
+        'get_battery_status': true,
+        'set_alarm': true,
+        'set_timer': true,
+        
+        // Media control (digital assistant)
+        'media_control': true,  // play, pause, next, previous, stop
+        'get_media_info': true,
+        
+        // Volume control (digital assistant)
+        'set_volume': true,
+        'get_volume': true,
+        'adjust_volume': true,  // up, down, mute, unmute
+        
+        // Ringer mode
+        'set_ringer_mode': true,  // normal, vibrate, silent
+        'get_ringer_mode': true,
+        
+        // Brightness control
+        'set_brightness': true,
+        'get_brightness': true,
+        
+        // Connectivity
+        'toggle_wifi': true,  // Opens settings panel on Android 10+
+        'get_wifi_status': true,
+        'toggle_bluetooth': true,  // Opens settings on Android 12+
+        'get_bluetooth_status': true,
+        
+        // Do Not Disturb
+        'set_do_not_disturb': true,
+        'get_do_not_disturb_status': true,
+        
+        // Screen control
+        'wake_screen': true,
+        'get_screen_status': true,
+        
+        // System info
+        'get_system_info': true,  // Comprehensive device status
         'get_device_info': true,
+        
+        // Notes
+        'mobile_save_note': true,
+        'mobile_get_notes': true,
+        
+        // Search
+        'mobile_search_web': true,
       };
 
       return {'output': jsonEncode(capabilities), 'exit_code': 0};
@@ -1480,6 +1607,409 @@ class ClientCommandsService {
       };
     } catch (e) {
       return {'output': 'Error setting timer: $e', 'exit_code': 1};
+    }
+  }
+
+  // ==================== Media Control Tools ====================
+
+  /// Device control method channel
+  static const MethodChannel _deviceControlChannel = MethodChannel(
+    'dev.agixt.agixt/device_control',
+  );
+
+  /// Control media playback (play, pause, next, previous, stop)
+  Future<Map<String, dynamic>> _mediaControl(Map<String, dynamic> args) async {
+    try {
+      final action = args['action'] as String? ?? 'play_pause';
+
+      final result = await _deviceControlChannel.invokeMethod('mediaControl', {
+        'action': action,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'Media control: $action', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'Media control not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error controlling media: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Get information about currently playing media
+  Future<Map<String, dynamic>> _getMediaInfo(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('getMediaInfo');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'No media info available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'Media info not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting media info: $e', 'exit_code': 1};
+    }
+  }
+
+  // ==================== Volume Control Tools ====================
+
+  /// Set volume level (0-100 percentage)
+  Future<Map<String, dynamic>> _setVolume(Map<String, dynamic> args) async {
+    try {
+      final level = args['level'] as int? ?? 50;
+      final stream = args['stream'] as String? ?? 'media';
+
+      final result = await _deviceControlChannel.invokeMethod('setVolume', {
+        'level': level,
+        'stream': stream,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'Volume set to $level%', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'Volume control not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error setting volume: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Get current volume level
+  Future<Map<String, dynamic>> _getVolume(Map<String, dynamic> args) async {
+    try {
+      final stream = args['stream'] as String? ?? 'media';
+
+      final result = await _deviceControlChannel.invokeMethod('getVolume', {
+        'stream': stream,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'Volume info not available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'Volume control not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting volume: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Adjust volume up/down/mute
+  Future<Map<String, dynamic>> _adjustVolume(Map<String, dynamic> args) async {
+    try {
+      final direction = args['direction'] as String? ?? 'up';
+      final stream = args['stream'] as String? ?? 'media';
+
+      final result = await _deviceControlChannel.invokeMethod('adjustVolume', {
+        'direction': direction,
+        'stream': stream,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'Volume adjusted $direction', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'Volume control not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error adjusting volume: $e', 'exit_code': 1};
+    }
+  }
+
+  // ==================== Ringer Mode Tools ====================
+
+  /// Set ringer mode (normal, vibrate, silent)
+  Future<Map<String, dynamic>> _setRingerMode(Map<String, dynamic> args) async {
+    try {
+      final mode = args['mode'] as String? ?? 'normal';
+
+      final result = await _deviceControlChannel.invokeMethod('setRingerMode', {
+        'mode': mode,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'Ringer mode set to $mode', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'Ringer mode control not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error setting ringer mode: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Get current ringer mode
+  Future<Map<String, dynamic>> _getRingerMode(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('getRingerMode');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'Ringer mode not available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'Ringer mode not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting ringer mode: $e', 'exit_code': 1};
+    }
+  }
+
+  // ==================== Brightness Tools ====================
+
+  /// Set screen brightness (0-100 percentage)
+  Future<Map<String, dynamic>> _setBrightness(Map<String, dynamic> args) async {
+    try {
+      final level = args['level'] as int? ?? 50;
+
+      final result = await _deviceControlChannel.invokeMethod('setBrightness', {
+        'level': level,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'Brightness set to $level%', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'Brightness control not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error setting brightness: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Get current brightness level
+  Future<Map<String, dynamic>> _getBrightness(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('getBrightness');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'Brightness info not available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'Brightness control not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting brightness: $e', 'exit_code': 1};
+    }
+  }
+
+  // ==================== Connectivity Tools ====================
+
+  /// Toggle WiFi on/off
+  Future<Map<String, dynamic>> _toggleWifi(Map<String, dynamic> args) async {
+    try {
+      final enable = args['enable'] as bool?;
+
+      final result = await _deviceControlChannel.invokeMethod('toggleWifi', {
+        'enable': enable,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'WiFi toggled', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'WiFi control not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error toggling WiFi: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Get WiFi status
+  Future<Map<String, dynamic>> _getWifiStatus(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('getWifiStatus');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'WiFi status not available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'WiFi status not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting WiFi status: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Toggle Bluetooth on/off
+  Future<Map<String, dynamic>> _toggleBluetooth(Map<String, dynamic> args) async {
+    try {
+      final enable = args['enable'] as bool?;
+
+      final result = await _deviceControlChannel.invokeMethod('toggleBluetooth', {
+        'enable': enable,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'Bluetooth toggled', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'Bluetooth control not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error toggling Bluetooth: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Get Bluetooth status
+  Future<Map<String, dynamic>> _getBluetoothStatus(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('getBluetoothStatus');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'Bluetooth status not available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'Bluetooth status not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting Bluetooth status: $e', 'exit_code': 1};
+    }
+  }
+
+  // ==================== Do Not Disturb Tools ====================
+
+  /// Set Do Not Disturb mode
+  Future<Map<String, dynamic>> _setDoNotDisturb(Map<String, dynamic> args) async {
+    try {
+      final enable = args['enable'] as bool? ?? true;
+
+      final result = await _deviceControlChannel.invokeMethod('setDoNotDisturb', {
+        'enable': enable,
+      });
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'Do Not Disturb ${enable ? "enabled" : "disabled"}', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'Do Not Disturb control not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error setting Do Not Disturb: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Get Do Not Disturb status
+  Future<Map<String, dynamic>> _getDoNotDisturbStatus(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('getDoNotDisturbStatus');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'DND status not available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'Do Not Disturb not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting Do Not Disturb status: $e', 'exit_code': 1};
+    }
+  }
+
+  // ==================== Screen Control Tools ====================
+
+  /// Wake the screen
+  Future<Map<String, dynamic>> _wakeScreen(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('wakeScreen');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': 'Screen awakened', 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': 'Screen wake not available on this platform',
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error waking screen: $e', 'exit_code': 1};
+    }
+  }
+
+  /// Get screen status (on/off, locked)
+  Future<Map<String, dynamic>> _getScreenStatus(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('isScreenOn');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'Screen status not available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'Screen status not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting screen status: $e', 'exit_code': 1};
+    }
+  }
+
+  // ==================== System Info Tools ====================
+
+  /// Get comprehensive system info (volumes, battery, screen, etc.)
+  Future<Map<String, dynamic>> _getSystemInfo(Map<String, dynamic> args) async {
+    try {
+      final result = await _deviceControlChannel.invokeMethod('getSystemInfo');
+
+      if (result is Map) {
+        return {'output': jsonEncode(result), 'exit_code': 0};
+      }
+      return {'output': jsonEncode({'note': 'System info not available'}), 'exit_code': 0};
+    } on MissingPluginException {
+      return {
+        'output': jsonEncode({'note': 'System info not available on this platform'}),
+        'exit_code': 1,
+      };
+    } catch (e) {
+      return {'output': 'Error getting system info: $e', 'exit_code': 1};
     }
   }
 

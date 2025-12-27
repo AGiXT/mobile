@@ -37,6 +37,7 @@ class MainActivity: FlutterActivity() {
     // Voice & Watch handlers
     private var wakeWordHandler: WakeWordHandler? = null
     private var watchHandler: WatchHandler? = null
+    private var deviceControlHandler: DeviceControlHandler? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -171,6 +172,7 @@ class MainActivity: FlutterActivity() {
         // Clean up handlers
         // wakeWordHandler?.destroy()  // Now using Vosk in Flutter
         watchHandler?.destroy()
+        deviceControlHandler?.destroy()
         BackgroundService.stopService(this@MainActivity, null)
     }
 
@@ -249,6 +251,10 @@ class MainActivity: FlutterActivity() {
         // Initialize Watch handler for Pixel Watch support
         watchHandler = WatchHandler(this, binaryMessenger)
         watchHandler?.initialize()
+        
+        // Initialize Device Control handler for digital assistant capabilities
+        deviceControlHandler = DeviceControlHandler(this, binaryMessenger)
+        deviceControlHandler?.initialize()
         
         // Check if we have a pending token to send
         pendingToken?.let { token ->
