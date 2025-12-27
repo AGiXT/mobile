@@ -3,7 +3,7 @@
 ![AGiXT_New](https://github.com/user-attachments/assets/14a5c1ae-6af8-4de8-a82e-f24ea52da23f)
 
 <p align="center">
-  <b>AI-Powered Assistant for Even Realities G1 Smart Glasses & Pixel Watch</b>
+  <b>AI-Powered Assistant for Even Realities G1 Smart Glasses & Wear OS Smartwatches</b>
 </p>
 
 ## 📱 Overview
@@ -26,8 +26,8 @@ AGiXT Mobile is a cutting-edge Flutter application designed as the perfect compa
 - **Context-Aware Assistance**: Remembers conversation history for more relevant interactions
 - **Streaming TTS**: Real-time audio response streaming to connected devices
 
-### ⌚ Pixel Watch (Wear OS) Support
-- **Native Watch App**: Dedicated Wear OS companion app for Pixel Watch
+### ⌚ Wear OS Smartwatch Support
+- **Native Watch App**: Dedicated Wear OS companion app for Pixel Watch, Galaxy Watch 4+, and other Wear OS devices
 - **Voice Input**: Speak directly to your watch for AI assistance
 - **Streaming Audio**: Hear AI responses through watch speaker in real-time
 - **Quick Tiles**: Access AGiXT from watch face tiles
@@ -97,8 +97,8 @@ AGiXT supports voice recognition, command processing, and translation in:
 - **Flutter SDK**: ^3.5.4
 - **iOS**: 13.0 or newer
 - **Android**: API level 21+ (Android 5.0+)
-- **Wear OS**: API level 30+ (Wear OS 3.0+) for Pixel Watch
-- **Hardware**: Even Realities G1 smart glasses and/or Pixel Watch for full functionality
+- **Wear OS**: API level 30+ (Wear OS 3.0+) for smartwatch features
+- **Hardware**: Even Realities G1 smart glasses and/or Wear OS smartwatch (Pixel Watch, Galaxy Watch 4+, etc.) for full functionality
 - **Bluetooth**: 5.0+ recommended for optimal performance
 
 ### Installation
@@ -140,9 +140,9 @@ If multiple wallets are installed, AGiXT filters the list to providers compatibl
 5. **Follow on-screen pairing instructions** to complete the setup
 6. **Verify connection** by checking the status indicator in the app
 
-### Setting Up Pixel Watch
+### Setting Up Wear OS Smartwatch
 
-1. **Install the watch app** on your Pixel Watch (Wear OS 3.0+)
+1. **Install the watch app** on your Wear OS smartwatch (Pixel Watch, Galaxy Watch 4+, etc.)
 2. **Open AGiXT** on your phone to establish the connection
 3. **Grant permissions** for microphone and speaker access on the watch
 4. **Add the tile** (optional): Swipe left on your watch face and add the AGiXT tile
@@ -184,8 +184,8 @@ Maintains critical functionality even when the app is minimized, ensuring contin
 #### Wake Word Detection
 On-device Vosk-based wake word detection with the trigger word "computer". Runs locally for privacy with configurable confidence thresholds.
 
-#### Pixel Watch Integration
-Native Wear OS companion app with Wearable Data Layer communication. Supports local speech recognition on watch, streaming TTS audio playback, tiles, and complications.
+#### Wear OS Integration
+Native Wear OS companion app with Wearable Data Layer communication. Compatible with Pixel Watch, Galaxy Watch 4+, and other Wear OS 3.0+ devices. Supports local speech recognition on watch, streaming TTS audio playback, tiles, and complications.
 
 #### Digital Assistant Handler
 System-level assistant integration via VoiceInteractionService. Handles device control commands for media, volume, brightness, connectivity, and focus modes.
