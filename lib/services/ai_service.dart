@@ -376,6 +376,7 @@ class AIService {
       final responseBuffer = StringBuffer();
       bool audioHeaderSent = false;
       bool hasReceivedAudio = false;
+      bool usePhoneAudio = !_watchService.isConnected; // Track if we're using phone audio
       DateTime? lastGlassesUpdate;
       const glassesUpdateInterval = Duration(milliseconds: 500);
 
@@ -409,12 +410,22 @@ class AIService {
                   'AIService: Audio header - ${event.sampleRate}Hz, ${event.bitsPerSample}bit, ${event.channels}ch');
               audioHeaderSent = true;
               // Send audio header to watch if connected, otherwise start phone playback
-              if (_watchService.isConnected) {
-                await _watchService.sendAudioHeader(
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioHeader(
                   sampleRate: event.sampleRate!,
                   bitsPerSample: event.bitsPerSample ?? 16,
                   channels: event.channels ?? 1,
                 );
+                if (!success) {
+                  // Watch send failed - fall back to phone speaker
+                  debugPrint('AIService: Watch audio header failed, falling back to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: event.sampleRate!,
+                    bitsPerSample: event.bitsPerSample ?? 16,
+                    channels: event.channels ?? 1,
+                  );
+                }
               } else {
                 // Start streaming audio on phone speaker
                 await _audioPlayerService.startStreaming(
@@ -430,8 +441,20 @@ class AIService {
             // Stream audio to watch speaker or phone speaker
             if (event.audioData != null && audioHeaderSent) {
               hasReceivedAudio = true;
-              if (_watchService.isConnected) {
-                await _watchService.sendAudioChunk(event.audioData!);
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioChunk(event.audioData!);
+                if (!success) {
+                  // Watch send failed - switch to phone audio
+                  debugPrint('AIService: Watch audio chunk failed, switching to phone');
+                  usePhoneAudio = true;
+                  // Start phone streaming (we may have missed the header, use defaults)
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: 24000,
+                    bitsPerSample: 16,
+                    channels: 1,
+                  );
+                  await _audioPlayerService.feedAudioChunk(event.audioData!);
+                }
               } else {
                 // Play on phone speaker
                 await _audioPlayerService.feedAudioChunk(event.audioData!);
@@ -441,7 +464,7 @@ class AIService {
 
           case ChatStreamEventType.audioEnd:
             // Audio streaming complete
-            if (_watchService.isConnected) {
+            if (!usePhoneAudio && _watchService.isConnected) {
               await _watchService.sendAudioEnd();
             } else {
               await _audioPlayerService.stopStreaming();
@@ -717,6 +740,7 @@ class AIService {
       final responseBuffer = StringBuffer();
       bool audioHeaderSent = false;
       bool hasReceivedAudio = false;
+      bool usePhoneAudio = !_watchService.isConnected; // Track if we're using phone audio
       DateTime? lastGlassesUpdate;
       const glassesUpdateInterval = Duration(milliseconds: 500);
 
@@ -748,12 +772,21 @@ class AIService {
               debugPrint(
                   'AIService: Audio header - ${event.sampleRate}Hz, ${event.bitsPerSample}bit, ${event.channels}ch');
               audioHeaderSent = true;
-              if (_watchService.isConnected) {
-                await _watchService.sendAudioHeader(
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioHeader(
                   sampleRate: event.sampleRate!,
                   bitsPerSample: event.bitsPerSample ?? 16,
                   channels: event.channels ?? 1,
                 );
+                if (!success) {
+                  debugPrint('AIService: Watch audio header failed, falling back to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: event.sampleRate!,
+                    bitsPerSample: event.bitsPerSample ?? 16,
+                    channels: event.channels ?? 1,
+                  );
+                }
               } else {
                 // Start streaming audio on phone speaker
                 await _audioPlayerService.startStreaming(
@@ -769,8 +802,18 @@ class AIService {
             // Stream audio to watch speaker or phone speaker
             if (event.audioData != null && audioHeaderSent) {
               hasReceivedAudio = true;
-              if (_watchService.isConnected) {
-                await _watchService.sendAudioChunk(event.audioData!);
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioChunk(event.audioData!);
+                if (!success) {
+                  debugPrint('AIService: Watch audio chunk failed, switching to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: 24000,
+                    bitsPerSample: 16,
+                    channels: 1,
+                  );
+                  await _audioPlayerService.feedAudioChunk(event.audioData!);
+                }
               } else {
                 // Play on phone speaker
                 await _audioPlayerService.feedAudioChunk(event.audioData!);
@@ -780,7 +823,7 @@ class AIService {
 
           case ChatStreamEventType.audioEnd:
             // Audio streaming complete
-            if (_watchService.isConnected) {
+            if (!usePhoneAudio && _watchService.isConnected) {
               await _watchService.sendAudioEnd();
             } else {
               await _audioPlayerService.stopStreaming();
@@ -872,6 +915,7 @@ class AIService {
       final responseBuffer = StringBuffer();
       bool audioHeaderSent = false;
       bool hasReceivedAudio = false;
+      bool usePhoneAudio = !_watchService.isConnected; // Track if we're using phone audio
       DateTime? lastGlassesUpdate;
       const glassesUpdateInterval = Duration(milliseconds: 500);
 
@@ -900,12 +944,21 @@ class AIService {
           case ChatStreamEventType.audioHeader:
             if (event.sampleRate != null) {
               audioHeaderSent = true;
-              if (_watchService.isConnected) {
-                await _watchService.sendAudioHeader(
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioHeader(
                   sampleRate: event.sampleRate!,
                   bitsPerSample: event.bitsPerSample ?? 16,
                   channels: event.channels ?? 1,
                 );
+                if (!success) {
+                  debugPrint('AIService: Watch audio header failed, falling back to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: event.sampleRate!,
+                    bitsPerSample: event.bitsPerSample ?? 16,
+                    channels: event.channels ?? 1,
+                  );
+                }
               } else {
                 // Start streaming audio on phone speaker
                 await _audioPlayerService.startStreaming(
@@ -920,8 +973,18 @@ class AIService {
           case ChatStreamEventType.audioChunk:
             if (event.audioData != null && audioHeaderSent) {
               hasReceivedAudio = true;
-              if (_watchService.isConnected) {
-                await _watchService.sendAudioChunk(event.audioData!);
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioChunk(event.audioData!);
+                if (!success) {
+                  debugPrint('AIService: Watch audio chunk failed, switching to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: 24000,
+                    bitsPerSample: 16,
+                    channels: 1,
+                  );
+                  await _audioPlayerService.feedAudioChunk(event.audioData!);
+                }
               } else {
                 // Play on phone speaker
                 await _audioPlayerService.feedAudioChunk(event.audioData!);
@@ -930,7 +993,7 @@ class AIService {
             break;
 
           case ChatStreamEventType.audioEnd:
-            if (_watchService.isConnected) {
+            if (!usePhoneAudio && _watchService.isConnected) {
               await _watchService.sendAudioEnd();
             } else {
               await _audioPlayerService.stopStreaming();
