@@ -125,6 +125,11 @@ jobs:
               APP_NAME: XT Systems
               AGIXT_SERVER: https://api.xt.systems
               APP_URI: https://dev.xt.systems
+          - name: joshxt
+            env:
+              APP_NAME: JoshXT AGiXT
+              AGIXT_SERVER: https://api.josh.devxt.com
+              APP_URI: https://josh.devxt.com
     env:
       APP_NAME: ${{ matrix.flavor.env.APP_NAME }}
       AGIXT_SERVER: ${{ matrix.flavor.env.AGIXT_SERVER }}
@@ -220,10 +225,19 @@ jobs:
           path: apks
       - name: Upload all APKs to release
         run: |
-          # Find all APK files in the artifacts directory structure
-          find apks -name "*.apk" -type f | while read apk_file; do
-            echo "Uploading $apk_file to release..."
-            gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "$apk_file" --clobber --repo ${{ github.repository }}
+          # Upload each flavor APK (skip dev.apk and joshxt.apk)
+          for flavor_dir in apks/*/; do
+            flavor_name=$(basename "$flavor_dir")
+            # Skip dev.apk and joshxt.apk - they're only for Discord/artifacts
+            if [ "$flavor_name" = "dev.apk" ] || [ "$flavor_name" = "joshxt.apk" ]; then
+              echo "Skipping $flavor_name (dev build)"
+              continue
+            fi
+            apk_file="$flavor_dir/app-release.apk"
+            if [ -f "$apk_file" ]; then
+              echo "Uploading $apk_file as $flavor_name..."
+              gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "$apk_file#$flavor_name" --clobber --repo ${{ github.repository }}
+            fi
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
