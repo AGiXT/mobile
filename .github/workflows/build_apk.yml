@@ -2,7 +2,9 @@ name: Build and Deploy
 on:
   push:
     branches:
-      - '**'
+      - "**"
+permissions:
+  contents: write
 jobs:
   apk-dev:
     name: Build APK (dev)
@@ -45,8 +47,8 @@ jobs:
             ${{ runner.os }}-gradle-
       - name: Git Safe Directory
         run: |
-            git config --global --add safe.directory /usr/local/flutter && \
-            git config --global --add safe.directory /app
+          git config --global --add safe.directory /usr/local/flutter && \
+          git config --global --add safe.directory /app
       - name: Install dependencies
         run: flutter pub get
       - name: Run tests
@@ -108,21 +110,26 @@ jobs:
     strategy:
       matrix:
         flavor:
-          - name: everythingsoftware
+          - name: agixt
             env:
-              APP_NAME: Everything Software
-              AGIXT_SERVER: https://api.everything.software
-              APP_URI: https://everything.software
+              APP_NAME: AGiXT
+              AGIXT_SERVER: https://api.agixt.com
+              APP_URI: https://agixt.com
           - name: nursext
             env:
               APP_NAME: NurseXT
-              AGIXT_SERVER: https://api.everything.software
-              APP_URI: https://everything.software
+              AGIXT_SERVER: https://api.nursext.com
+              APP_URI: https://nursext.com
           - name: xtsystems
             env:
               APP_NAME: XT Systems
-              AGIXT_SERVER: https://api.agixt.dev
+              AGIXT_SERVER: https://api.xt.systems
               APP_URI: https://dev.xt.systems
+          - name: dev
+            env:
+              APP_NAME: AGiXT Dev
+              AGIXT_SERVER: https://api.agixt.dev
+              APP_URI: https://agixt.dev
     env:
       APP_NAME: ${{ matrix.flavor.env.APP_NAME }}
       AGIXT_SERVER: ${{ matrix.flavor.env.AGIXT_SERVER }}
@@ -145,8 +152,8 @@ jobs:
             ${{ runner.os }}-gradle-
       - name: Git Safe Directory
         run: |
-            git config --global --add safe.directory /usr/local/flutter && \
-            git config --global --add safe.directory /app
+          git config --global --add safe.directory /usr/local/flutter && \
+          git config --global --add safe.directory /app
       - name: Install dependencies
         run: flutter pub get
       - name: Build Android release
@@ -201,8 +208,6 @@ jobs:
     needs: [apk-dev, apk-main-flavors]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Create Release
         id: create_release
@@ -216,12 +221,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download all APKs from build
         uses: actions/download-artifact@v4
+        with:
+          path: apks
       - name: Upload all APKs to release
         run: |
           # Find all APK files in the artifacts directory structure
-          find artifacts -name "*.apk" -type f | while read apk_file; do
+          find apks -name "*.apk" -type f | while read apk_file; do
             echo "Uploading $apk_file to release..."
             gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "$apk_file" --clobber
           done
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

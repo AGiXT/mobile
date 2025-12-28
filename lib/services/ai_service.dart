@@ -10,6 +10,7 @@ import 'package:agixt/services/watch_service.dart';
 import 'package:agixt/services/wake_word_service.dart';
 import 'package:agixt/services/voice_input_service.dart';
 import 'package:agixt/services/tts_service.dart';
+import 'package:agixt/services/audio_player_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'; // Import Services
 
@@ -25,6 +26,7 @@ class AIService {
   final WakeWordService _wakeWordService = WakeWordService.singleton;
   final VoiceInputService _voiceInputService = VoiceInputService.singleton;
   final TTSService _ttsService = TTSService.singleton;
+  final AudioPlayerService _audioPlayerService = AudioPlayerService.singleton;
   WhisperService? _whisperService;
   final AGiXTChatWidget _chatWidget = AGiXTChatWidget();
   final AGiXTWebSocketService _webSocketService = AGiXTWebSocketService();
@@ -40,6 +42,7 @@ class AIService {
   StreamSubscription<ActivityUpdate>? _activitySubscription;
   StreamSubscription<WakeWordEvent>? _wakeWordSubscription;
   StreamSubscription<VoiceInputState>? _voiceInputSubscription;
+  StreamSubscription<WatchVoiceInput>? _watchVoiceInputSubscription;
   StringBuffer _streamingResponse = StringBuffer();
   bool _isStreaming = false;
 
@@ -54,7 +57,7 @@ class AIService {
     // Method channel handler will be set up when needed
   }
 
-  /// Initialize new services (watch, wake word, voice input, TTS)
+  /// Initialize new services (watch, wake word, voice input, TTS, audio player)
   Future<void> _initNewServices() async {
     try {
       // Initialize watch service
@@ -68,6 +71,9 @@ class AIService {
 
       // Initialize TTS service
       await _ttsService.initialize();
+
+      // Initialize audio player service for streaming PCM playback
+      await _audioPlayerService.initialize();
 
       // Set up wake word listener
       _wakeWordSubscription = _wakeWordService.eventStream.listen(
@@ -85,6 +91,14 @@ class AIService {
         },
       );
 
+      // Set up watch voice input listener
+      _watchVoiceInputSubscription = _watchService.voiceInputStream.listen(
+        _handleWatchVoiceInput,
+        onError: (error) {
+          debugPrint('AIService: Watch voice input error: $error');
+        },
+      );
+
       debugPrint('AIService: New services initialized');
     } catch (e) {
       debugPrint('AIService: Error initializing new services: $e');
@@ -93,22 +107,191 @@ class AIService {
 
   /// Handle wake word events
   void _handleWakeWordEvent(WakeWordEvent event) {
-    if (event.type == WakeWordEventType.detected) {
-      debugPrint('AIService: Wake word detected from ${event.source}');
-      // Start voice recording when wake word is detected
-      if (!_isProcessing) {
-        _startVoiceRecording();
-      }
+    switch (event.type) {
+      case WakeWordEventType.detected:
+        debugPrint('AIService: Wake word detected from ${event.source}');
+        // Provide haptic feedback
+        _playWakeWordFeedback();
+        // Start voice recording when wake word is detected
+        if (!_isProcessing) {
+          _startVoiceRecording();
+        }
+        break;
+
+      case WakeWordEventType.modelDownloadStarted:
+        debugPrint('AIService: Wake word model download started');
+        _showInfoMessage('Downloading speech model for wake word...');
+        break;
+
+      case WakeWordEventType.modelDownloadProgress:
+        final progress = ((event.progress ?? 0) * 100).toInt();
+        debugPrint('AIService: Wake word model download progress: $progress%');
+        break;
+
+      case WakeWordEventType.modelDownloadComplete:
+        debugPrint('AIService: Wake word model download complete');
+        _showInfoMessage('Wake word ready! Say "computer" to activate.');
+        break;
+
+      case WakeWordEventType.error:
+        debugPrint('AIService: Wake word error: ${event.error}');
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  /// Play feedback when wake word is detected
+  Future<void> _playWakeWordFeedback() async {
+    try {
+      // Haptic feedback using Flutter's built-in HapticFeedback
+      await HapticFeedback.mediumImpact();
+      // Also play system click sound
+      await SystemSound.play(SystemSoundType.click);
+    } catch (e) {
+      debugPrint('AIService: Error playing wake word feedback: $e');
     }
   }
 
   /// Handle voice input state changes
   void _handleVoiceInputState(VoiceInputState state) {
-    debugPrint('AIService: Voice input state: ${state.status}');
+    debugPrint(
+        'AIService: Voice input state: ${state.status}, hasAudio: ${state.audioData != null}');
 
-    if (state.status == VoiceInputStatus.complete && state.audioData != null) {
+    // Process audio when recording completes with audio data
+    if ((state.status == VoiceInputStatus.complete ||
+            state.status == VoiceInputStatus.stopped) &&
+        state.audioData != null) {
       // Process the recorded audio
       _processRecordedAudio(state.audioData!, state.source);
+    } else if (state.status == VoiceInputStatus.stopped &&
+        state.audioData == null) {
+      // Recording stopped but no audio captured
+      debugPrint('AIService: Recording stopped with no audio data');
+      _isProcessing = false;
+      _showErrorMessage('No audio captured');
+    }
+  }
+
+  /// Handle voice input from the Wear OS watch
+  Future<void> _handleWatchVoiceInput(WatchVoiceInput input) async {
+    debugPrint('AIService: Watch voice input: ${input.text}');
+
+    if (input.text.isEmpty) {
+      await _watchService.sendErrorToWatch(
+        'No speech detected',
+        nodeId: input.nodeId,
+      );
+      return;
+    }
+
+    try {
+      // Use TTS streaming to send audio to the watch speaker
+      await _processTextInputWithTTS(input.text, nodeId: input.nodeId);
+    } catch (e) {
+      debugPrint('AIService: Error processing watch input: $e');
+      await _watchService.sendErrorToWatch(
+        'Error processing request',
+        nodeId: input.nodeId,
+      );
+    }
+  }
+
+  /// Process text input with TTS streaming to watch
+  ///
+  /// This uses the interleaved TTS mode to stream both text and audio
+  /// to the watch, allowing real-time audio playback on the watch speaker.
+  Future<void> _processTextInputWithTTS(String text, {String? nodeId}) async {
+    try {
+      final responseBuffer = StringBuffer();
+      bool audioHeaderSent = false;
+
+      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(
+        text,
+      )) {
+        switch (event.type) {
+          case ChatStreamEventType.text:
+            if (event.text != null) {
+              responseBuffer.write(event.text);
+            }
+            break;
+
+          case ChatStreamEventType.audioHeader:
+            // Send audio format to watch
+            if (event.sampleRate != null &&
+                event.bitsPerSample != null &&
+                event.channels != null) {
+              await _watchService.sendAudioHeader(
+                sampleRate: event.sampleRate!,
+                bitsPerSample: event.bitsPerSample!,
+                channels: event.channels!,
+                nodeId: nodeId,
+              );
+              audioHeaderSent = true;
+              debugPrint('AIService: Sent audio header to watch');
+            }
+            break;
+
+          case ChatStreamEventType.audioChunk:
+            // Stream audio chunk to watch
+            if (event.audioData != null && audioHeaderSent) {
+              await _watchService.sendAudioChunk(
+                event.audioData!,
+                nodeId: nodeId,
+              );
+            }
+            break;
+
+          case ChatStreamEventType.audioEnd:
+            // Signal end of audio
+            await _watchService.sendAudioEnd(nodeId: nodeId);
+            debugPrint('AIService: Sent audio end to watch');
+            break;
+
+          case ChatStreamEventType.done:
+            // Stream complete - send text response for display
+            final response = responseBuffer.toString();
+            if (response.isNotEmpty) {
+              await _watchService.sendChatResponse(response, nodeId: nodeId);
+            }
+            break;
+
+          case ChatStreamEventType.error:
+            await _watchService.sendErrorToWatch(
+              event.error ?? 'Unknown error',
+              nodeId: nodeId,
+            );
+            break;
+        }
+      }
+    } catch (e) {
+      debugPrint('AIService: Error in TTS streaming: $e');
+      await _watchService.sendErrorToWatch(
+        'Error processing request',
+        nodeId: nodeId,
+      );
+    }
+  }
+
+  /// Process text input and return the response
+  Future<String?> _processTextInput(
+    String text, {
+    bool isFromWatch = false,
+  }) async {
+    try {
+      // Use streaming for better responsiveness
+      final responseBuffer = StringBuffer();
+      final stream = _chatWidget.sendChatMessageStreaming(text);
+
+      await for (final chunk in stream) {
+        responseBuffer.write(chunk);
+      }
+
+      return responseBuffer.toString();
+    } catch (e) {
+      debugPrint('AIService: Error processing text input: $e');
+      return null;
     }
   }
 
@@ -121,10 +304,20 @@ class AIService {
 
     _isProcessing = true;
 
+    // First pause wake word detection to release the phone microphone
+    // This must complete before we try to start recording
+    if (_wakeWordService.isEnabled) {
+      debugPrint('AIService: Pausing wake word detection...');
+      await _wakeWordService.pause();
+      // Give the audio system a moment to release resources
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
     // Show listening indicator
     await _showListeningIndicator();
 
     // Start recording from the best available source
+    debugPrint('AIService: Starting voice recording...');
     final success = await _voiceInputService.startRecording(
       maxDuration: const Duration(seconds: 10),
     );
@@ -133,7 +326,18 @@ class AIService {
       debugPrint('AIService: Failed to start recording');
       _isProcessing = false;
       await _showErrorMessage('Failed to start recording');
+      // Resume wake word detection since recording failed
+      if (_wakeWordService.isEnabled) {
+        await _wakeWordService.resume();
+      }
     }
+  }
+
+  /// Public method to start voice input (for assistant/external triggers)
+  /// This can be called when the app is launched as a digital assistant
+  Future<void> startVoiceInput() async {
+    debugPrint('AIService: startVoiceInput called (external trigger)');
+    await _startVoiceRecording();
   }
 
   /// Process recorded audio from any source
@@ -141,36 +345,174 @@ class AIService {
     Uint8List audioData,
     VoiceInputSource? source,
   ) async {
+    debugPrint(
+        'AIService: _processRecordedAudio called with ${audioData.length} bytes from $source');
     try {
       await _showProcessingMessage();
 
       // First, transcribe the audio using whisper service
+      debugPrint('AIService: Transcribing audio with WhisperService...');
       String? transcription;
       if (_whisperService != null) {
         transcription = await _whisperService!.transcribe(audioData);
+      } else {
+        debugPrint('AIService: WhisperService is null, initializing...');
+        await _initWhisperService();
+        if (_whisperService != null) {
+          transcription = await _whisperService!.transcribe(audioData);
+        }
       }
 
       if (transcription == null || transcription.isEmpty) {
+        debugPrint('AIService: Transcription failed or empty');
         await _showErrorMessage('Could not transcribe audio');
         return;
       }
 
       debugPrint('AIService: Transcription: $transcription');
 
-      // Send transcribed text to AGiXT chat
-      final response = await _chatWidget.sendChatMessage(transcription);
+      // Send transcribed text to AGiXT chat with streaming TTS (like ESP32)
+      // This uses tts_mode=interleaved to stream both text and audio
+      final responseBuffer = StringBuffer();
+      bool audioHeaderSent = false;
+      bool hasReceivedAudio = false;
+      bool usePhoneAudio =
+          !_watchService.isConnected; // Track if we're using phone audio
+      DateTime? lastGlassesUpdate;
+      const glassesUpdateInterval = Duration(milliseconds: 500);
 
-      if (response != null && response.isNotEmpty) {
-        // Output response based on connected devices
-        await _outputResponse(response);
+      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(
+        transcription,
+      )) {
+        switch (event.type) {
+          case ChatStreamEventType.text:
+            if (event.text != null) {
+              responseBuffer.write(event.text);
+              // Stream accumulated text to glasses progressively (rate limited)
+              if (_bluetoothManager.isConnected) {
+                final now = DateTime.now();
+                if (lastGlassesUpdate == null ||
+                    now.difference(lastGlassesUpdate!) >
+                        glassesUpdateInterval) {
+                  lastGlassesUpdate = now;
+                  // Send full accumulated text so far
+                  await _bluetoothManager.sendAIResponse(
+                    responseBuffer.toString(),
+                  );
+                }
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioHeader:
+            // Audio format info - start streaming playback
+            if (event.sampleRate != null) {
+              debugPrint(
+                  'AIService: Audio header - ${event.sampleRate}Hz, ${event.bitsPerSample}bit, ${event.channels}ch');
+              audioHeaderSent = true;
+              // Send audio header to watch if connected, otherwise start phone playback
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioHeader(
+                  sampleRate: event.sampleRate!,
+                  bitsPerSample: event.bitsPerSample ?? 16,
+                  channels: event.channels ?? 1,
+                );
+                if (!success) {
+                  // Watch send failed - fall back to phone speaker
+                  debugPrint(
+                      'AIService: Watch audio header failed, falling back to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: event.sampleRate!,
+                    bitsPerSample: event.bitsPerSample ?? 16,
+                    channels: event.channels ?? 1,
+                  );
+                }
+              } else {
+                // Start streaming audio on phone speaker
+                await _audioPlayerService.startStreaming(
+                  sampleRate: event.sampleRate!,
+                  bitsPerSample: event.bitsPerSample ?? 16,
+                  channels: event.channels ?? 1,
+                );
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioChunk:
+            // Stream audio to watch speaker or phone speaker
+            if (event.audioData != null && audioHeaderSent) {
+              hasReceivedAudio = true;
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success =
+                    await _watchService.sendAudioChunk(event.audioData!);
+                if (!success) {
+                  // Watch send failed - switch to phone audio
+                  debugPrint(
+                      'AIService: Watch audio chunk failed, switching to phone');
+                  usePhoneAudio = true;
+                  // Start phone streaming (we may have missed the header, use defaults)
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: 24000,
+                    bitsPerSample: 16,
+                    channels: 1,
+                  );
+                  await _audioPlayerService.feedAudioChunk(event.audioData!);
+                }
+              } else {
+                // Play on phone speaker
+                await _audioPlayerService.feedAudioChunk(event.audioData!);
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioEnd:
+            // Audio streaming complete
+            if (!usePhoneAudio && _watchService.isConnected) {
+              await _watchService.sendAudioEnd();
+            } else {
+              await _audioPlayerService.stopStreaming();
+            }
+            debugPrint('AIService: Audio streaming complete');
+            break;
+
+          case ChatStreamEventType.done:
+            debugPrint('AIService: Response complete');
+            break;
+
+          case ChatStreamEventType.error:
+            debugPrint('AIService: Stream error: ${event.error}');
+            break;
+        }
+      }
+
+      final fullResponse = responseBuffer.toString();
+
+      if (fullResponse.isNotEmpty) {
+        // Display final complete response on glasses
+        if (_bluetoothManager.isConnected) {
+          await _bluetoothManager.sendAIResponse(fullResponse);
+        }
+        // Display on watch
+        if (_watchService.isConnected) {
+          await _watchService.displayMessage(fullResponse, durationMs: 10000);
+        }
+        // Note: Audio is streamed in real-time via audioHeader/audioChunk events
+        // No need for TTS fallback - AGiXT sends audio during the stream
       } else {
         await _showErrorMessage('No response from AGiXT');
       }
     } catch (e) {
       debugPrint('AIService: Error processing audio: $e');
       await _showErrorMessage('Error processing voice input');
+      // Stop any playing audio on error
+      await _audioPlayerService.stopStreaming();
     } finally {
       _isProcessing = false;
+      // Resume wake word listening if enabled
+      if (_wakeWordService.isEnabled) {
+        await _wakeWordService.resume();
+      }
     }
   }
 
@@ -392,24 +734,139 @@ class AIService {
     }
   }
 
-  // Send message to AGiXT API and display response
+  // Send message to AGiXT API and display response (with streaming TTS for watch)
   Future<void> _sendMessageToAGiXT(String message) async {
     try {
       // Show sending message using AI response method
-      await _bluetoothManager.sendAIResponse('Sending to AGiXT: "$message"');
+      await _bluetoothManager.sendAIResponse('Processing...');
 
-      // Get response using the AGiXTChatWidget
-      final response = await _chatWidget.sendChatMessage(message);
+      // Use streaming TTS to send audio to watch (like ESP32 does)
+      final responseBuffer = StringBuffer();
+      bool audioHeaderSent = false;
+      bool hasReceivedAudio = false;
+      bool usePhoneAudio =
+          !_watchService.isConnected; // Track if we're using phone audio
+      DateTime? lastGlassesUpdate;
+      const glassesUpdateInterval = Duration(milliseconds: 500);
 
-      if (response != null && response.isNotEmpty) {
-        // Output response to appropriate devices
-        await _outputResponse(response);
+      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(
+        message,
+      )) {
+        switch (event.type) {
+          case ChatStreamEventType.text:
+            if (event.text != null) {
+              responseBuffer.write(event.text);
+              // Stream accumulated text to glasses progressively (rate limited)
+              if (_bluetoothManager.isConnected) {
+                final now = DateTime.now();
+                if (lastGlassesUpdate == null ||
+                    now.difference(lastGlassesUpdate!) >
+                        glassesUpdateInterval) {
+                  lastGlassesUpdate = now;
+                  await _bluetoothManager.sendAIResponse(
+                    responseBuffer.toString(),
+                  );
+                }
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioHeader:
+            // Send audio format to watch or start phone playback
+            if (event.sampleRate != null) {
+              debugPrint(
+                  'AIService: Audio header - ${event.sampleRate}Hz, ${event.bitsPerSample}bit, ${event.channels}ch');
+              audioHeaderSent = true;
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioHeader(
+                  sampleRate: event.sampleRate!,
+                  bitsPerSample: event.bitsPerSample ?? 16,
+                  channels: event.channels ?? 1,
+                );
+                if (!success) {
+                  debugPrint(
+                      'AIService: Watch audio header failed, falling back to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: event.sampleRate!,
+                    bitsPerSample: event.bitsPerSample ?? 16,
+                    channels: event.channels ?? 1,
+                  );
+                }
+              } else {
+                // Start streaming audio on phone speaker
+                await _audioPlayerService.startStreaming(
+                  sampleRate: event.sampleRate!,
+                  bitsPerSample: event.bitsPerSample ?? 16,
+                  channels: event.channels ?? 1,
+                );
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioChunk:
+            // Stream audio to watch speaker or phone speaker
+            if (event.audioData != null && audioHeaderSent) {
+              hasReceivedAudio = true;
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success =
+                    await _watchService.sendAudioChunk(event.audioData!);
+                if (!success) {
+                  debugPrint(
+                      'AIService: Watch audio chunk failed, switching to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: 24000,
+                    bitsPerSample: 16,
+                    channels: 1,
+                  );
+                  await _audioPlayerService.feedAudioChunk(event.audioData!);
+                }
+              } else {
+                // Play on phone speaker
+                await _audioPlayerService.feedAudioChunk(event.audioData!);
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioEnd:
+            // Audio streaming complete
+            if (!usePhoneAudio && _watchService.isConnected) {
+              await _watchService.sendAudioEnd();
+            } else {
+              await _audioPlayerService.stopStreaming();
+            }
+            debugPrint('AIService: Audio streaming complete');
+            break;
+
+          case ChatStreamEventType.done:
+            debugPrint('AIService: Response complete');
+            break;
+
+          case ChatStreamEventType.error:
+            debugPrint('AIService: Stream error: ${event.error}');
+            break;
+        }
+      }
+
+      final response = responseBuffer.toString();
+
+      if (response.isNotEmpty) {
+        // Display final response on glasses
+        await _bluetoothManager.sendAIResponse(response);
+        // Display on watch
+        if (_watchService.isConnected) {
+          await _watchService.displayMessage(response, durationMs: 10000);
+        }
+        // Note: Audio is streamed in real-time via audioHeader/audioChunk events
       } else {
         await _showErrorMessage('No response from AGiXT');
       }
     } catch (e) {
       debugPrint('Error sending message to AGiXT: $e');
       await _showErrorMessage('Failed to get response from AGiXT');
+      // Stop any playing audio on error
+      await _audioPlayerService.stopStreaming();
     }
   }
 
@@ -456,23 +913,127 @@ class AIService {
   }
 
   /// Send message to AGiXT API directly without context (for background mode)
+  /// Uses streaming TTS for watch audio playback
   Future<void> _sendMessageToAGiXTDirect(String message) async {
     try {
-      // Show sending message using AI response method
-      await _bluetoothManager.sendAIResponse('Sending to AGiXT: "$message"');
+      // Show processing message
+      await _bluetoothManager.sendAIResponse('Processing...');
 
-      // Get response using a minimal chat request (no context to avoid blocking)
-      final response = await _chatWidget.sendChatMessageDirect(message);
+      // Use streaming TTS to send audio to watch (like foreground mode)
+      final responseBuffer = StringBuffer();
+      bool audioHeaderSent = false;
+      bool hasReceivedAudio = false;
+      bool usePhoneAudio =
+          !_watchService.isConnected; // Track if we're using phone audio
+      DateTime? lastGlassesUpdate;
+      const glassesUpdateInterval = Duration(milliseconds: 500);
 
-      if (response != null && response.isNotEmpty) {
-        // Output response to appropriate devices
-        await _outputResponse(response);
+      await for (final event in _chatWidget.sendChatMessageStreamingWithTTS(
+        message,
+      )) {
+        switch (event.type) {
+          case ChatStreamEventType.text:
+            if (event.text != null) {
+              responseBuffer.write(event.text);
+              // Stream accumulated text to glasses progressively
+              if (_bluetoothManager.isConnected) {
+                final now = DateTime.now();
+                if (lastGlassesUpdate == null ||
+                    now.difference(lastGlassesUpdate!) >
+                        glassesUpdateInterval) {
+                  lastGlassesUpdate = now;
+                  await _bluetoothManager.sendAIResponse(
+                    responseBuffer.toString(),
+                  );
+                }
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioHeader:
+            if (event.sampleRate != null) {
+              audioHeaderSent = true;
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success = await _watchService.sendAudioHeader(
+                  sampleRate: event.sampleRate!,
+                  bitsPerSample: event.bitsPerSample ?? 16,
+                  channels: event.channels ?? 1,
+                );
+                if (!success) {
+                  debugPrint(
+                      'AIService: Watch audio header failed, falling back to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: event.sampleRate!,
+                    bitsPerSample: event.bitsPerSample ?? 16,
+                    channels: event.channels ?? 1,
+                  );
+                }
+              } else {
+                // Start streaming audio on phone speaker
+                await _audioPlayerService.startStreaming(
+                  sampleRate: event.sampleRate!,
+                  bitsPerSample: event.bitsPerSample ?? 16,
+                  channels: event.channels ?? 1,
+                );
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioChunk:
+            if (event.audioData != null && audioHeaderSent) {
+              hasReceivedAudio = true;
+              if (!usePhoneAudio && _watchService.isConnected) {
+                final success =
+                    await _watchService.sendAudioChunk(event.audioData!);
+                if (!success) {
+                  debugPrint(
+                      'AIService: Watch audio chunk failed, switching to phone');
+                  usePhoneAudio = true;
+                  await _audioPlayerService.startStreaming(
+                    sampleRate: 24000,
+                    bitsPerSample: 16,
+                    channels: 1,
+                  );
+                  await _audioPlayerService.feedAudioChunk(event.audioData!);
+                }
+              } else {
+                // Play on phone speaker
+                await _audioPlayerService.feedAudioChunk(event.audioData!);
+              }
+            }
+            break;
+
+          case ChatStreamEventType.audioEnd:
+            if (!usePhoneAudio && _watchService.isConnected) {
+              await _watchService.sendAudioEnd();
+            } else {
+              await _audioPlayerService.stopStreaming();
+            }
+            break;
+
+          case ChatStreamEventType.done:
+          case ChatStreamEventType.error:
+            break;
+        }
+      }
+
+      final response = responseBuffer.toString();
+
+      if (response.isNotEmpty) {
+        await _bluetoothManager.sendAIResponse(response);
+        if (_watchService.isConnected) {
+          await _watchService.displayMessage(response, durationMs: 10000);
+        }
+        // Note: Audio is streamed in real-time via audioHeader/audioChunk events
       } else {
         await _showErrorMessage('No response from AGiXT');
       }
     } catch (e) {
       debugPrint('Error sending message to AGiXT: $e');
       await _showErrorMessage('Failed to get response from AGiXT');
+      // Stop any playing audio on error
+      await _audioPlayerService.stopStreaming();
     }
   }
 
@@ -495,6 +1056,13 @@ class AIService {
     await _bluetoothManager.sendAIResponse('Error: $message');
     if (_watchService.isConnected) {
       await _watchService.displayMessage('Error: $message', durationMs: 5000);
+    }
+  }
+
+  Future<void> _showInfoMessage(String message) async {
+    await _bluetoothManager.sendAIResponse(message);
+    if (_watchService.isConnected) {
+      await _watchService.displayMessage(message, durationMs: 5000);
     }
   }
 
@@ -539,6 +1107,7 @@ class AIService {
     _activitySubscription?.cancel();
     _wakeWordSubscription?.cancel();
     _voiceInputSubscription?.cancel();
+    _watchVoiceInputSubscription?.cancel();
     _clientCommandsService.dispose();
     _webSocketService.dispose();
     _voiceInputService.dispose();

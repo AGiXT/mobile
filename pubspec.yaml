@@ -82,6 +82,10 @@ dependencies:
   flutter_contacts: ^1.1.9+2
   # Text-to-speech for voice responses (watch, phone)
   flutter_tts: ^4.0.2
+  # Vosk for offline wake word detection (Apache 2.0 license - free for commercial use)
+  vosk_flutter:
+    git:
+      url: https://github.com/alphacep/vosk-flutter.git
 
 dependency_overrides:
   solana_wallet_adapter:

@@ -35,6 +35,20 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
+    
+    <!-- Voice Interaction Service permissions (for default assistant role) -->
+    <uses-permission android:name="android.permission.BIND_VOICE_INTERACTION" />
+    
+    <!-- Device control permissions for digital assistant capabilities -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <!-- Ensure compatibility with different Android versions -->
     <uses-feature android:name="android.hardware.bluetooth" android:required="false" />
@@ -75,6 +89,64 @@
                 <data android:scheme="agixt" android:host="callback" />
             </intent-filter>
         </activity>
+        
+        <!-- Assistant Activity - handles digital assistant intents -->
+        <activity
+            android:name=".AssistActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <!-- Handle being set as the default digital assistant -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Handle voice assistant activation -->
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Handle long-press on search key -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEARCH_LONG_PRESS" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Android 4.1+ voice assist -->
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <!-- Metadata for assistant capabilities -->
+            <meta-data
+                android:name="com.android.systemui.action_assist_icon"
+                android:resource="@mipmap/ic_launcher" />
+        </activity>
+        
+        <!-- Voice Interaction Service - enables AGiXT as default assistant -->
+        <service
+            android:name=".AGiXTVoiceInteractionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/voice_interaction_service" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+        
+        <!-- Voice Interaction Session Service -->
+        <service
+            android:name=".AGiXTVoiceInteractionSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionSessionService" />
+            </intent-filter>
+        </service>
+        
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data
@@ -88,6 +160,31 @@
             android:name="id.flutter.flutter_background_service.BackgroundService"
             android:foregroundServiceType="dataSync|connectedDevice|location"
         />
+        
+        <!-- Wearable Listener Service - receives messages from Wear OS watch -->
+        <service
+            android:name="dev.agixt.agixt.WearableMessageService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/voice_input"
+                    android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/voice_command"
+                    android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/audio_data"
+                    android:scheme="wear" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/connection_status"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
         <service 
             android:label="notifications" 
             android:name="notification.listener.service.NotificationListener"

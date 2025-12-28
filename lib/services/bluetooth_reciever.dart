@@ -298,8 +298,8 @@ class BluetoothReciever {
 
           final startTime = DateTime.now();
           try {
-            final transcription = await (await WhisperService.service())
-                .transcribe(pcm);
+            final transcription =
+                await (await WhisperService.service()).transcribe(pcm);
             final endTime = DateTime.now();
 
             debugPrint('[$side] Remote Transcription: $transcription');
@@ -351,13 +351,23 @@ class BluetoothReciever {
     debugPrint(
       '[$side] Received voice data chunk: seq=$seq, length=${voiceData.length}',
     );
+
+    final isLocalEnabled = await _isLocalTranscriptionEnabled();
+    final isRecording = voiceCollectorAI.isRecording;
+    debugPrint(
+        '[$side] Voice data: isLocalEnabled=$isLocalEnabled, voiceCollectorAI.isRecording=$isRecording');
+
     // Only add to buffer if using remote whisper (i.e., local is NOT enabled)
-    if (!await _isLocalTranscriptionEnabled() && voiceCollectorAI.isRecording) {
+    if (!isLocalEnabled && isRecording) {
+      debugPrint('[$side] Adding voice chunk to collector');
       voiceCollectorAI.addChunk(seq, voiceData);
-    } else if (await _isLocalTranscriptionEnabled()) {
+    } else if (isLocalEnabled) {
       // If local, we don't buffer here, speech_to_text uses the mic directly.
       // The logic in handleEvenAICommand case 23/24 handles mic enabling/disabling.
       // No action needed here for the voice data itself when using local STT.
+      debugPrint('[$side] Local transcription enabled, not buffering');
+    } else {
+      debugPrint('[$side] Not recording, discarding voice data');
     }
 
     // This check seems redundant now as stop command (24) handles mic disabling
