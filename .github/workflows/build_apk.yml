@@ -223,7 +223,7 @@ jobs:
           # Find all APK files in the artifacts directory structure
           find apks -name "*.apk" -type f | while read apk_file; do
             echo "Uploading $apk_file to release..."
-            gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "$apk_file" --clobber
+            gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "$apk_file" --clobber --repo ${{ github.repository }}
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
