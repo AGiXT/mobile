@@ -2,7 +2,7 @@ name: Build and Deploy
 on:
   push:
     branches:
-      - '**'
+      - "**"
 permissions:
   contents: write
 jobs:
@@ -47,8 +47,8 @@ jobs:
             ${{ runner.os }}-gradle-
       - name: Git Safe Directory
         run: |
-            git config --global --add safe.directory /usr/local/flutter && \
-            git config --global --add safe.directory /app
+          git config --global --add safe.directory /usr/local/flutter && \
+          git config --global --add safe.directory /app
       - name: Install dependencies
         run: flutter pub get
       - name: Run tests
@@ -110,21 +110,26 @@ jobs:
     strategy:
       matrix:
         flavor:
-          - name: everythingsoftware
+          - name: agixt
             env:
-              APP_NAME: Everything Software
-              AGIXT_SERVER: https://api.everything.software
-              APP_URI: https://everything.software
+              APP_NAME: AGiXT
+              AGIXT_SERVER: https://api.agixt.com
+              APP_URI: https://agixt.com
           - name: nursext
             env:
               APP_NAME: NurseXT
-              AGIXT_SERVER: https://api.everything.software
-              APP_URI: https://everything.software
+              AGIXT_SERVER: https://api.nursext.com
+              APP_URI: https://nursext.com
           - name: xtsystems
             env:
               APP_NAME: XT Systems
-              AGIXT_SERVER: https://api.agixt.dev
+              AGIXT_SERVER: https://api.xt.systems
               APP_URI: https://dev.xt.systems
+          - name: dev
+            env:
+              APP_NAME: AGiXT Dev
+              AGIXT_SERVER: https://api.agixt.dev
+              APP_URI: https://agixt.dev
     env:
       APP_NAME: ${{ matrix.flavor.env.APP_NAME }}
       AGIXT_SERVER: ${{ matrix.flavor.env.AGIXT_SERVER }}
@@ -147,8 +152,8 @@ jobs:
             ${{ runner.os }}-gradle-
       - name: Git Safe Directory
         run: |
-            git config --global --add safe.directory /usr/local/flutter && \
-            git config --global --add safe.directory /app
+          git config --global --add safe.directory /usr/local/flutter && \
+          git config --global --add safe.directory /app
       - name: Install dependencies
         run: flutter pub get
       - name: Build Android release
