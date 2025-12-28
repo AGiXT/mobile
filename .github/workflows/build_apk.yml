@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - '**'
+permissions:
+  contents: write
 jobs:
   apk-dev:
     name: Build APK (dev)
@@ -201,8 +203,6 @@ jobs:
     needs: [apk-dev, apk-main-flavors]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Create Release
         id: create_release
@@ -216,12 +216,14 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Download all APKs from build
         uses: actions/download-artifact@v4
+        with:
+          path: apks
       - name: Upload all APKs to release
         run: |
           # Find all APK files in the artifacts directory structure
-          find artifacts -name "*.apk" -type f | while read apk_file; do
+          find apks -name "*.apk" -type f | while read apk_file; do
             echo "Uploading $apk_file to release..."
             gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "$apk_file" --clobber
           done
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,17 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    
+    <!-- AGiXT "X" logo mark -->
+    <!-- First diagonal of X -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,34L50,54L34,74L42,74L54,58L66,74L74,74L58,54L74,34L66,34L54,50L42,34Z"/>
+    
+    <!-- Stylized "T" bar integrated with X -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M40,30L68,30L68,36L40,36Z"/>
+</vector>
