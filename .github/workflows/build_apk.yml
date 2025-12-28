@@ -125,11 +125,6 @@ jobs:
               APP_NAME: XT Systems
               AGIXT_SERVER: https://api.xt.systems
               APP_URI: https://dev.xt.systems
-          - name: dev
-            env:
-              APP_NAME: AGiXT Dev
-              AGIXT_SERVER: https://api.agixt.dev
-              APP_URI: https://agixt.dev
     env:
       APP_NAME: ${{ matrix.flavor.env.APP_NAME }}
       AGIXT_SERVER: ${{ matrix.flavor.env.AGIXT_SERVER }}
