@@ -130,6 +130,11 @@ jobs:
               APP_NAME: JoshXT AGiXT
               AGIXT_SERVER: https://api.josh.devxt.com
               APP_URI: https://josh.devxt.com
+          - name: nickxt
+            env:
+              APP_NAME: NickXT AGiXT
+              AGIXT_SERVER: https://api.nick.devxt.com
+              APP_URI: https://nick.devxt.com
     env:
       APP_NAME: ${{ matrix.flavor.env.APP_NAME }}
       AGIXT_SERVER: ${{ matrix.flavor.env.AGIXT_SERVER }}
@@ -229,14 +234,16 @@ jobs:
           for flavor_dir in apks/*/; do
             flavor_name=$(basename "$flavor_dir")
             # Skip dev.apk and joshxt.apk - they're only for Discord/artifacts
-            if [ "$flavor_name" = "dev.apk" ] || [ "$flavor_name" = "joshxt.apk" ]; then
+            if [ "$flavor_name" = "dev.apk" ] || [ "$flavor_name" = "joshxt.apk" ] || [ "$flavor_name" = "nickxt.apk" ]; then
               echo "Skipping $flavor_name (dev build)"
               continue
             fi
             apk_file="$flavor_dir/app-release.apk"
             if [ -f "$apk_file" ]; then
-              echo "Uploading $apk_file as $flavor_name..."
-              gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "$apk_file#$flavor_name" --clobber --repo ${{ github.repository }}
+              # Rename the file to the flavor name before uploading
+              cp "$apk_file" "/tmp/$flavor_name"
+              echo "Uploading /tmp/$flavor_name to release..."
+              gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "/tmp/$flavor_name" --clobber --repo ${{ github.repository }}
             fi
           done
         env:
