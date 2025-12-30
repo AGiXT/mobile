@@ -124,7 +124,12 @@ jobs:
             env:
               APP_NAME: XT Systems
               AGIXT_SERVER: https://api.xt.systems
-              APP_URI: https://dev.xt.systems
+              APP_URI: https://xt.systems
+          - name: ultraestimate
+            env:
+              APP_NAME: UltraEstimate
+              AGIXT_SERVER: https://api.ultraestimate.com
+              APP_URI: https://ultraestimate.com
           - name: joshxt
             env:
               APP_NAME: JoshXT AGiXT
