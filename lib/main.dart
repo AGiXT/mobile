@@ -14,6 +14,7 @@ import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/services/privacy_consent_service.dart';
+import 'package:agixt/services/system_notification_service.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:agixt/utils/ui_perfs.dart';
 import 'package:flutter/material.dart';
@@ -113,6 +114,13 @@ void main() async {
       await BluetoothManager.singleton.initialize();
     } catch (e) {
       debugPrint('Failed to initialize BluetoothManager: $e');
+    }
+
+    // Initialize system notification service for server-wide alerts
+    try {
+      await SystemNotificationService().initialize();
+    } catch (e) {
+      debugPrint('Failed to initialize SystemNotificationService: $e');
     }
 
     // Note: BluetoothBackgroundService.start() is now called automatically

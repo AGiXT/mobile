@@ -42,6 +42,40 @@ class WebSocketMessage {
   }
 }
 
+/// System notification from server admin
+class SystemNotification {
+  final String id;
+  final String title;
+  final String message;
+  final String notificationType; // info, warning, critical
+  final DateTime expiresAt;
+  final DateTime createdAt;
+  final DateTime timestamp;
+
+  SystemNotification({
+    required this.id,
+    required this.title,
+    required this.message,
+    required this.notificationType,
+    required this.expiresAt,
+    required this.createdAt,
+    required this.timestamp,
+  });
+
+  factory SystemNotification.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>? ?? json;
+    return SystemNotification(
+      id: data['id'] ?? '',
+      title: data['title'] ?? '',
+      message: data['message'] ?? '',
+      notificationType: data['notification_type'] ?? 'info',
+      expiresAt: DateTime.tryParse(data['expires_at'] ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(data['created_at'] ?? '') ?? DateTime.now(),
+      timestamp: DateTime.tryParse(data['timestamp'] ?? '') ?? DateTime.now(),
+    );
+  }
+}
+
 /// Activity update from the AGiXT agent
 class ActivityUpdate {
   final String type; // thinking, reflection, activity, subactivity, info, error
@@ -105,6 +139,8 @@ class AGiXTWebSocketService {
       StreamController<ActivityUpdate>.broadcast();
   final StreamController<RemoteCommandRequest> _commandController =
       StreamController<RemoteCommandRequest>.broadcast();
+  final StreamController<SystemNotification> _systemNotificationController =
+      StreamController<SystemNotification>.broadcast();
   final StreamController<String> _connectionStatusController =
       StreamController<String>.broadcast();
 
@@ -112,6 +148,8 @@ class AGiXTWebSocketService {
   Stream<WebSocketMessage> get messageStream => _messageController.stream;
   Stream<ActivityUpdate> get activityStream => _activityController.stream;
   Stream<RemoteCommandRequest> get commandStream => _commandController.stream;
+  Stream<SystemNotification> get systemNotificationStream =>
+      _systemNotificationController.stream;
   Stream<String> get connectionStatusStream =>
       _connectionStatusController.stream;
 
@@ -274,6 +312,9 @@ class AGiXTWebSocketService {
         case 'conversation_renamed':
           _handleConversationRenamed(data);
           break;
+        case 'system_notification':
+          _handleSystemNotification(data);
+          break;
         case 'pong':
           _handlePong();
           break;
@@ -362,6 +403,13 @@ class AGiXTWebSocketService {
   void _handleConversationRenamed(Map<String, dynamic> data) {
     final convData = data['data'] as Map<String, dynamic>?;
     debugPrint('WebSocket: Conversation renamed: $convData');
+  }
+
+  void _handleSystemNotification(Map<String, dynamic> data) {
+    final notification = SystemNotification.fromJson(data);
+    debugPrint(
+        'WebSocket: System notification received: ${notification.title}');
+    _systemNotificationController.add(notification);
   }
 
   void _handleInitialData(Map<String, dynamic> data) {
