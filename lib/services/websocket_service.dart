@@ -14,7 +14,7 @@ class WebSocketMessage {
   final String message;
   final DateTime timestamp;
   final String?
-      type; // message_added, activity.stream, remote_command.request, etc.
+  type; // message_added, activity.stream, remote_command.request, etc.
   final Map<String, dynamic>? rawData;
 
   WebSocketMessage({
@@ -32,9 +32,8 @@ class WebSocketMessage {
       id: data?['id'] ?? json['id'],
       role: data?['role'] ?? json['role'] ?? 'assistant',
       message: data?['message'] ?? json['message'] ?? '',
-      timestamp: DateTime.tryParse(
-            data?['timestamp'] ?? json['timestamp'] ?? '',
-          ) ??
+      timestamp:
+          DateTime.tryParse(data?['timestamp'] ?? json['timestamp'] ?? '') ??
           DateTime.now(),
       type: json['type'],
       rawData: json,
@@ -184,8 +183,9 @@ class AGiXTWebSocketService {
       // Build WebSocket URL
       final serverUrl = AuthService.serverUrl;
       final protocol = serverUrl.startsWith('https') ? 'wss' : 'ws';
-      final baseUrl =
-          serverUrl.replaceFirst('http://', '').replaceFirst('https://', '');
+      final baseUrl = serverUrl
+          .replaceFirst('http://', '')
+          .replaceFirst('https://', '');
       final wsUrl =
           '$protocol://$baseUrl/v1/conversation/$conversationId/stream?authorization=${Uri.encodeComponent(jwt)}';
 
@@ -270,7 +270,8 @@ class AGiXTWebSocketService {
       final serverUrl = AuthService.serverUrl;
       final conversationId = _currentConversationId ?? '-';
       final url = Uri.parse(
-          '$serverUrl/v1/conversation/$conversationId/remote-command-result');
+        '$serverUrl/v1/conversation/$conversationId/remote-command-result',
+      );
 
       final response = await http.post(
         url,
@@ -352,10 +353,9 @@ class AGiXTWebSocketService {
         activityContent = remaining.split(']').skip(1).join(']').trim();
       }
 
-      _activityController.add(ActivityUpdate(
-        type: activityType,
-        content: activityContent,
-      ));
+      _activityController.add(
+        ActivityUpdate(type: activityType, content: activityContent),
+      );
     } else if (content.startsWith('[SUBACTIVITY]')) {
       final remaining = content.substring(13).trim();
       String activityType = 'subactivity';
@@ -371,10 +371,9 @@ class AGiXTWebSocketService {
         activityContent = remaining.split(']').skip(1).join(']').trim();
       }
 
-      _activityController.add(ActivityUpdate(
-        type: activityType,
-        content: activityContent,
-      ));
+      _activityController.add(
+        ActivityUpdate(type: activityType, content: activityContent),
+      );
     } else {
       // Regular message
       _messageController.add(message);
@@ -386,17 +385,20 @@ class AGiXTWebSocketService {
     final content = data['content'] as String? ?? '';
     final isComplete = data['complete'] as bool? ?? false;
 
-    _activityController.add(ActivityUpdate(
-      type: activityType,
-      content: content,
-      isComplete: isComplete,
-    ));
+    _activityController.add(
+      ActivityUpdate(
+        type: activityType,
+        content: content,
+        isComplete: isComplete,
+      ),
+    );
   }
 
   void _handleRemoteCommand(Map<String, dynamic> data) {
     final command = RemoteCommandRequest.fromJson(data);
     debugPrint(
-        'WebSocket: Remote command request: ${command.toolName} with args: ${command.toolArgs}');
+      'WebSocket: Remote command request: ${command.toolName} with args: ${command.toolArgs}',
+    );
     _commandController.add(command);
   }
 
@@ -408,7 +410,8 @@ class AGiXTWebSocketService {
   void _handleSystemNotification(Map<String, dynamic> data) {
     final notification = SystemNotification.fromJson(data);
     debugPrint(
-        'WebSocket: System notification received: ${notification.title}');
+      'WebSocket: System notification received: ${notification.title}',
+    );
     _systemNotificationController.add(notification);
   }
 
@@ -417,10 +420,12 @@ class AGiXTWebSocketService {
     if (messages != null) {
       for (final msgData in messages) {
         if (msgData is Map<String, dynamic>) {
-          _messageController.add(WebSocketMessage.fromJson({
-            'type': 'message_added',
-            'data': msgData,
-          }));
+          _messageController.add(
+            WebSocketMessage.fromJson({
+              'type': 'message_added',
+              'data': msgData,
+            }),
+          );
         }
       }
     }
@@ -508,7 +513,8 @@ class AGiXTWebSocketService {
 
     final delay = _calculateReconnectDelay();
     debugPrint(
-        'WebSocket: Scheduling reconnect in ${delay}ms (attempt ${_reconnectAttempts + 1})');
+      'WebSocket: Scheduling reconnect in ${delay}ms (attempt ${_reconnectAttempts + 1})',
+    );
 
     _reconnectTimer = Timer(Duration(milliseconds: delay), () {
       _reconnectAttempts++;

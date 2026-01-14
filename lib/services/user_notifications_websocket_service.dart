@@ -67,8 +67,9 @@ class UserNotificationsWebSocketService {
       // Build WebSocket URL
       final serverUrl = AuthService.serverUrl;
       final protocol = serverUrl.startsWith('https') ? 'wss' : 'ws';
-      final baseUrl =
-          serverUrl.replaceFirst('http://', '').replaceFirst('https://', '');
+      final baseUrl = serverUrl
+          .replaceFirst('http://', '')
+          .replaceFirst('https://', '');
       final wsUrl =
           '$protocol://$baseUrl/v1/user/notifications?authorization=${Uri.encodeComponent(jwt)}';
 
@@ -156,7 +157,8 @@ class UserNotificationsWebSocketService {
   void _handleSystemNotification(Map<String, dynamic> data) {
     final notification = SystemNotification.fromJson(data);
     debugPrint(
-        'UserNotificationsWS: System notification: ${notification.title}');
+      'UserNotificationsWS: System notification: ${notification.title}',
+    );
     _systemNotificationController.add(notification);
   }
 
@@ -226,8 +228,10 @@ class UserNotificationsWebSocketService {
       return;
     }
 
-    final delay = (reconnectBaseDelay * (1 << (_reconnectAttempts - 1)))
-        .clamp(reconnectBaseDelay, reconnectMaxDelay);
+    final delay = (reconnectBaseDelay * (1 << (_reconnectAttempts - 1))).clamp(
+      reconnectBaseDelay,
+      reconnectMaxDelay,
+    );
 
     _setConnectionStatus('reconnecting');
     debugPrint('UserNotificationsWS: Reconnecting in ${delay}ms');

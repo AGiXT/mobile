@@ -19,13 +19,13 @@ class SystemNotificationService {
   // Notification channel for system notifications
   static const AndroidNotificationChannel systemChannel =
       AndroidNotificationChannel(
-    'system_notifications',
-    'System Notifications',
-    description: 'Server-wide announcements and alerts from administrators',
-    importance: Importance.high,
-    enableVibration: true,
-    playSound: true,
-  );
+        'system_notifications',
+        'System Notifications',
+        description: 'Server-wide announcements and alerts from administrators',
+        importance: Importance.high,
+        enableVibration: true,
+        playSound: true,
+      );
 
   /// Initialize the service and start listening for system notifications
   Future<void> initialize() async {
@@ -35,7 +35,8 @@ class SystemNotificationService {
       // Create the notification channel on Android
       await flutterLocalNotificationsPlugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.createNotificationChannel(systemChannel);
 
       // Connect to user notifications WebSocket
@@ -64,8 +65,11 @@ class SystemNotificationService {
 
   /// Handle incoming system notification
   Future<void> _handleSystemNotification(
-      SystemNotification notification) async {
-    debugPrint('SystemNotificationService: Showing notification: ${notification.title}');
+    SystemNotification notification,
+  ) async {
+    debugPrint(
+      'SystemNotificationService: Showing notification: ${notification.title}',
+    );
 
     // Determine notification priority based on type
     final priority = _getPriority(notification.notificationType);
