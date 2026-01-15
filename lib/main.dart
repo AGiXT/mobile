@@ -14,6 +14,7 @@ import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/services/privacy_consent_service.dart';
+import 'package:agixt/services/system_notification_service.dart';
 import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:agixt/utils/ui_perfs.dart';
 import 'package:flutter/material.dart';
@@ -113,6 +114,13 @@ void main() async {
       await BluetoothManager.singleton.initialize();
     } catch (e) {
       debugPrint('Failed to initialize BluetoothManager: $e');
+    }
+
+    // Initialize system notification service for server-wide alerts
+    try {
+      await SystemNotificationService().initialize();
+    } catch (e) {
+      debugPrint('Failed to initialize SystemNotificationService: $e');
     }
 
     // Note: BluetoothBackgroundService.start() is now called automatically
@@ -398,7 +406,8 @@ class _AGiXTAppState extends State<AGiXTApp> {
       final error = uri.queryParameters['error'];
       if (error != null) {
         debugPrint(
-            'OAuth error: $error - ${uri.queryParameters['error_description']}');
+          'OAuth error: $error - ${uri.queryParameters['error_description']}',
+        );
       }
     }
   }
@@ -525,7 +534,8 @@ class _AGiXTAppState extends State<AGiXTApp> {
           try {
             if (call.method == 'startVoiceInput') {
               debugPrint(
-                  'Assistant trigger received from native - starting voice input');
+                'Assistant trigger received from native - starting voice input',
+              );
               // Navigate to home page and trigger voice input
               final navigator = AGiXTApp.navigatorKey.currentState;
               if (navigator != null) {
@@ -571,12 +581,15 @@ class _AGiXTAppState extends State<AGiXTApp> {
         home: _buildHome(),
         routes: {
           '/home': (context) {
-            final args = ModalRoute.of(context)?.settings.arguments
-                as Map<String, dynamic>?;
+            final args =
+                ModalRoute.of(context)?.settings.arguments
+                    as Map<String, dynamic>?;
             final forceNewChat = args?['forceNewChat'] as bool? ?? false;
             final startVoiceInput = args?['startVoiceInput'] as bool? ?? false;
             return HomePage(
-                forceNewChat: forceNewChat, startVoiceInput: startVoiceInput);
+              forceNewChat: forceNewChat,
+              startVoiceInput: startVoiceInput,
+            );
           },
           '/login': (context) => const LoginScreen(),
           '/profile': (context) => const ProfileScreen(),
@@ -722,7 +735,8 @@ const notificationId = 888;
 Future<void> initializeService() async {
   flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin
+      >()
       ?.requestNotificationsPermission();
 
   final service = FlutterBackgroundService();
@@ -736,7 +750,8 @@ Future<void> initializeService() async {
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
+        AndroidFlutterLocalNotificationsPlugin
+      >()
       ?.createNotificationChannel(channel);
 
   await service.configure(

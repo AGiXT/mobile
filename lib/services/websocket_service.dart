@@ -14,7 +14,7 @@ class WebSocketMessage {
   final String message;
   final DateTime timestamp;
   final String?
-      type; // message_added, activity.stream, remote_command.request, etc.
+  type; // message_added, activity.stream, remote_command.request, etc.
   final Map<String, dynamic>? rawData;
 
   WebSocketMessage({
@@ -32,12 +32,45 @@ class WebSocketMessage {
       id: data?['id'] ?? json['id'],
       role: data?['role'] ?? json['role'] ?? 'assistant',
       message: data?['message'] ?? json['message'] ?? '',
-      timestamp: DateTime.tryParse(
-            data?['timestamp'] ?? json['timestamp'] ?? '',
-          ) ??
+      timestamp:
+          DateTime.tryParse(data?['timestamp'] ?? json['timestamp'] ?? '') ??
           DateTime.now(),
       type: json['type'],
       rawData: json,
+    );
+  }
+}
+
+/// System notification from server admin
+class SystemNotification {
+  final String id;
+  final String title;
+  final String message;
+  final String notificationType; // info, warning, critical
+  final DateTime expiresAt;
+  final DateTime createdAt;
+  final DateTime timestamp;
+
+  SystemNotification({
+    required this.id,
+    required this.title,
+    required this.message,
+    required this.notificationType,
+    required this.expiresAt,
+    required this.createdAt,
+    required this.timestamp,
+  });
+
+  factory SystemNotification.fromJson(Map<String, dynamic> json) {
+    final data = json['data'] as Map<String, dynamic>? ?? json;
+    return SystemNotification(
+      id: data['id'] ?? '',
+      title: data['title'] ?? '',
+      message: data['message'] ?? '',
+      notificationType: data['notification_type'] ?? 'info',
+      expiresAt: DateTime.tryParse(data['expires_at'] ?? '') ?? DateTime.now(),
+      createdAt: DateTime.tryParse(data['created_at'] ?? '') ?? DateTime.now(),
+      timestamp: DateTime.tryParse(data['timestamp'] ?? '') ?? DateTime.now(),
     );
   }
 }
@@ -105,6 +138,8 @@ class AGiXTWebSocketService {
       StreamController<ActivityUpdate>.broadcast();
   final StreamController<RemoteCommandRequest> _commandController =
       StreamController<RemoteCommandRequest>.broadcast();
+  final StreamController<SystemNotification> _systemNotificationController =
+      StreamController<SystemNotification>.broadcast();
   final StreamController<String> _connectionStatusController =
       StreamController<String>.broadcast();
 
@@ -112,6 +147,8 @@ class AGiXTWebSocketService {
   Stream<WebSocketMessage> get messageStream => _messageController.stream;
   Stream<ActivityUpdate> get activityStream => _activityController.stream;
   Stream<RemoteCommandRequest> get commandStream => _commandController.stream;
+  Stream<SystemNotification> get systemNotificationStream =>
+      _systemNotificationController.stream;
   Stream<String> get connectionStatusStream =>
       _connectionStatusController.stream;
 
@@ -146,8 +183,9 @@ class AGiXTWebSocketService {
       // Build WebSocket URL
       final serverUrl = AuthService.serverUrl;
       final protocol = serverUrl.startsWith('https') ? 'wss' : 'ws';
-      final baseUrl =
-          serverUrl.replaceFirst('http://', '').replaceFirst('https://', '');
+      final baseUrl = serverUrl
+          .replaceFirst('http://', '')
+          .replaceFirst('https://', '');
       final wsUrl =
           '$protocol://$baseUrl/v1/conversation/$conversationId/stream?authorization=${Uri.encodeComponent(jwt)}';
 
@@ -232,7 +270,8 @@ class AGiXTWebSocketService {
       final serverUrl = AuthService.serverUrl;
       final conversationId = _currentConversationId ?? '-';
       final url = Uri.parse(
-          '$serverUrl/v1/conversation/$conversationId/remote-command-result');
+        '$serverUrl/v1/conversation/$conversationId/remote-command-result',
+      );
 
       final response = await http.post(
         url,
@@ -274,6 +313,9 @@ class AGiXTWebSocketService {
         case 'conversation_renamed':
           _handleConversationRenamed(data);
           break;
+        case 'system_notification':
+          _handleSystemNotification(data);
+          break;
         case 'pong':
           _handlePong();
           break;
@@ -311,10 +353,9 @@ class AGiXTWebSocketService {
         activityContent = remaining.split(']').skip(1).join(']').trim();
       }
 
-      _activityController.add(ActivityUpdate(
-        type: activityType,
-        content: activityContent,
-      ));
+      _activityController.add(
+        ActivityUpdate(type: activityType, content: activityContent),
+      );
     } else if (content.startsWith('[SUBACTIVITY]')) {
       final remaining = content.substring(13).trim();
       String activityType = 'subactivity';
@@ -330,10 +371,9 @@ class AGiXTWebSocketService {
         activityContent = remaining.split(']').skip(1).join(']').trim();
       }
 
-      _activityController.add(ActivityUpdate(
-        type: activityType,
-        content: activityContent,
-      ));
+      _activityController.add(
+        ActivityUpdate(type: activityType, content: activityContent),
+      );
     } else {
       // Regular message
       _messageController.add(message);
@@ -345,17 +385,20 @@ class AGiXTWebSocketService {
     final content = data['content'] as String? ?? '';
     final isComplete = data['complete'] as bool? ?? false;
 
-    _activityController.add(ActivityUpdate(
-      type: activityType,
-      content: content,
-      isComplete: isComplete,
-    ));
+    _activityController.add(
+      ActivityUpdate(
+        type: activityType,
+        content: content,
+        isComplete: isComplete,
+      ),
+    );
   }
 
   void _handleRemoteCommand(Map<String, dynamic> data) {
     final command = RemoteCommandRequest.fromJson(data);
     debugPrint(
-        'WebSocket: Remote command request: ${command.toolName} with args: ${command.toolArgs}');
+      'WebSocket: Remote command request: ${command.toolName} with args: ${command.toolArgs}',
+    );
     _commandController.add(command);
   }
 
@@ -364,15 +407,25 @@ class AGiXTWebSocketService {
     debugPrint('WebSocket: Conversation renamed: $convData');
   }
 
+  void _handleSystemNotification(Map<String, dynamic> data) {
+    final notification = SystemNotification.fromJson(data);
+    debugPrint(
+      'WebSocket: System notification received: ${notification.title}',
+    );
+    _systemNotificationController.add(notification);
+  }
+
   void _handleInitialData(Map<String, dynamic> data) {
     final messages = data['messages'] as List<dynamic>?;
     if (messages != null) {
       for (final msgData in messages) {
         if (msgData is Map<String, dynamic>) {
-          _messageController.add(WebSocketMessage.fromJson({
-            'type': 'message_added',
-            'data': msgData,
-          }));
+          _messageController.add(
+            WebSocketMessage.fromJson({
+              'type': 'message_added',
+              'data': msgData,
+            }),
+          );
         }
       }
     }
@@ -460,7 +513,8 @@ class AGiXTWebSocketService {
 
     final delay = _calculateReconnectDelay();
     debugPrint(
-        'WebSocket: Scheduling reconnect in ${delay}ms (attempt ${_reconnectAttempts + 1})');
+      'WebSocket: Scheduling reconnect in ${delay}ms (attempt ${_reconnectAttempts + 1})',
+    );
 
     _reconnectTimer = Timer(Duration(milliseconds: delay), () {
       _reconnectAttempts++;
