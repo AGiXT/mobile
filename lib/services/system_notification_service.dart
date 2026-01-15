@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:agixt/services/websocket_service.dart';
@@ -134,14 +135,14 @@ class SystemNotificationService {
     }
   }
 
-  int _getColor(String type) {
+  Color _getColor(String type) {
     switch (type) {
       case 'critical':
-        return 0xFFEF4444; // Red
+        return const Color(0xFFEF4444); // Red
       case 'warning':
-        return 0xFFF59E0B; // Yellow/Orange
+        return const Color(0xFFF59E0B); // Yellow/Orange
       default:
-        return 0xFF3B82F6; // Blue
+        return const Color(0xFF3B82F6); // Blue
     }
   }
 
