@@ -7,7 +7,7 @@ import 'package:agixt/models/agixt/calendar.dart';
 import 'package:agixt/models/agixt/checklist.dart';
 import 'package:agixt/models/agixt/daily.dart';
 import 'package:agixt/models/agixt/stop.dart';
-import 'package:agixt/screens/auth/login_screen.dart';
+import 'package:agixt/screens/auth/webview_login_screen.dart';
 import 'package:agixt/screens/auth/profile_screen.dart';
 import 'package:agixt/screens/privacy/privacy_consent_screen.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
@@ -15,7 +15,6 @@ import 'package:agixt/services/bluetooth_background_service.dart';
 import 'package:agixt/services/stops_manager.dart';
 import 'package:agixt/services/privacy_consent_service.dart';
 import 'package:agixt/services/system_notification_service.dart';
-import 'package:agixt/services/wallet_adapter_service.dart';
 import 'package:agixt/utils/ui_perfs.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -40,7 +39,7 @@ const String AGIXT_SERVER = String.fromEnvironment(
 );
 const String APP_URI = String.fromEnvironment(
   'APP_URI',
-  defaultValue: 'https://agixt.dev',
+  defaultValue: 'https://agixt.com',
 );
 const String PRIVACY_POLICY_URL =
     'https://agixt.com/docs/5-Reference/1-Privacy%20Policy';
@@ -55,12 +54,6 @@ void main() async {
       appUri: APP_URI,
       appName: APP_NAME,
     );
-
-    try {
-      await WalletAdapterService.initialize(appUri: APP_URI, appName: APP_NAME);
-    } catch (e) {
-      debugPrint('Failed to initialize wallet adapter service: $e');
-    }
 
     // Initialize notifications with error handling
     try {
@@ -226,12 +219,41 @@ class AppRetainWidget extends StatelessWidget {
   }
 }
 
+/// Navigator observer that detects when /home route is pushed
+/// and syncs the root login state
+class _AuthNavigatorObserver extends NavigatorObserver {
+  final VoidCallback onHomeRouteActivated;
+  
+  _AuthNavigatorObserver({required this.onHomeRouteActivated});
+  
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    if (route.settings.name == '/home') {
+      debugPrint('AuthNavigatorObserver: /home route pushed, syncing state');
+      onHomeRouteActivated();
+    }
+  }
+  
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    if (newRoute?.settings.name == '/home') {
+      debugPrint('AuthNavigatorObserver: /home route replaced, syncing state');
+      onHomeRouteActivated();
+    }
+  }
+}
+
 class AGiXTApp extends StatefulWidget {
   const AGiXTApp({super.key});
 
   // Global navigator key for accessing context from anywhere
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
+
+  // Static callback for WebViewLoginScreen to notify successful login
+  static void Function()? onLoginSuccess;
 
   @override
   State<AGiXTApp> createState() => _AGiXTAppState();
@@ -249,8 +271,20 @@ class _AGiXTAppState extends State<AGiXTApp> {
   @override
   void initState() {
     super.initState();
+    // Register the login success callback
+    AGiXTApp.onLoginSuccess = _handleLoginSuccess;
     // Initialize with proper error handling
     _safeInitialization();
+  }
+
+  /// Called by WebViewLoginScreen when login is successful
+  void _handleLoginSuccess() {
+    debugPrint('Main: onLoginSuccess callback triggered');
+    if (mounted) {
+      setState(() {
+        _isLoggedIn = true;
+      });
+    }
   }
 
   Future<void> _safeInitialization() async {
@@ -286,9 +320,16 @@ class _AGiXTAppState extends State<AGiXTApp> {
         return;
       }
 
+      // Re-check login status after privacy acceptance
+      // This is important because the user may have logged in via WebView
+      // before accepting privacy, and we need to update our local state
+      final isLoggedIn = await AuthService.isLoggedIn();
+      debugPrint('After privacy acceptance, isLoggedIn = $isLoggedIn');
+
       setState(() {
         _hasAcceptedPrivacy = true;
         _privacyAcceptedAt = acceptedAt;
+        _isLoggedIn = isLoggedIn;
       });
     } catch (e) {
       debugPrint('Error recording privacy acceptance: $e');
@@ -336,6 +377,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
 
   @override
   void dispose() {
+    AGiXTApp.onLoginSuccess = null;
     _deepLinkSubscription?.cancel();
 
     // Clean up all singletons and services with error handling
@@ -459,6 +501,18 @@ class _AGiXTAppState extends State<AGiXTApp> {
     }
   }
 
+  /// Called by navigator observer when /home route is activated
+  /// This syncs the root state with the actual auth state
+  void _syncLoginState() async {
+    final isLoggedIn = await AuthService.isLoggedIn();
+    debugPrint('Main: Navigator detected /home route, syncing state. isLoggedIn=$isLoggedIn');
+    if (mounted && isLoggedIn != _isLoggedIn) {
+      setState(() {
+        _isLoggedIn = isLoggedIn;
+      });
+    }
+  }
+
   Future<void> _initDeepLinkHandling() async {
     try {
       // Handle links that opened the app
@@ -579,6 +633,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
         ),
         themeMode: ThemeMode.system,
         home: _buildHome(),
+        navigatorObservers: [_AuthNavigatorObserver(onHomeRouteActivated: _syncLoginState)],
         routes: {
           '/home': (context) {
             final args =
@@ -591,7 +646,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
               startVoiceInput: startVoiceInput,
             );
           },
-          '/login': (context) => const LoginScreen(),
+          '/login': (context) => const WebViewLoginScreen(),
           '/profile': (context) => const ProfileScreen(),
         },
       );
@@ -638,7 +693,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
       }
 
       return AppRetainWidget(
-        child: _isLoggedIn ? const HomePage() : const LoginScreen(),
+        child: _isLoggedIn ? const HomePage() : const WebViewLoginScreen(),
       );
     } catch (e) {
       debugPrint('Error building home widget: $e');

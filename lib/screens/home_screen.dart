@@ -151,8 +151,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _loadUserDetails() async {
+    debugPrint('HomeScreen: _loadUserDetails called');
     final email = await AuthService.getEmail();
     final isLoggedIn = await AuthService.isLoggedIn();
+    final jwt = await AuthService.getJwt();
+    final isCookieAuth = await AuthService.isCookieAuthenticated();
+    
+    debugPrint('HomeScreen: email=$email, isLoggedIn=$isLoggedIn, hasJwt=${jwt != null && jwt.isNotEmpty}, isCookieAuth=$isCookieAuth');
 
     if (mounted) {
       setState(() {
@@ -166,6 +171,7 @@ class _HomePageState extends State<HomePage> {
 
       // Redirect to login if not logged in
       if (!_isLoggedIn) {
+        debugPrint('HomeScreen: Not logged in, redirecting to /login');
         Navigator.of(context).pushReplacementNamed('/login');
       } else if (_userEmail == null || _userEmail!.isEmpty) {
         // If logged in but email is missing, try to get the user info
