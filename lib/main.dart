@@ -42,8 +42,7 @@ const String APP_URI = String.fromEnvironment(
   'APP_URI',
   defaultValue: 'https://agixt.com',
 );
-const String PRIVACY_POLICY_URL =
-    'https://agixt.com/docs/5-Reference/1-Privacy%20Policy';
+const String PRIVACY_POLICY_URL = 'https://agixt.com/privacy';
 
 void main() async {
   try {
