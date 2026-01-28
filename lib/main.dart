@@ -230,9 +230,9 @@ class AppRetainWidget extends StatelessWidget {
 /// and syncs the root login state
 class _AuthNavigatorObserver extends NavigatorObserver {
   final VoidCallback onHomeRouteActivated;
-  
+
   _AuthNavigatorObserver({required this.onHomeRouteActivated});
-  
+
   @override
   void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
     super.didPush(route, previousRoute);
@@ -241,7 +241,7 @@ class _AuthNavigatorObserver extends NavigatorObserver {
       onHomeRouteActivated();
     }
   }
-  
+
   @override
   void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
     super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
@@ -512,7 +512,8 @@ class _AGiXTAppState extends State<AGiXTApp> {
   /// This syncs the root state with the actual auth state
   void _syncLoginState() async {
     final isLoggedIn = await AuthService.isLoggedIn();
-    debugPrint('Main: Navigator detected /home route, syncing state. isLoggedIn=$isLoggedIn');
+    debugPrint(
+        'Main: Navigator detected /home route, syncing state. isLoggedIn=$isLoggedIn');
     if (mounted && isLoggedIn != _isLoggedIn) {
       setState(() {
         _isLoggedIn = isLoggedIn;
@@ -640,12 +641,13 @@ class _AGiXTAppState extends State<AGiXTApp> {
         ),
         themeMode: ThemeMode.system,
         home: _buildHome(),
-        navigatorObservers: [_AuthNavigatorObserver(onHomeRouteActivated: _syncLoginState)],
+        navigatorObservers: [
+          _AuthNavigatorObserver(onHomeRouteActivated: _syncLoginState)
+        ],
         routes: {
           '/home': (context) {
-            final args =
-                ModalRoute.of(context)?.settings.arguments
-                    as Map<String, dynamic>?;
+            final args = ModalRoute.of(context)?.settings.arguments
+                as Map<String, dynamic>?;
             final forceNewChat = args?['forceNewChat'] as bool? ?? false;
             final startVoiceInput = args?['startVoiceInput'] as bool? ?? false;
             return HomePage(
@@ -797,8 +799,7 @@ const notificationId = 888;
 Future<void> initializeService() async {
   flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.requestNotificationsPermission();
 
   final service = FlutterBackgroundService();
@@ -812,8 +813,7 @@ Future<void> initializeService() async {
 
   await flutterLocalNotificationsPlugin
       .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin
-      >()
+          AndroidFlutterLocalNotificationsPlugin>()
       ?.createNotificationChannel(channel);
 
   await service.configure(
