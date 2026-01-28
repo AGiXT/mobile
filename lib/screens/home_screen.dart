@@ -1382,6 +1382,14 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  /// Refresh the WebView content
+  Future<void> _refreshWebView() async {
+    if (_webViewController == null) return;
+    
+    debugPrint('HomeScreen: Refreshing WebView content');
+    await _webViewController!.reload();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -1393,7 +1401,14 @@ class _HomePageState extends State<HomePage> {
               top: kToolbarHeight +
                   12, // keep shortcut clear of account/settings buttons
               right: 12,
-              child: _GlassesShortcut(onPressed: _openGlassesSettings),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _RefreshButton(onPressed: _refreshWebView),
+                  const SizedBox(width: 8),
+                  _GlassesShortcut(onPressed: _openGlassesSettings),
+                ],
+              ),
             ),
           ],
         ),
@@ -1428,6 +1443,25 @@ class _GlassesShortcut extends StatelessWidget {
         visualDensity: VisualDensity.compact,
       ),
       child: const Icon(Symbols.eyeglasses_rounded),
+    );
+  }
+}
+
+class _RefreshButton extends StatelessWidget {
+  const _RefreshButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        padding: const EdgeInsets.all(10),
+        shape: const CircleBorder(),
+        visualDensity: VisualDensity.compact,
+      ),
+      child: const Icon(Symbols.refresh_rounded),
     );
   }
 }
