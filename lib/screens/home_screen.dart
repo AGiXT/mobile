@@ -14,6 +14,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import '../services/bluetooth_manager.dart';
+import 'package:agixt/services/web_notification_bridge_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class HomePage extends StatefulWidget {
@@ -37,6 +38,8 @@ class _HomePageState extends State<HomePage> {
   final BluetoothManager bluetoothManager = BluetoothManager();
   final AIService aiService = AIService();
   final LocationService _locationService = LocationService();
+  final WebNotificationBridgeService _webNotificationBridge =
+      WebNotificationBridgeService();
 
   // Static flag to prevent multiple instances from showing the glasses prompt dialog
   static bool _isShowingGlassesPrompt = false;
@@ -122,6 +125,10 @@ class _HomePageState extends State<HomePage> {
     // Connect WebSocket for real-time streaming and client commands
     debugPrint('HomeScreen: Connecting WebSocket for streaming');
     await aiService.connectWebSocket();
+
+    // Initialize the web notification bridge (creates notification channels)
+    await _webNotificationBridge.initialize();
+
     debugPrint('HomeScreen: App initialization complete');
   }
 
@@ -279,6 +286,10 @@ class _HomePageState extends State<HomePage> {
 
             // Inject agent selection observer
             await _injectAgentSelectionObserver();
+
+            // Inject web notification bridge to forward in-page
+            // notifications as native push + glasses on-lens display
+            await _injectWebNotificationBridge();
 
             // Set up location injection for the webview
             await _setupLocationInjection();
@@ -719,6 +730,16 @@ class _HomePageState extends State<HomePage> {
         },
       );
 
+      // Register the web notification bridge channel
+      // Intercepts chat:notification and browser Notification API events
+      // from the web app and forwards them as native push + glasses display
+      await _webViewController!.addJavaScriptChannel(
+        'WebNotificationBridge',
+        onMessageReceived: (JavaScriptMessage message) {
+          _webNotificationBridge.handleBridgeMessage(message.message);
+        },
+      );
+
       _jsChannelsRegistered = true;
       debugPrint('JavaScript channels registered successfully');
     } catch (e) {
@@ -868,6 +889,21 @@ class _HomePageState extends State<HomePage> {
       debugPrint('Agent selection observer script injected');
     } catch (e) {
       debugPrint('Error injecting agent observer: $e');
+    }
+  }
+
+  /// Inject the web notification bridge script into the WebView.
+  /// This intercepts `chat:notification` CustomEvents and the browser
+  /// Notification API, forwarding them to the native [WebNotificationBridge]
+  /// JavaScript channel for push notifications and glasses on-lens display.
+  Future<void> _injectWebNotificationBridge() async {
+    if (_webViewController == null) return;
+
+    try {
+      await _webViewController!.runJavaScript(webNotificationBridgeScript);
+      debugPrint('Web notification bridge script injected');
+    } catch (e) {
+      debugPrint('Error injecting web notification bridge: $e');
     }
   }
 
