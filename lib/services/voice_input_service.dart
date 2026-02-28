@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/bluetooth_reciever.dart';
 import 'package:agixt/services/watch_service.dart';

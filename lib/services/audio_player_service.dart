@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 
@@ -13,8 +12,7 @@ class AudioPlayerService {
   final FlutterSoundPlayer _player = FlutterSoundPlayer();
   bool _playerInitialized = false;
   bool _isPlaying = false;
-  StreamController<Food>? _audioStreamController;
-  StreamSubscription<Food>? _audioStreamSubscription;
+  StreamController<Uint8List>? _audioStreamController;
 
   // Audio format info (from audio.header)
   int _sampleRate = 24000;
@@ -60,12 +58,12 @@ class AudioPlayerService {
     _channels = channels;
 
     debugPrint(
-      'AudioPlayerService: Starting stream - ${_sampleRate}Hz, ${_bitsPerSample}-bit, ${_channels}ch',
+      'AudioPlayerService: Starting stream - ${_sampleRate}Hz, $_bitsPerSample-bit, ${_channels}ch',
     );
 
     try {
       // Create a new stream controller for feeding audio
-      _audioStreamController = StreamController<Food>();
+      _audioStreamController = StreamController<Uint8List>();
 
       // Determine codec based on bits per sample
       Codec codec;
@@ -108,7 +106,7 @@ class AudioPlayerService {
 
     try {
       // Feed the PCM data directly to the player
-      await _player.feedFromStream(pcmData);
+      await _player.feedUint8FromStream(pcmData);
     } catch (e) {
       debugPrint('AudioPlayerService: Error feeding audio: $e');
     }

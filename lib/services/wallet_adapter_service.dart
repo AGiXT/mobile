@@ -6,7 +6,6 @@ import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:solana_wallet_adapter/solana_wallet_adapter.dart';
-import 'package:solana_wallet_adapter_platform_interface/src/exceptions/solana_wallet_adapter_exception.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// Centralized helper for interacting with the Solana Mobile Wallet Adapter.

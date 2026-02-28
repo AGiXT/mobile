@@ -102,8 +102,7 @@ class LocationService {
   // Save last known position
   Future<void> saveLastPosition(Position position) async {
     try {
-      final DateTime? timestampCandidate = position.timestamp;
-      final timestamp = timestampCandidate ?? DateTime.now();
+      final timestamp = position.timestamp;
       final payload = jsonEncode({
         'latitude': position.latitude,
         'longitude': position.longitude,

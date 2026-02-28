@@ -145,7 +145,7 @@ class _GlassesSettingsPageState extends State<GlassesSettingsPage> {
                     'v0.0.68',
                     style: TextStyle(
                       fontSize: 12,
-                      color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
+                      color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.5),
                     ),
                   ),
                 ),

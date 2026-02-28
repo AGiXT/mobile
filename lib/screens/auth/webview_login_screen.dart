@@ -394,6 +394,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
   }
 
   /// Check page content for Phantom wallet related elements
+  // ignore: unused_element
   Future<void> _checkPageForPhantomContent() async {
     if (_controller == null || _isAuthenticated || _hasOfferedPhantomApp) {
       return;
@@ -618,7 +619,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
         }
       }
 
-      final token = result?.jwtToken;
+      final token = result.jwtToken;
       if (token == null || token.isEmpty) {
         throw StateError('Wallet authentication did not return a session token.');
       }
@@ -792,6 +793,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
   }
 
   /// Try to get a nonce/message from the web page that needs to be signed
+  // ignore: unused_element
   Future<String?> _getNonceFromWebPage() async {
     if (_controller == null) return null;
 
@@ -841,6 +843,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
   }
 
   /// Inject the wallet address into the webview to complete the Phantom login
+  // ignore: unused_element
   Future<void> _injectWalletAddressAndLogin(String walletAddress, {String? signature}) async {
     if (_controller == null) return;
 

@@ -55,8 +55,11 @@ class WakeWordService {
   static const _minConfidenceThreshold = 0.75;
 
   // Recent audio energy tracking for noise rejection
+  // ignore: unused_field
   final List<double> _recentEnergies = [];
+  // ignore: unused_field
   static const _energyWindowSize = 10;
+  // ignore: unused_field
   static const _minEnergyRatio = 2.0; // Audio must be 2x above ambient noise
 
   // Model info - using small English model (~50MB)

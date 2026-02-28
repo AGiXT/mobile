@@ -1,6 +1,5 @@
 // Service for handling AI communications with AGiXT API
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:agixt/models/agixt/widgets/agixt_chat.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/whisper.dart';
@@ -44,8 +43,8 @@ class AIService {
   StreamSubscription<WakeWordEvent>? _wakeWordSubscription;
   StreamSubscription<VoiceInputState>? _voiceInputSubscription;
   StreamSubscription<WatchVoiceInput>? _watchVoiceInputSubscription;
-  StringBuffer _streamingResponse = StringBuffer();
-  bool _isStreaming = false;
+  final StringBuffer _streamingResponse = StringBuffer();
+  bool _isStreaming = false; // ignore: prefer_final_fields
 
   factory AIService() {
     return singleton;
@@ -284,10 +283,8 @@ class AIService {
   }
 
   /// Process text input and return the response
-  Future<String?> _processTextInput(
-    String text, {
-    bool isFromWatch = false,
-  }) async {
+  // ignore: unused_element
+  Future<String?> _processTextInput(String text) async {
     try {
       // Use streaming for better responsiveness
       final responseBuffer = StringBuffer();
@@ -384,7 +381,6 @@ class AIService {
       // This uses tts_mode=interleaved to stream both text and audio
       final responseBuffer = StringBuffer();
       bool audioHeaderSent = false;
-      bool hasReceivedAudio = false;
       bool usePhoneAudio =
           !_watchService.isConnected; // Track if we're using phone audio
       DateTime? lastGlassesUpdate;
@@ -401,7 +397,7 @@ class AIService {
               if (_bluetoothManager.isConnected) {
                 final now = DateTime.now();
                 if (lastGlassesUpdate == null ||
-                    now.difference(lastGlassesUpdate!) >
+                    now.difference(lastGlassesUpdate) >
                         glassesUpdateInterval) {
                   lastGlassesUpdate = now;
                   // Send full accumulated text so far
@@ -451,7 +447,6 @@ class AIService {
           case ChatStreamEventType.audioChunk:
             // Stream audio to watch speaker or phone speaker
             if (event.audioData != null && audioHeaderSent) {
-              hasReceivedAudio = true;
               if (!usePhoneAudio && _watchService.isConnected) {
                 final success =
                     await _watchService.sendAudioChunk(event.audioData!);
@@ -580,6 +575,7 @@ class AIService {
   }
 
   /// Output response to the appropriate device(s)
+  // ignore: unused_element
   Future<void> _outputResponse(String response) async {
     // Always display on glasses if connected
     if (_bluetoothManager.isConnected) {
@@ -759,6 +755,7 @@ class AIService {
   }
 
   /// Fallback to original glasses-only recording method
+  // ignore: unused_element
   Future<void> _fallbackToOriginalRecording() async {
     try {
       // First open the microphone before showing "Listening..."
@@ -818,7 +815,6 @@ class AIService {
       // Use streaming TTS to send audio to watch (like ESP32 does)
       final responseBuffer = StringBuffer();
       bool audioHeaderSent = false;
-      bool hasReceivedAudio = false;
       bool usePhoneAudio =
           !_watchService.isConnected; // Track if we're using phone audio
       DateTime? lastGlassesUpdate;
@@ -835,7 +831,7 @@ class AIService {
               if (_bluetoothManager.isConnected) {
                 final now = DateTime.now();
                 if (lastGlassesUpdate == null ||
-                    now.difference(lastGlassesUpdate!) >
+                    now.difference(lastGlassesUpdate) >
                         glassesUpdateInterval) {
                   lastGlassesUpdate = now;
                   await _bluetoothManager.sendAIResponse(
@@ -882,7 +878,6 @@ class AIService {
           case ChatStreamEventType.audioChunk:
             // Stream audio to watch speaker or phone speaker
             if (event.audioData != null && audioHeaderSent) {
-              hasReceivedAudio = true;
               if (!usePhoneAudio && _watchService.isConnected) {
                 final success =
                     await _watchService.sendAudioChunk(event.audioData!);
@@ -997,7 +992,6 @@ class AIService {
       // Use streaming TTS to send audio to watch (like foreground mode)
       final responseBuffer = StringBuffer();
       bool audioHeaderSent = false;
-      bool hasReceivedAudio = false;
       bool usePhoneAudio =
           !_watchService.isConnected; // Track if we're using phone audio
       DateTime? lastGlassesUpdate;
@@ -1014,7 +1008,7 @@ class AIService {
               if (_bluetoothManager.isConnected) {
                 final now = DateTime.now();
                 if (lastGlassesUpdate == null ||
-                    now.difference(lastGlassesUpdate!) >
+                    now.difference(lastGlassesUpdate) >
                         glassesUpdateInterval) {
                   lastGlassesUpdate = now;
                   await _bluetoothManager.sendAIResponse(
@@ -1057,7 +1051,6 @@ class AIService {
 
           case ChatStreamEventType.audioChunk:
             if (event.audioData != null && audioHeaderSent) {
-              hasReceivedAudio = true;
               if (!usePhoneAudio && _watchService.isConnected) {
                 final success =
                     await _watchService.sendAudioChunk(event.audioData!);
