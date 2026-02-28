@@ -36,6 +36,7 @@ class AIService {
   Timer? _micTimer;
   bool _isBackgroundMode = false;
   bool _methodChannelInitialized = false;
+  bool _isConversationRecording = false;
 
   // WebSocket streaming state
   StreamSubscription<WebSocketMessage>? _messageSubscription;
@@ -163,11 +164,19 @@ class AIService {
     if ((state.status == VoiceInputStatus.complete ||
             state.status == VoiceInputStatus.stopped) &&
         state.audioData != null) {
-      // Process the recorded audio
-      _processRecordedAudio(state.audioData!, state.source);
+      if (_isConversationRecording) {
+        _isConversationRecording = false;
+        _processConversationRecording(state.audioData!, state.source);
+      } else {
+        // Process the recorded audio
+        _processRecordedAudio(state.audioData!, state.source);
+      }
     } else if (state.status == VoiceInputStatus.stopped &&
         state.audioData == null) {
       // Recording stopped but no audio captured
+      if (_isConversationRecording) {
+        _isConversationRecording = false;
+      }
       debugPrint('AIService: Recording stopped with no audio data');
       _isProcessing = false;
       _showErrorMessage('No audio captured');
@@ -516,6 +525,60 @@ class AIService {
     }
   }
 
+  /// Process a conversation recording: transcribe and send with summary prompt
+  Future<void> _processConversationRecording(
+    Uint8List audioData,
+    VoiceInputSource? source,
+  ) async {
+    debugPrint(
+        'AIService: Processing conversation recording (${audioData.length} bytes from $source)');
+    try {
+      await _showProcessingMessage();
+
+      // Transcribe the audio
+      debugPrint('AIService: Transcribing conversation audio...');
+      String? transcription;
+      if (_whisperService != null) {
+        transcription = await _whisperService!.transcribe(audioData);
+      } else {
+        debugPrint('AIService: WhisperService is null, initializing...');
+        await _initWhisperService();
+        if (_whisperService != null) {
+          transcription = await _whisperService!.transcribe(audioData);
+        }
+      }
+
+      if (transcription == null || transcription.isEmpty) {
+        debugPrint('AIService: Conversation transcription failed or empty');
+        await _showErrorMessage('Could not transcribe conversation');
+        return;
+      }
+
+      debugPrint('AIService: Conversation transcription: $transcription');
+
+      // Wrap transcription in a conversation summary prompt
+      final prompt = 'The following is a transcription of a recorded '
+          'conversation. Please:\n'
+          '1. Summarize the conversation\n'
+          '2. Extract potentially important notes and highlights\n'
+          '3. Identify specific goals if mentioned\n'
+          '4. List any action items\n\n'
+          'Transcription:\n$transcription';
+
+      // Send to AGiXT
+      await _sendMessageToAGiXT(prompt);
+    } catch (e) {
+      debugPrint('AIService: Error processing conversation recording: $e');
+      await _showErrorMessage('Error processing conversation');
+      await _audioPlayerService.stopStreaming();
+    } finally {
+      _isProcessing = false;
+      if (_wakeWordService.isEnabled) {
+        await _wakeWordService.resume();
+      }
+    }
+  }
+
   /// Output response to the appropriate device(s)
   Future<void> _outputResponse(String response) async {
     // Always display on glasses if connected
@@ -646,38 +709,50 @@ class AIService {
     _whisperService = await WhisperService.service();
   }
 
-  // Handle side button press to activate voice input and AI response
+  // Handle side button press to toggle conversation recording
   Future<void> handleSideButtonPress() async {
+    // Toggle: if already recording a conversation, stop and process
+    if (_isConversationRecording) {
+      debugPrint('AIService: Stopping conversation recording (second press)');
+      await _showInfoMessage('Processing conversation...');
+      await _voiceInputService.stopRecording();
+      // Audio will be processed via _handleVoiceInputState callback
+      return;
+    }
+
     if (_isProcessing) {
       debugPrint('Already processing a request');
       return;
     }
 
     _isProcessing = true;
+    _isConversationRecording = true;
     try {
-      // Pause wake word detection during manual recording
+      // Pause wake word detection during recording
       if (_wakeWordService.isEnabled) {
         await _wakeWordService.pause();
       }
 
       // Use the voice input service to record from best available source
       final source = _voiceInputService.getBestAvailableSource();
-      debugPrint('AIService: Starting recording from $source');
+      debugPrint('AIService: Starting conversation recording from $source');
 
-      // Now show listening indicator since we're about to listen
-      await _showListeningIndicator();
+      // Show recording indicator
+      await _showInfoMessage('Recording...');
 
-      // Start recording
+      // Start recording with long duration - will be stopped manually by second press
       final success = await _voiceInputService.startRecording(
-        maxDuration: const Duration(seconds: 5),
+        maxDuration: const Duration(minutes: 30),
       );
 
       if (!success) {
-        // Fall back to original method if voice input service fails
-        await _fallbackToOriginalRecording();
+        _isConversationRecording = false;
+        _isProcessing = false;
+        await _showErrorMessage('Failed to start recording');
       }
     } catch (e) {
       debugPrint('Error handling side button press: $e');
+      _isConversationRecording = false;
       _isProcessing = false;
       await _showErrorMessage('Failed to process voice input');
     }
@@ -1068,6 +1143,9 @@ class AIService {
 
   /// Check if AIService is in background mode
   bool get isBackgroundMode => _isBackgroundMode;
+
+  /// Check if currently recording a conversation
+  bool get isConversationRecording => _isConversationRecording;
 
   /// Check if WebSocket is connected
   bool get isWebSocketConnected => _webSocketService.isConnected;
