@@ -747,8 +747,8 @@ class AIService {
 
       if (!success) {
         _isConversationRecording = false;
-        // Fall back to original method if voice input service fails
-        await _fallbackToOriginalRecording();
+        _isProcessing = false;
+        await _showErrorMessage('Failed to start recording');
       }
     } catch (e) {
       debugPrint('Error handling side button press: $e');
