@@ -11,6 +11,8 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
+import 'package:http/http.dart' as http;
+
 import 'package:agixt/services/secure_storage_service.dart';
 import 'package:agixt/utils/url_security.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
@@ -27,6 +29,18 @@ abstract class WhisperService {
   }
 
   Future<String> transcribe(Uint8List voiceData);
+
+  /// Transcribe audio with speaker diarization.
+  /// Returns a map with 'text' (speaker-attributed), 'segments' (list of
+  /// segment maps with 'speaker', 'text', 'start', 'end'), and 'language'.
+  Future<Map<String, dynamic>> transcribeWithDiarization(
+    Uint8List voiceData, {
+    int? numSpeakers,
+  }) async {
+    // Default implementation falls back to plain transcription
+    final text = await transcribe(voiceData);
+    return {'text': text, 'segments': [], 'language': null};
+  }
 
   // Method for AGiXT AI integration that returns a simulated transcription
   Future<String?> getTranscription() async {
@@ -294,6 +308,110 @@ class WhisperRemoteService implements WhisperService {
       } catch (_) {}
       debugPrint('Transcription error: $e');
       rethrow;
+    }
+  }
+
+  /// Build a WAV file from raw PCM data and return the file path
+  Future<String> _buildWavFile(Uint8List voiceData) async {
+    final Directory documentDirectory =
+        await getApplicationDocumentsDirectory();
+    final String wavPath = '${documentDirectory.path}/${Uuid().v4()}.wav';
+
+    final int sampleRate = 16000;
+    final int numChannels = 1;
+    final int byteRate = sampleRate * numChannels * 2;
+    final int blockAlign = numChannels * 2;
+    final int bitsPerSample = 16;
+    final int dataSize = voiceData.length;
+    final int chunkSize = 36 + dataSize;
+
+    final List<int> header = [
+      ...ascii.encode('RIFF'),
+      chunkSize & 0xff, (chunkSize >> 8) & 0xff,
+      (chunkSize >> 16) & 0xff, (chunkSize >> 24) & 0xff,
+      ...ascii.encode('WAVE'),
+      ...ascii.encode('fmt '),
+      16, 0, 0, 0,
+      1, 0,
+      numChannels, 0,
+      sampleRate & 0xff, (sampleRate >> 8) & 0xff,
+      (sampleRate >> 16) & 0xff, (sampleRate >> 24) & 0xff,
+      byteRate & 0xff, (byteRate >> 8) & 0xff,
+      (byteRate >> 16) & 0xff, (byteRate >> 24) & 0xff,
+      blockAlign, 0,
+      bitsPerSample, 0,
+      ...ascii.encode('data'),
+      dataSize & 0xff, (dataSize >> 8) & 0xff,
+      (dataSize >> 16) & 0xff, (dataSize >> 24) & 0xff,
+    ];
+    header.addAll(voiceData.toList());
+
+    final audioFile = File(wavPath);
+    await audioFile.writeAsBytes(Uint8List.fromList(header));
+    return wavPath;
+  }
+
+  @override
+  Future<Map<String, dynamic>> transcribeWithDiarization(
+    Uint8List voiceData, {
+    int? numSpeakers,
+  }) async {
+    debugPrint(
+        'Transcribing with diarization: ${voiceData.length} bytes');
+    await init();
+
+    final wavPath = await _buildWavFile(voiceData);
+
+    try {
+      final url = await getBaseURL();
+      final sanitizedUrl = UrlSecurity.sanitizeBaseUrl(
+        url!,
+        allowHttpOnLocalhost: true,
+      );
+      final apiKey = await getApiKey();
+      final model = await getModel() ?? 'whisper-1';
+
+      // Use multipart request to pass enable_diarization param
+      final uri = Uri.parse('$sanitizedUrl/v1/audio/transcriptions');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer ${apiKey ?? ""}';
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        wavPath,
+        filename: 'audio.wav',
+      ));
+      request.fields['model'] = model;
+      request.fields['enable_diarization'] = 'true';
+      request.fields['response_format'] = 'verbose_json';
+      if (numSpeakers != null) {
+        request.fields['num_speakers'] = numSpeakers.toString();
+      }
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 120),
+      );
+      final responseBody = await streamedResponse.stream.bytesToString();
+
+      if (streamedResponse.statusCode != 200) {
+        throw Exception(
+            'Diarization request failed (${streamedResponse.statusCode}): $responseBody');
+      }
+
+      final result = jsonDecode(responseBody) as Map<String, dynamic>;
+      debugPrint('Diarization result: ${result['text']?.toString().substring(0, (result['text']?.toString().length ?? 0).clamp(0, 100))}...');
+
+      // Clean up
+      await File(wavPath).delete();
+
+      return result;
+    } catch (e) {
+      try {
+        await File(wavPath).delete();
+      } catch (_) {}
+      debugPrint('Diarization transcription error: $e');
+      // Fall back to plain transcription
+      final text = await transcribe(voiceData);
+      return {'text': text, 'segments': [], 'language': null};
     }
   }
 

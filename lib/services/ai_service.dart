@@ -530,35 +530,106 @@ class AIService {
     try {
       await _showProcessingMessage();
 
-      // Transcribe the audio
-      debugPrint('AIService: Transcribing conversation audio...');
-      String? transcription;
-      if (_whisperService != null) {
-        transcription = await _whisperService!.transcribe(audioData);
-      } else {
+      // Ensure whisper service is available
+      if (_whisperService == null) {
         debugPrint('AIService: WhisperService is null, initializing...');
         await _initWhisperService();
-        if (_whisperService != null) {
-          transcription = await _whisperService!.transcribe(audioData);
-        }
       }
 
+      if (_whisperService == null) {
+        await _showErrorMessage('Could not initialize transcription service');
+        return;
+      }
+
+      // Use diarization to identify speakers in the conversation
+      debugPrint('AIService: Transcribing with speaker diarization...');
+      Map<String, dynamic> result;
+      try {
+        result =
+            await _whisperService!.transcribeWithDiarization(audioData);
+      } catch (e) {
+        debugPrint('AIService: Diarization failed, falling back to plain transcription: $e');
+        final plainText = await _whisperService!.transcribe(audioData);
+        result = {'text': plainText, 'segments': [], 'language': null};
+      }
+
+      final transcription = result['text'] as String?;
       if (transcription == null || transcription.isEmpty) {
         debugPrint('AIService: Conversation transcription failed or empty');
         await _showErrorMessage('Could not transcribe conversation');
         return;
       }
 
-      debugPrint('AIService: Conversation transcription: $transcription');
+      // Build speaker-attributed transcription from segments if available
+      final segments = result['segments'] as List<dynamic>? ?? [];
+      String formattedTranscription;
+      if (segments.isNotEmpty &&
+          segments.any((s) => s is Map && s.containsKey('speaker'))) {
+        final buffer = StringBuffer();
+        String? currentSpeaker;
+        for (final seg in segments) {
+          if (seg is Map) {
+            final speaker = seg['speaker'] as String? ?? 'SPEAKER_00';
+            final text = (seg['text'] as String? ?? '').trim();
+            if (text.isEmpty) continue;
+            if (speaker != currentSpeaker) {
+              if (buffer.isNotEmpty) buffer.writeln();
+              buffer.write('[$speaker]: ');
+              currentSpeaker = speaker;
+            }
+            buffer.write('$text ');
+          }
+        }
+        formattedTranscription = buffer.toString().trim();
+      } else {
+        formattedTranscription = transcription;
+      }
 
-      // Wrap transcription in a conversation summary prompt
-      final prompt = 'The following is a transcription of a recorded '
-          'conversation. Please:\n'
-          '1. Summarize the conversation\n'
-          '2. Extract potentially important notes and highlights\n'
-          '3. Identify specific goals if mentioned\n'
-          '4. List any action items\n\n'
-          'Transcription:\n$transcription';
+      debugPrint(
+          'AIService: Diarized transcription: ${formattedTranscription.substring(0, formattedTranscription.length.clamp(0, 200))}');
+
+      // Build speaker-aware summary prompt
+      final hasSpeakers = segments.isNotEmpty &&
+          segments.any((s) => s is Map && s.containsKey('speaker'));
+      final speakerSet = <String>{};
+      if (hasSpeakers) {
+        for (final seg in segments) {
+          if (seg is Map && seg['speaker'] != null) {
+            speakerSet.add(seg['speaker'] as String);
+          }
+        }
+      }
+
+      String prompt;
+      if (hasSpeakers && speakerSet.length > 1) {
+        prompt = 'The following is a speaker-diarized transcription of a '
+            'recorded conversation with ${speakerSet.length} speakers '
+            '(${speakerSet.join(", ")}). Please provide:\n\n'
+            '## Summary\n'
+            'A concise summary of the conversation.\n\n'
+            '## Key Points\n'
+            'Important information, decisions, or highlights.\n\n'
+            '## Action Items\n'
+            'List action items grouped by speaker. For each item, note:\n'
+            '- Who is responsible (which speaker)\n'
+            '- What they need to do\n'
+            '- Any deadlines or priorities mentioned\n\n'
+            '## Questions & Follow-ups\n'
+            'Any unresolved questions or topics that need follow-up.\n\n'
+            'Transcription:\n$formattedTranscription';
+      } else {
+        prompt = 'The following is a transcription of a recorded '
+            'conversation. Please provide:\n\n'
+            '## Summary\n'
+            'A concise summary of what was discussed.\n\n'
+            '## Key Points\n'
+            'Important information, decisions, or highlights.\n\n'
+            '## Action Items\n'
+            'Any action items or tasks mentioned.\n\n'
+            '## Questions & Follow-ups\n'
+            'Any unresolved questions or topics that need follow-up.\n\n'
+            'Transcription:\n$formattedTranscription';
+      }
 
       // Send to AGiXT
       await _sendMessageToAGiXT(prompt);
