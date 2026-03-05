@@ -507,6 +507,15 @@ class VoiceDataCollector {
     return data;
   }
 
+  /// Get a snapshot of all buffered data without clearing the buffer.
+  /// Used for periodic live transcription during ongoing recording.
+  Future<List<int>> getBufferedDataSnapshot() async {
+    await m.acquire();
+    final data = getAllData();
+    m.release();
+    return data;
+  }
+
   void reset() {
     _chunks.clear();
     seqAdd = 0;

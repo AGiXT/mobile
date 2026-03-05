@@ -457,6 +457,24 @@ class VoiceInputService {
     }
   }
 
+  /// Get a snapshot of the current buffered audio without stopping recording.
+  /// Returns decoded PCM data from the glasses, or null if not recording from glasses.
+  Future<Uint8List?> getAudioSnapshot() async {
+    if (!_isRecording || _activeSource != VoiceInputSource.glasses) {
+      return null;
+    }
+    try {
+      final lc3Data =
+          await _bluetoothReciever.voiceCollectorAI.getBufferedDataSnapshot();
+      if (lc3Data.isEmpty) return null;
+      final pcmData = await LC3.decodeLC3(Uint8List.fromList(lc3Data));
+      return pcmData.isEmpty ? null : pcmData;
+    } catch (e) {
+      debugPrint('VoiceInputService: Error getting audio snapshot: $e');
+      return null;
+    }
+  }
+
   /// Get the display name for a voice input source
   static String getSourceDisplayName(VoiceInputSource source) {
     switch (source) {

@@ -33,9 +33,12 @@ abstract class WhisperService {
   /// Transcribe audio with speaker diarization.
   /// Returns a map with 'text' (speaker-attributed), 'segments' (list of
   /// segment maps with 'speaker', 'text', 'start', 'end'), and 'language'.
+  /// When [sessionId] is provided, the backend persists speaker voice prints
+  /// so the same physical speaker receives a consistent ID across chunks.
   Future<Map<String, dynamic>> transcribeWithDiarization(
     Uint8List voiceData, {
     int? numSpeakers,
+    String? sessionId,
   }) async {
     // Default implementation falls back to plain transcription
     final text = await transcribe(voiceData);
@@ -77,6 +80,17 @@ class WhisperLocalService implements WhisperService {
   final stt.SpeechToText _speech = stt.SpeechToText();
   final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
   bool _isInitialized = false;
+
+  @override
+  Future<Map<String, dynamic>> transcribeWithDiarization(
+    Uint8List voiceData, {
+    int? numSpeakers,
+    String? sessionId,
+  }) async {
+    // Local service doesn't support diarization — fall back to plain text
+    final text = await transcribe(voiceData);
+    return {'text': text, 'segments': [], 'language': null};
+  }
 
   Future<void> _ensureInitialized() async {
     if (!_isInitialized) {
@@ -355,6 +369,7 @@ class WhisperRemoteService implements WhisperService {
   Future<Map<String, dynamic>> transcribeWithDiarization(
     Uint8List voiceData, {
     int? numSpeakers,
+    String? sessionId,
   }) async {
     debugPrint(
         'Transcribing with diarization: ${voiceData.length} bytes');
@@ -385,6 +400,9 @@ class WhisperRemoteService implements WhisperService {
       request.fields['response_format'] = 'verbose_json';
       if (numSpeakers != null) {
         request.fields['num_speakers'] = numSpeakers.toString();
+      }
+      if (sessionId != null) {
+        request.fields['session_id'] = sessionId;
       }
 
       final streamedResponse = await request.send().timeout(
@@ -427,6 +445,73 @@ class WhisperRemoteService implements WhisperService {
     } catch (e) {
       debugPrint('Error in WhisperRemoteService.getTranscription: $e');
       return null;
+    }
+  }
+
+  /// Send a live conversation audio chunk to the AGiXT live transcription
+  /// endpoint. Returns the parsed response with notes, suggestions, and
+  /// action items formatted for glasses display.
+  Future<Map<String, dynamic>> sendLiveChunk({
+    required Uint8List audioData,
+    required String sessionId,
+    required int chunkIndex,
+    bool isFinal = false,
+    String agentName = 'XT',
+    String? conversationName,
+  }) async {
+    debugPrint(
+        'WhisperRemoteService: Sending live chunk #$chunkIndex (${audioData.length} bytes, final=$isFinal)');
+    await init();
+
+    final wavPath = await _buildWavFile(audioData);
+
+    try {
+      final url = await getBaseURL();
+      final sanitizedUrl = UrlSecurity.sanitizeBaseUrl(
+        url!,
+        allowHttpOnLocalhost: true,
+      );
+      final apiKey = await getApiKey();
+
+      final uri =
+          Uri.parse('$sanitizedUrl/v1/audio/transcriptions/live');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer ${apiKey ?? ""}';
+      request.files.add(await http.MultipartFile.fromPath(
+        'file',
+        wavPath,
+        filename: 'audio.wav',
+      ));
+      request.fields['agent_name'] = agentName;
+      request.fields['session_id'] = sessionId;
+      request.fields['chunk_index'] = chunkIndex.toString();
+      request.fields['is_final'] = isFinal.toString();
+      if (conversationName != null) {
+        request.fields['conversation_name'] = conversationName;
+      }
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: 120),
+      );
+      final responseBody = await streamedResponse.stream.bytesToString();
+
+      if (streamedResponse.statusCode != 200) {
+        throw Exception(
+            'Live transcription request failed (${streamedResponse.statusCode}): $responseBody');
+      }
+
+      final result = jsonDecode(responseBody) as Map<String, dynamic>;
+      debugPrint(
+          'Live chunk #$chunkIndex result: notes=${result['notes']}, suggestions=${result['suggestions']}');
+
+      await File(wavPath).delete();
+      return result;
+    } catch (e) {
+      try {
+        await File(wavPath).delete();
+      } catch (_) {}
+      debugPrint('Live chunk send error: $e');
+      rethrow;
     }
   }
 

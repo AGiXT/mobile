@@ -12,6 +12,7 @@ import 'package:agixt/services/tts_service.dart';
 import 'package:agixt/services/audio_player_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'; // Import Services
+import 'package:uuid/uuid.dart';
 
 class AIService {
   // MethodChannel for button events from native code
@@ -36,6 +37,12 @@ class AIService {
   bool _isBackgroundMode = false;
   bool _methodChannelInitialized = false;
   bool _isConversationRecording = false;
+
+  // Live conversation intelligence state
+  Timer? _liveConversationTimer;
+  String? _liveSessionId;
+  int _liveChunkIndex = 0;
+  bool _isProcessingLiveChunk = false;
 
   // WebSocket streaming state
   StreamSubscription<WebSocketMessage>? _messageSubscription;
@@ -165,6 +172,9 @@ class AIService {
         state.audioData != null) {
       if (_isConversationRecording) {
         _isConversationRecording = false;
+        // Clean up live conversation timer if still running
+        _liveConversationTimer?.cancel();
+        _liveConversationTimer = null;
         _processConversationRecording(state.audioData!, state.source);
       } else {
         // Process the recorded audio
@@ -175,6 +185,8 @@ class AIService {
       // Recording stopped but no audio captured
       if (_isConversationRecording) {
         _isConversationRecording = false;
+        _liveConversationTimer?.cancel();
+        _liveConversationTimer = null;
       }
       debugPrint('AIService: Recording stopped with no audio data');
       _isProcessing = false;
@@ -545,8 +557,10 @@ class AIService {
       debugPrint('AIService: Transcribing with speaker diarization...');
       Map<String, dynamic> result;
       try {
-        result =
-            await _whisperService!.transcribeWithDiarization(audioData);
+        result = await _whisperService!.transcribeWithDiarization(
+          audioData,
+          sessionId: _liveSessionId,
+        );
       } catch (e) {
         debugPrint('AIService: Diarization failed, falling back to plain transcription: $e');
         final plainText = await _whisperService!.transcribe(audioData);
@@ -781,6 +795,16 @@ class AIService {
     // Toggle: if already recording a conversation, stop and process
     if (_isConversationRecording) {
       debugPrint('AIService: Stopping conversation recording (second press)');
+
+      // Stop the live conversation timer
+      _liveConversationTimer?.cancel();
+      _liveConversationTimer = null;
+
+      // Send final live chunk before full processing
+      if (_liveSessionId != null) {
+        await _sendFinalLiveChunk();
+      }
+
       await _showInfoMessage('Processing conversation...');
       await _voiceInputService.stopRecording();
       // Audio will be processed via _handleVoiceInputState callback
@@ -807,21 +831,168 @@ class AIService {
       // Show recording indicator
       await _showInfoMessage('Recording...');
 
-      // Start recording with long duration - will be stopped manually by second press
+      // Start recording with extended duration for live conversation mode
       final success = await _voiceInputService.startRecording(
-        maxDuration: const Duration(minutes: 30),
+        maxDuration: const Duration(hours: 8),
       );
 
       if (!success) {
         _isConversationRecording = false;
         _isProcessing = false;
         await _showErrorMessage('Failed to start recording');
+      } else {
+        // Start live conversation intelligence pipeline
+        _startLiveConversationPipeline();
       }
     } catch (e) {
       debugPrint('Error handling side button press: $e');
       _isConversationRecording = false;
       _isProcessing = false;
+      _liveConversationTimer?.cancel();
+      _liveConversationTimer = null;
       await _showErrorMessage('Failed to process voice input');
+    }
+  }
+
+  /// Start the live conversation intelligence pipeline.
+  /// Sends audio snapshots to AGiXT every 60 seconds for progressive
+  /// transcription, summarization, and glasses display of notes/suggestions.
+  void _startLiveConversationPipeline() {
+    _liveSessionId = const Uuid().v4();
+    _liveChunkIndex = 0;
+    _isProcessingLiveChunk = false;
+
+    debugPrint(
+        'AIService: Starting live conversation pipeline (session=$_liveSessionId)');
+
+    // First chunk after 60 seconds, then every 60 seconds
+    _liveConversationTimer =
+        Timer.periodic(const Duration(seconds: 60), (timer) {
+      if (!_isConversationRecording) {
+        timer.cancel();
+        return;
+      }
+      _processLiveChunk();
+    });
+  }
+
+  /// Process a single live conversation chunk — snapshot audio, send to AGiXT,
+  /// display returned notes on glasses.
+  Future<void> _processLiveChunk() async {
+    if (_isProcessingLiveChunk) {
+      debugPrint(
+          'AIService: Skipping live chunk — previous chunk still processing');
+      return;
+    }
+    _isProcessingLiveChunk = true;
+
+    try {
+      // Get audio snapshot without stopping recording
+      final audioData = await _voiceInputService.getAudioSnapshot();
+      if (audioData == null || audioData.isEmpty) {
+        debugPrint('AIService: No audio data for live chunk');
+        return;
+      }
+
+      debugPrint(
+          'AIService: Sending live chunk #$_liveChunkIndex (${audioData.length} bytes)');
+
+      // Ensure whisper service is available and is remote
+      if (_whisperService == null) {
+        await _initWhisperService();
+      }
+      if (_whisperService is! WhisperRemoteService) {
+        debugPrint(
+            'AIService: Live conversation requires remote whisper service');
+        return;
+      }
+      final remoteService = _whisperService as WhisperRemoteService;
+
+      // Send chunk to the live transcription endpoint
+      final result = await remoteService.sendLiveChunk(
+        audioData: audioData,
+        sessionId: _liveSessionId!,
+        chunkIndex: _liveChunkIndex,
+        isFinal: false,
+      );
+
+      _liveChunkIndex++;
+
+      // Display notes/suggestions on glasses
+      await _displayLiveInsights(result);
+    } catch (e) {
+      debugPrint('AIService: Error processing live chunk: $e');
+    } finally {
+      _isProcessingLiveChunk = false;
+    }
+  }
+
+  /// Send the final live chunk when recording stops.
+  Future<void> _sendFinalLiveChunk() async {
+    try {
+      final audioData = await _voiceInputService.getAudioSnapshot();
+      if (audioData == null || audioData.isEmpty) {
+        debugPrint('AIService: No audio data for final live chunk');
+        return;
+      }
+
+      if (_whisperService == null) {
+        await _initWhisperService();
+      }
+      if (_whisperService is! WhisperRemoteService) return;
+      final remoteService = _whisperService as WhisperRemoteService;
+
+      final result = await remoteService.sendLiveChunk(
+        audioData: audioData,
+        sessionId: _liveSessionId!,
+        chunkIndex: _liveChunkIndex,
+        isFinal: true,
+      );
+
+      _liveChunkIndex++;
+
+      // Display final summary on glasses
+      await _displayLiveInsights(result);
+    } catch (e) {
+      debugPrint('AIService: Error sending final live chunk: $e');
+    } finally {
+      _liveSessionId = null;
+      _liveChunkIndex = 0;
+    }
+  }
+
+  /// Display live conversation insights (notes, suggestions, action items)
+  /// on the glasses. Formats output for the 20-char/line, 5-line/page
+  /// glasses display constraint.
+  Future<void> _displayLiveInsights(Map<String, dynamic> result) async {
+    if (!_bluetoothManager.isConnected) return;
+
+    final notes = result['notes'] as String? ?? '';
+    final suggestions = result['suggestions'] as List<dynamic>? ?? [];
+    final actionItems = result['action_items'] as List<dynamic>? ?? [];
+
+    // Build a concise display string for the glasses
+    final buffer = StringBuffer();
+
+    if (notes.isNotEmpty) {
+      buffer.writeln(notes);
+    }
+
+    if (suggestions.isNotEmpty) {
+      if (buffer.isNotEmpty) buffer.writeln();
+      buffer.write('Ask: ${suggestions.first}');
+    }
+
+    if (actionItems.isNotEmpty) {
+      if (buffer.isNotEmpty) buffer.writeln();
+      buffer.write('TODO: ${actionItems.first}');
+    }
+
+    final displayText = buffer.toString().trim();
+    if (displayText.isNotEmpty) {
+      debugPrint(
+          'AIService: Displaying live insights on glasses (${displayText.length} chars)');
+      await _bluetoothManager.sendAIResponse(displayText);
     }
   }
 
