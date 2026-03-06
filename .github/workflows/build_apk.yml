@@ -55,7 +55,10 @@ jobs:
         run: flutter test
       - name: Build Android release
         run: |
-          flutter build apk --release
+          flutter build apk --release \
+            --dart-define=APP_NAME="${APP_NAME}" \
+            --dart-define=AGIXT_SERVER="${AGIXT_SERVER}" \
+            --dart-define=APP_URI="${APP_URI}"
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         id: upload_artifact
@@ -168,7 +171,10 @@ jobs:
         run: flutter pub get
       - name: Build Android release
         run: |
-          flutter build apk --release
+          flutter build apk --release \
+            --dart-define=APP_NAME="${APP_NAME}" \
+            --dart-define=AGIXT_SERVER="${AGIXT_SERVER}" \
+            --dart-define=APP_URI="${APP_URI}"
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         id: upload_artifact
