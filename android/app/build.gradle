@@ -16,10 +16,15 @@ if (keystorePropertiesFile.exists()) {
     useReleaseKeys = keystoreFile != null && keystoreFile.exists()
 }
 
+// Read APP_FLAVOR from environment to set a unique applicationId per flavor.
+// This allows all flavor APKs to be installed side-by-side on the same device.
+// Defaults to 'agixt' for local development when the env var is not set.
+def appFlavor = System.getenv('APP_FLAVOR') ?: 'agixt'
+
 android {
     namespace = "dev.agixt.agixt"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.11902837"
+    ndkVersion = "28.2.13676358"
 
     // Add signing configs for release builds
     signingConfigs {
@@ -56,8 +61,7 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "dev.agixt.agixt"
+        applicationId = "dev.agixt.${appFlavor}"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = 24 // minimum SDK version for speech_to_text
@@ -71,7 +75,7 @@ android {
         
         // Add the required manifest placeholders
         manifestPlaceholders = [
-            'appAuthRedirectScheme': 'agixt',
+            'appAuthRedirectScheme': appFlavor,
             'applicationName': 'io.flutter.app.FlutterApplication'
         ]
     }
@@ -108,7 +112,7 @@ subprojects {
         if (project.plugins.hasPlugin("com.android.application") ||
                 project.plugins.hasPlugin("com.android.library")) {
             project.android {
-                compileSdkVersion 34                
+                compileSdkVersion 35                
             }
         }
     }

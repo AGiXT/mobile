@@ -69,6 +69,7 @@ jobs:
       APP_NAME: ${{ matrix.flavor.env.APP_NAME }}
       AGIXT_SERVER: ${{ matrix.flavor.env.AGIXT_SERVER }}
       APP_URI: ${{ matrix.flavor.env.APP_URI }}
+      APP_FLAVOR: ${{ matrix.flavor.name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -110,14 +111,10 @@ jobs:
           GITHUB_USERNAME="${{ github.actor }}"
           if [ "$GITHUB_USERNAME" = "Josh-XT" ]; then
             DISCORD_NAME="<@381837595522367488>"
-          elif [ "$GITHUB_USERNAME" = "waiscodes" ]; then
-            DISCORD_NAME="<@670762167037067304>"
           elif [ "$GITHUB_USERNAME" = "birdup000" ]; then
             DISCORD_NAME="<@856308374567256074>"
           elif [ "$GITHUB_USERNAME" = "Nick-XT" ]; then
             DISCORD_NAME="<@381908912951001088>"
-          elif [ "$GITHUB_USERNAME" = "rm4453" ]; then
-            DISCORD_NAME="<@1104215954356969512>"
           elif [ "$GITHUB_USERNAME" = "Luke-XT" ]; then
             DISCORD_NAME="<@334703813967740938>"
           else
