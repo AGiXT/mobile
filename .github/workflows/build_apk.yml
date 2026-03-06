@@ -6,110 +6,32 @@ on:
 permissions:
   contents: write
 jobs:
-  apk-dev:
-    name: Build APK (dev)
+  tag:
+    name: Create Tag
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    container:
-      image: joshxt/flutterbuilder:main
-    env:
-      APP_NAME: AGiXT
-      AGIXT_SERVER: https://api.agixt.dev
-      APP_URI: https://agixt.dev
-      FLAVOR_NAME: dev
     outputs:
       new_tag: ${{ steps.next_tag_version.outputs.new_tag }}
-      artifact_id: ${{ steps.upload_artifact.outputs.artifact-id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Increment tag version
-        if: github.ref == 'refs/heads/main'
         uses: mathieudutour/github-tag-action@v6.2
         id: next_tag_version
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           release_branches: main
           create_annotated_tag: true
-      - name: Set default tag for non-main branches
-        if: github.ref != 'refs/heads/main'
-        run: echo "new_tag=dev" >> $GITHUB_OUTPUT
-        id: default_tag
-      - name: Setup repositories cache
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-      - name: Git Safe Directory
-        run: |
-          git config --global --add safe.directory /usr/local/flutter && \
-          git config --global --add safe.directory /app
-      - name: Install dependencies
-        run: flutter pub get
-      - name: Run tests
-        run: flutter test
-      - name: Build Android release
-        run: |
-          flutter build apk --release \
-            --dart-define=APP_NAME="${APP_NAME}" \
-            --dart-define=AGIXT_SERVER="${AGIXT_SERVER}" \
-            --dart-define=APP_URI="${APP_URI}"
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        id: upload_artifact
-        with:
-          name: dev.apk
-          path: build/app/outputs/flutter-apk/app-release.apk
-      - name: Send APK to Discord
-        if: always()
-        continue-on-error: true
-        run: |
-          GITHUB_USERNAME="${{ github.actor }}"
-          if [ "$GITHUB_USERNAME" = "Josh-XT" ]; then
-            DISCORD_NAME="<@381837595522367488>"
-          elif [ "$GITHUB_USERNAME" = "waiscodes" ]; then
-            DISCORD_NAME="<@670762167037067304>"
-          elif [ "$GITHUB_USERNAME" = "birdup000" ]; then
-            DISCORD_NAME="<@856308374567256074>"
-          elif [ "$GITHUB_USERNAME" = "Nick-XT" ]; then
-            DISCORD_NAME="<@381908912951001088>"
-          elif [ "$GITHUB_USERNAME" = "rm4453" ]; then
-            DISCORD_NAME="<@1104215954356969512>"
-          elif [ "$GITHUB_USERNAME" = "Luke-XT" ]; then
-            DISCORD_NAME="<@334703813967740938>"
-          else
-            DISCORD_NAME="**$GITHUB_USERNAME**"
-          fi
-          BRANCH_NAME=$(echo ${{ github.ref }} | awk -F'/' '{print $NF}')
-          VERSION="${{ github.ref == 'refs/heads/main' && steps.next_tag_version.outputs.new_tag || 'dev' }}"
-          ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_artifact.outputs.artifact-id }}"
-          JOB_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          COMMIT_MESSAGE=$(echo "${{ github.event.head_commit.message }}" | tr '\n' ' ' | sed 's/"/\\"/g')
-          FILE_PATH="build/app/outputs/flutter-apk/app-release.apk"
-          if [ -f "$FILE_PATH" ]; then
-            FILE_SIZE=$(stat -c%s "$FILE_PATH")
-            if [ $FILE_SIZE -gt 0 ]; then
-              MESSAGE="✅ Build successful for **${{ github.repository }}** (dev.apk) on branch **$BRANCH_NAME** at commit ${{ github.sha }}\n**$COMMIT_MESSAGE** by ${DISCORD_NAME} \nDownload the APK here: $ARTIFACT_URL"
-            else
-              MESSAGE="❌ Build failed for **${{ github.repository }}** (dev.apk) on branch **$BRANCH_NAME** at commit ${{ github.sha }}\n**$COMMIT_MESSAGE** by ${DISCORD_NAME} \nView the build logs here: $JOB_URL"
-            fi
-          else
-            MESSAGE="❌ Build failed for **${{ github.repository }}** (dev.apk) on branch **$BRANCH_NAME** at commit ${{ github.sha }}\n**$COMMIT_MESSAGE** by ${DISCORD_NAME} \nView the build logs here: $JOB_URL"
-          fi
-          curl -H "Content-Type:application/json" -d "{\"content\":\"$MESSAGE\"}" "${{ secrets.DISCORD_WEBHOOK }}"
 
-  apk-main-flavors:
+  build:
     name: Build APK (${{ matrix.flavor.name }})
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     container:
       image: joshxt/flutterbuilder:main
-    needs: [apk-dev]
+    needs: [tag]
     strategy:
       matrix:
         flavor:
@@ -147,8 +69,6 @@ jobs:
       APP_NAME: ${{ matrix.flavor.env.APP_NAME }}
       AGIXT_SERVER: ${{ matrix.flavor.env.AGIXT_SERVER }}
       APP_URI: ${{ matrix.flavor.env.APP_URI }}
-    outputs:
-      artifact_ids: ${{ steps.upload_artifact.outputs.artifact-id }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -169,6 +89,8 @@ jobs:
           git config --global --add safe.directory /app
       - name: Install dependencies
         run: flutter pub get
+      - name: Run tests
+        run: flutter test
       - name: Build Android release
         run: |
           flutter build apk --release \
@@ -202,7 +124,7 @@ jobs:
             DISCORD_NAME="**$GITHUB_USERNAME**"
           fi
           BRANCH_NAME=$(echo ${{ github.ref }} | awk -F'/' '{print $NF}')
-          VERSION="${{ needs.apk-dev.outputs.new_tag }}"
+          VERSION="${{ needs.tag.outputs.new_tag }}"
           ARTIFACT_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.upload_artifact.outputs.artifact-id }}"
           JOB_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           COMMIT_MESSAGE=$(echo "${{ github.event.head_commit.message }}" | tr '\n' ' ' | sed 's/"/\\"/g')
@@ -221,7 +143,7 @@ jobs:
 
   release:
     name: Create Release and Upload APKs
-    needs: [apk-dev, apk-main-flavors]
+    needs: [tag, build]
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
@@ -229,8 +151,8 @@ jobs:
         id: create_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.apk-dev.outputs.new_tag }}
-          name: ${{ needs.apk-dev.outputs.new_tag }}
+          tag_name: ${{ needs.tag.outputs.new_tag }}
+          name: ${{ needs.tag.outputs.new_tag }}
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -241,19 +163,13 @@ jobs:
           path: apks
       - name: Upload all APKs to release
         run: |
-          # Upload each flavor APK (skip dev.apk and joshxt.apk)
           for flavor_dir in apks/*/; do
             flavor_name=$(basename "$flavor_dir")
-            if [ "$flavor_name" = "dev.apk" ]; then
-              echo "Skipping $flavor_name (dev build)"
-              continue
-            fi
             apk_file="$flavor_dir/app-release.apk"
             if [ -f "$apk_file" ]; then
-              # Rename the file to the flavor name before uploading
               cp "$apk_file" "/tmp/$flavor_name"
               echo "Uploading /tmp/$flavor_name to release..."
-              gh release upload "${{ needs.apk-dev.outputs.new_tag }}" "/tmp/$flavor_name" --clobber --repo ${{ github.repository }}
+              gh release upload "${{ needs.tag.outputs.new_tag }}" "/tmp/$flavor_name" --clobber --repo ${{ github.repository }}
             fi
           done
         env:
