@@ -341,11 +341,15 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
       }
     }
 
-    // Check if we're on the AGiXT domain and on the chat page (successful login)
-    final isAgixtDomain = uri.host.contains('agixt');
+    // Check if we're on the app domain and on the chat page (successful login)
+    // Use the configured appUri domain instead of hardcoding 'agixt'
+    final appHost = Uri.parse(AuthService.appUri).host;
+    final isAppDomain = uri.host == appHost ||
+        uri.host.endsWith('.$appHost') ||
+        uri.host.contains('agixt');
     final isOnChat = uri.path == '/chat' || uri.path.startsWith('/chat/');
 
-    if (isAgixtDomain && isOnChat) {
+    if (isAppDomain && isOnChat) {
       debugPrint('WebView Login: Successfully landed on chat page');
       _hasCheckedAuth = true;
 
@@ -353,18 +357,33 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
       String? jwtToken = await _extractJwtFromWebView();
 
       if (jwtToken != null && jwtToken.isNotEmpty) {
-        debugPrint('WebView Login: Found JWT token, storing it');
-        await AuthService.storeJwt(jwtToken);
+        debugPrint('WebView Login: Found JWT token from webview, navigating to home');
+        await _handleSuccessfulLogin(jwtToken);
       } else {
-        // Even if we couldn't extract the JWT, we're logged in via the web app cookies
-        debugPrint(
-            'WebView Login: No JWT found but on chat page - using cookie auth');
-        await AuthService.setCookieAuthenticated(true);
-      }
+        // Try to get JWT from the API using the session cookies in the webview
+        debugPrint('WebView Login: No JWT in storage, trying API extraction...');
+        jwtToken = await _extractJwtFromApi();
 
-      // Mark as authenticated and stay on this page (don't navigate away)
-      // The user is already on the chat page in this WebView, so let them continue
-      await _markAuthenticatedAndStayInWebView();
+        if (jwtToken != null && jwtToken.isNotEmpty) {
+          debugPrint('WebView Login: Got JWT from API, navigating to home');
+          await _handleSuccessfulLogin(jwtToken);
+        } else {
+          // Fallback: use cookie-based auth
+          debugPrint('WebView Login: No JWT found, using cookie auth fallback');
+          await AuthService.setCookieAuthenticated(true);
+
+          if (mounted) {
+            AGiXTApp.onLoginSuccess?.call();
+            await Future.delayed(const Duration(milliseconds: 100));
+
+            Navigator.of(context).pushNamedAndRemoveUntil(
+              '/home',
+              (route) => false,
+              arguments: {'forceNewChat': true},
+            );
+          }
+        }
+      }
     }
   }
 
@@ -1209,17 +1228,75 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
     }
   }
 
+  /// Try to get a JWT by calling the user endpoint from within the webview
+  /// This works because the webview has the session cookies from SSO
+  Future<String?> _extractJwtFromApi() async {
+    if (_controller == null) return null;
+
+    try {
+      final serverUrl = AuthService.serverUrl;
+      final jsResult = await _controller!.runJavaScriptReturningResult('''
+        (async function() {
+          try {
+            // The jwt cookie should already be set by the Next.js middleware
+            // Try reading it directly first
+            var cookies = document.cookie.split(';');
+            for (var i = 0; i < cookies.length; i++) {
+              var cookie = cookies[i].trim();
+              if (cookie.startsWith('jwt=')) {
+                var val = cookie.substring(4);
+                // Decode URI component in case it's encoded
+                try { val = decodeURIComponent(val); } catch(e) {}
+                if (val && val.length > 20 && val !== 'null' && val !== 'undefined') {
+                  return val;
+                }
+              }
+            }
+            return 'null';
+          } catch(e) {
+            return 'null';
+          }
+        })()
+      ''');
+
+      if (jsResult != null && jsResult.toString() != 'null') {
+        var token = jsResult.toString().replaceAll('"', '').replaceAll("'", '');
+        if (token != 'null' && token.isNotEmpty && token.length > 20) {
+          debugPrint('WebView Login: Found JWT from API/cookie extraction');
+          return token;
+        }
+      }
+    } catch (e) {
+      debugPrint('WebView Login: Error extracting JWT from API: $e');
+    }
+
+    return null;
+  }
+
   Future<String?> _extractJwtFromWebView() async {
     if (_controller == null) return null;
 
     try {
       final jsResult = await _controller!.runJavaScriptReturningResult('''
         (function() {
+          // PRIORITY: Check the 'jwt' cookie first - this is what the web app uses
+          var cookies = document.cookie.split(';');
+          for (var j = 0; j < cookies.length; j++) {
+            var cookie = cookies[j].trim();
+            if (cookie.startsWith('jwt=')) {
+              var val = cookie.substring(4);
+              try { val = decodeURIComponent(val); } catch(e) {}
+              if (val && val.length > 20 && val !== 'null' && val !== 'undefined') {
+                return val;
+              }
+            }
+          }
+
           // Try localStorage with various keys
           var keys = ['jwt', 'token', 'access_token', 'accessToken', 'auth_token', 'authToken', 'id_token', 'idToken'];
           for (var i = 0; i < keys.length; i++) {
             var token = localStorage.getItem(keys[i]);
-            if (token && token !== 'null' && token !== 'undefined') {
+            if (token && token !== 'null' && token !== 'undefined' && token.length > 20) {
               return token;
             }
           }
@@ -1227,19 +1304,21 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
           // Try sessionStorage with various keys
           for (var i = 0; i < keys.length; i++) {
             var token = sessionStorage.getItem(keys[i]);
-            if (token && token !== 'null' && token !== 'undefined') {
+            if (token && token !== 'null' && token !== 'undefined' && token.length > 20) {
               return token;
             }
           }
           
-          // Try cookies with various names
-          var cookieKeys = ['jwt', 'token', 'access_token', 'accessToken', 'auth_token', 'authToken'];
-          var cookies = document.cookie.split(';');
+          // Try other cookies with various names
+          var cookieKeys = ['token', 'access_token', 'accessToken', 'auth_token', 'authToken'];
           for (var j = 0; j < cookies.length; j++) {
             var cookie = cookies[j].trim();
             for (var k = 0; k < cookieKeys.length; k++) {
               if (cookie.startsWith(cookieKeys[k] + '=')) {
-                return cookie.substring(cookieKeys[k].length + 1);
+                var val = cookie.substring(cookieKeys[k].length + 1);
+                if (val && val.length > 20) {
+                  return val;
+                }
               }
             }
           }
@@ -1262,7 +1341,7 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
       if (jsResult != 'null' && jsResult.toString().isNotEmpty) {
         // Remove quotes if present
         var token = jsResult.toString().replaceAll('"', '').replaceAll("'", '');
-        if (token != 'null' && token.isNotEmpty) {
+        if (token != 'null' && token.isNotEmpty && token.length > 20) {
           return token;
         }
       }
@@ -1296,8 +1375,30 @@ class _WebViewLoginScreenState extends State<WebViewLoginScreen> {
       debugPrint(
           'WebView Login: After storing JWT, isLoggedIn = $isNowLoggedIn');
 
-      // Stay in WebView instead of navigating away
-      await _markAuthenticatedAndStayInWebView();
+      if (!isNowLoggedIn) {
+        throw StateError('JWT was not stored properly');
+      }
+
+      setState(() {
+        _isAuthenticated = true;
+      });
+
+      if (mounted) {
+        // Notify the root state of successful login
+        debugPrint('WebView Login: Calling onLoginSuccess callback...');
+        AGiXTApp.onLoginSuccess?.call();
+
+        // Small delay to ensure state propagates
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Navigate directly to home screen (like Phantom wallet flow)
+        debugPrint('WebView Login: Navigating to /home...');
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/home',
+          (route) => false,
+          arguments: {'forceNewChat': true},
+        );
+      }
     } catch (e) {
       debugPrint('WebView Login: Error storing token: $e');
       if (mounted) {

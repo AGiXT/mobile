@@ -316,7 +316,15 @@ class _HomePageState extends State<HomePage> {
               return NavigationDecision.navigate;
             }
 
-            if (!request.url.contains('agixt')) {
+            // Check if this is an internal link by comparing against the app domain
+            final requestUri = Uri.tryParse(request.url);
+            final appHost = Uri.parse(AuthService.appUri).host;
+            final isInternal = requestUri != null &&
+                (requestUri.host == appHost ||
+                    requestUri.host.endsWith('.$appHost') ||
+                    request.url.contains('agixt'));
+
+            if (!isInternal) {
               // External link, launch in browser
               _launchInBrowser(request.url);
               return NavigationDecision.prevent;
@@ -1420,7 +1428,12 @@ class _HomePageState extends State<HomePage> {
 
   /// Refresh the WebView content
   Future<void> _refreshWebView() async {
-    if (_webViewController == null) return;
+    if (_webViewController == null) {
+      // WebView hasn't initialized yet - try to initialize it
+      debugPrint('HomeScreen: WebView controller is null, re-initializing');
+      await _initializeWebView();
+      return;
+    }
     
     debugPrint('HomeScreen: Refreshing WebView content');
     await _webViewController!.reload();
