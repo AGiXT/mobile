@@ -412,9 +412,10 @@ class AIService {
                     now.difference(lastGlassesUpdate) >
                         glassesUpdateInterval) {
                   lastGlassesUpdate = now;
-                  // Send full accumulated text so far
+                  // Send only the last page to glasses for fast streaming display
                   await _bluetoothManager.sendAIResponse(
                     responseBuffer.toString(),
+                    streaming: true,
                   );
                 }
               }
@@ -1078,6 +1079,7 @@ class AIService {
                   lastGlassesUpdate = now;
                   await _bluetoothManager.sendAIResponse(
                     responseBuffer.toString(),
+                    streaming: true,
                   );
                 }
               }
@@ -1255,6 +1257,7 @@ class AIService {
                   lastGlassesUpdate = now;
                   await _bluetoothManager.sendAIResponse(
                     responseBuffer.toString(),
+                    streaming: true,
                   );
                 }
               }

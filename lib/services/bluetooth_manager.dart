@@ -69,6 +69,9 @@ class BluetoothManager {
   DashboardController dashboardController = DashboardController();
   StopsManager stopsManager = StopsManager();
 
+  /// Incremented each time sendAIResponse is called so in-flight sends abort.
+  int _aiResponseVersion = 0;
+
   Timer? _syncTimer;
 
   Glass? leftGlass;
@@ -653,11 +656,14 @@ class BluetoothManager {
   Future<void> _sendTextDirect(
     String text, {
     Duration delay = const Duration(seconds: 5),
+    int? cancelVersion,
   }) async {
     final textMsg = TextMessage(text);
     List<List<int>> packets = textMsg.constructSendText();
 
     for (int i = 0; i < packets.length; i++) {
+      // Abort if a newer AI response has been queued
+      if (cancelVersion != null && _aiResponseVersion != cancelVersion) return;
       await sendCommandToGlasses(packets[i]);
       if (i < 2) {
         // init packet
@@ -668,14 +674,27 @@ class BluetoothManager {
     }
   }
 
-  /// Send AI response text directly to glasses, bypassing display preference checks
-  /// This ensures AI responses are always displayed regardless of location settings
+  /// Send AI response text to glasses, bypassing display preference checks.
+  /// When [streaming] is true, only the last page is sent with a short delay
+  /// and any in-flight sends are cancelled, keeping the display responsive.
   Future<void> sendAIResponse(
     String text, {
     Duration delay = const Duration(seconds: 5),
+    bool streaming = false,
   }) async {
-    debugPrint('Sending AI response to glasses: $text');
-    await _sendTextDirect(text, delay: delay);
+    _aiResponseVersion++;
+    final version = _aiResponseVersion;
+
+    if (streaming) {
+      // Streaming mode: send only the last page for instant feedback
+      final textMsg = TextMessage(text);
+      final packet = textMsg.constructStreamingText();
+      await sendCommandToGlasses(packet);
+    } else {
+      // Final send: display all pages with normal pacing
+      debugPrint('Sending AI response to glasses (full): $text');
+      await _sendTextDirect(text, delay: delay, cancelVersion: version);
+    }
   }
 
   Future<void> setDashboardLayout(List<int> option) async {

@@ -123,4 +123,36 @@ class TextMessage {
 
     return packets;
   }
+
+  /// Build a single packet showing only the last page of text with DISPLAYING status.
+  /// Used during streaming to avoid re-sending all pages on every update.
+  List<int> constructStreamingText() {
+    List<String> lines = _formatTextLines(text);
+    int totalPages = ((lines.length + 4) / 5).ceil();
+
+    // Get the last page's lines
+    int lastPageStart = (totalPages - 1) * 5;
+    List<String> pageLines = lines.sublist(
+      lastPageStart,
+      lastPageStart + 5 > lines.length ? lines.length : lastPageStart + 5,
+    );
+
+    // Vertical centering
+    if (pageLines.length < 5) {
+      int padding = ((5 - pageLines.length) / 2).floor();
+      pageLines = List.filled(padding, '') +
+          pageLines +
+          List.filled(5 - pageLines.length - padding, '');
+    }
+
+    String pageText = pageLines.join('\n');
+    int screenStatus = AIStatus.DISPLAYING | ScreenAction.NEW_CONTENT;
+
+    return _sendTextPacket(
+      textMessage: pageText,
+      pageNumber: totalPages,
+      maxPages: totalPages,
+      screenStatus: screenStatus,
+    );
+  }
 }
