@@ -1,24 +1,29 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-/// Service for sending SMS messages
+/// Service for sending SMS messages via the system SMS app.
+///
+/// Uses url_launcher with the `sms:` URI scheme, which opens the default
+/// messaging app with a pre-filled message. This does not require READ_SMS
+/// or RECEIVE_SMS permissions (which are restricted to default SMS handlers
+/// on Android 10+).
 class SmsService {
   static final SmsService _instance = SmsService._internal();
   factory SmsService() => _instance;
   SmsService._internal();
 
-  /// Check if SMS permission is granted
+  /// Check if SMS sending is available.
+  ///
+  /// Since we use url_launcher (opens the system SMS app), this is always
+  /// available on mobile platforms without needing READ_SMS permission.
   Future<bool> hasPermission() async {
-    final status = await Permission.sms.status;
-    return status.isGranted;
+    return true;
   }
 
-  /// Request SMS permission
+  /// Request SMS permission (no-op since url_launcher doesn't need it).
   Future<bool> requestPermission() async {
-    final status = await Permission.sms.request();
-    return status.isGranted;
+    return true;
   }
 
   /// Send an SMS message

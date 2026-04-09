@@ -163,10 +163,8 @@ class PermissionManager {
       id: AppPermission.sms,
       title: 'SMS Messages',
       description:
-          'Enables the AI assistant to send text messages on your behalf when you ask.',
-      permissions: [
-        Permission.sms,
-      ],
+          'Enables the AI assistant to send text messages on your behalf when you ask. Opens your default messaging app.',
+      permissions: [],
       requiredForCoreFlow: false,
       androidOnly: true,
     ),

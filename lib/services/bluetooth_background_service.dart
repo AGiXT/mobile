@@ -293,9 +293,9 @@ class BluetoothBackgroundService {
   static void _startHeartbeatTimer() {
     _heartbeatTimer?.cancel();
 
-    // Send heartbeat every 28 seconds (protocol says disconnection happens after 32 seconds)
+    // Send heartbeat every 15 seconds (protocol disconnects after 32 seconds without heartbeat)
     _heartbeatTimer =
-        Timer.periodic(const Duration(seconds: 28), (timer) async {
+        Timer.periodic(const Duration(seconds: 15), (timer) async {
       if (!_isRunning || _bluetoothManager == null) {
         timer.cancel();
         return;
@@ -305,8 +305,13 @@ class BluetoothBackgroundService {
         await _sendHeartbeat();
       } catch (e) {
         debugPrint('BluetoothBackgroundService: Heartbeat failed: $e');
-        // Don't attempt reconnect on every heartbeat failure to avoid cascade
-        // Only try reconnect on connection monitor
+        // Heartbeat failure likely means disconnection — attempt reconnect immediately
+        try {
+          await _attemptReconnect();
+        } catch (reconnectError) {
+          debugPrint(
+              'BluetoothBackgroundService: Immediate reconnect after heartbeat failure also failed: $reconnectError');
+        }
       }
     });
   }
@@ -348,9 +353,9 @@ class BluetoothBackgroundService {
   static void _startConnectionMonitorTimer() {
     _connectionMonitorTimer?.cancel();
 
-    // Monitor connection every 60 seconds and attempt reconnection if needed
+    // Monitor connection every 15 seconds and attempt reconnection if needed
     _connectionMonitorTimer =
-        Timer.periodic(const Duration(seconds: 60), (timer) async {
+        Timer.periodic(const Duration(seconds: 15), (timer) async {
       if (!_isRunning || _bluetoothManager == null) {
         timer.cancel();
         return;

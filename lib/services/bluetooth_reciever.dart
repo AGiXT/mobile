@@ -1,8 +1,5 @@
-import 'package:agixt/models/agixt/checklist.dart';
 import 'package:agixt/models/g1/glass.dart';
 import 'package:agixt/models/g1/commands.dart';
-import 'package:agixt/models/g1/voice_note.dart';
-import 'package:agixt/models/voice/voice_commands.dart';
 import 'package:agixt/services/ai_service.dart';
 import 'package:agixt/services/bluetooth_manager.dart';
 import 'package:agixt/services/whisper.dart';
@@ -21,7 +18,6 @@ class BluetoothReciever {
   static final BluetoothReciever singleton = BluetoothReciever._internal();
 
   final voiceCollectorAI = VoiceDataCollector();
-  final voiceCollectorNote = VoiceDataCollector();
 
   // Speech to text setup
   final SpeechToText _speechToText = SpeechToText();
@@ -29,49 +25,6 @@ class BluetoothReciever {
   bool _isListening = false;
   String _lastWords = '';
   // ---
-
-  final rightVoiceCommands = VoiceCommandHelper(
-    commands: [
-      VoiceCommand(
-        command: "open checklist",
-        phrases: [
-          "checklist",
-          "check list",
-          "open checklist",
-          "open check list",
-        ],
-        fn: (String listName) {
-          final list = AGiXTChecklist.displayChecklistFor(listName);
-          final bt = BluetoothManager();
-          if (list != null) {
-            bt.sync();
-          } else {
-            bt.sendText('No checklist found for "$listName"');
-          }
-        },
-      ),
-      VoiceCommand(
-        command: "close checklist",
-        phrases: [
-          "close checklist",
-          "close check list",
-          "closed checklist",
-          "closed check list",
-        ],
-        fn: (String listName) {
-          final list = AGiXTChecklist.hideChecklistFor(listName);
-          final bt = BluetoothManager();
-          if (list != null) {
-            bt.sync();
-          } else {
-            bt.sendText('No checklist found for "$listName"');
-          }
-        },
-      ),
-    ],
-  );
-
-  int _syncId = 0;
 
   factory BluetoothReciever() {
     return singleton;
@@ -236,91 +189,100 @@ class BluetoothReciever {
         voiceCollectorAI.isRecording = false;
         break;
       case 23:
-        debugPrint('[$side] Start AGiXT AI Chat');
-        if (await _isLocalTranscriptionEnabled()) {
-          debugPrint('[$side] Using local speech_to_text');
-          if (!_speechEnabled) {
-            debugPrint('Speech not enabled, attempting init...');
-            await _initSpeech(); // Ensure initialized (now returns Future<bool>)
-          }
-          if (_speechEnabled) {
-            // Start listening only if enabled
-            _startListening();
-          } else {
-            debugPrint('Speech could not be enabled, cannot start listener.');
-            // Optionally provide feedback to the user/device
-          }
-          // We might still need to enable the glasses mic for the system recognizer
-          await bt.setMicrophone(true);
+        // Subcmd 23 (0x17) = TouchPad pressed and held
+        if (side == GlassSide.right) {
+          // Right side: toggle conversation recording with diarization
+          debugPrint('[$side] Right touchpad press, toggling conversation recording');
+          await AIService.singleton.handleSideButtonPress();
         } else {
-          debugPrint('[$side] Using remote Whisper, starting recording buffer');
-          voiceCollectorAI.reset(); // Reset buffer before starting
-          voiceCollectorAI.isRecording = true;
-          await bt.setMicrophone(true);
+          // Left side: start AI chat recording (hold-to-record)
+          debugPrint('[$side] Start AGiXT AI Chat');
+          if (await _isLocalTranscriptionEnabled()) {
+            debugPrint('[$side] Using local speech_to_text');
+            if (!_speechEnabled) {
+              debugPrint('Speech not enabled, attempting init...');
+              await _initSpeech();
+            }
+            if (_speechEnabled) {
+              _startListening();
+            } else {
+              debugPrint('Speech could not be enabled, cannot start listener.');
+            }
+            await bt.setMicrophone(true);
+          } else {
+            debugPrint('[$side] Using remote Whisper, starting recording buffer');
+            voiceCollectorAI.reset();
+            voiceCollectorAI.isRecording = true;
+            await bt.setMicrophone(true);
+          }
         }
         break;
       case 24:
-        debugPrint('[$side] Stop AGiXT recording');
-        if (await _isLocalTranscriptionEnabled()) {
-          debugPrint('[$side] Stopping local speech_to_text listener');
-          _stopListening();
-          // Mic might be stopped automatically by speech_to_text, or we might need to stop it.
-          // Let's explicitly stop it for now.
-          await bt.setMicrophone(false);
+        // Subcmd 24 (0x18) = TouchPad pressed and released
+        if (side == GlassSide.right) {
+          // Right side: ignore release event — conversation toggle is handled
+          // entirely by the press event (subcmd 23) or quick note handler.
+          debugPrint('[$side] Right touchpad release, ignoring (toggle on press)');
         } else {
-          debugPrint('[$side] Stopping remote Whisper recording buffer');
-          voiceCollectorAI.isRecording = false;
-          await bt.setMicrophone(false);
+          // Left side: stop recording, transcribe, and send for chat completion
+          debugPrint('[$side] Stop AGiXT recording');
+          if (await _isLocalTranscriptionEnabled()) {
+            debugPrint('[$side] Stopping local speech_to_text listener');
+            _stopListening();
+            await bt.setMicrophone(false);
+          } else {
+            debugPrint('[$side] Stopping remote Whisper recording buffer');
+            voiceCollectorAI.isRecording = false;
+            await bt.setMicrophone(false);
 
-          List<int> completeVoiceData =
-              await voiceCollectorAI.getAllDataAndReset();
-          if (completeVoiceData.isEmpty) {
-            debugPrint('[$side] No voice data collected for remote Whisper');
-            return;
-          }
-          debugPrint(
-            '[$side] Voice data collected for remote: ${completeVoiceData.length} bytes',
-          );
-
-          final pcm = await LC3.decodeLC3(
-            Uint8List.fromList(completeVoiceData),
-          );
-          debugPrint(
-            '[$side] Voice data decoded for remote: ${pcm.length} bytes',
-          );
-
-          if (pcm.isEmpty) {
-            debugPrint(
-              '[$side] Decoded PCM data is empty, skipping transcription.',
-            );
-            return;
-          }
-
-          final startTime = DateTime.now();
-          try {
-            final transcription =
-                await (await WhisperService.service()).transcribe(pcm);
-            final endTime = DateTime.now();
-
-            debugPrint('[$side] Remote Transcription: $transcription');
-            debugPrint(
-              '[$side] Remote Transcription took: ${endTime.difference(startTime).inSeconds} seconds',
-            );
-
-            // Use appropriate AIService method based on background mode
-            if (transcription.isNotEmpty) {
-              final aiService = AIService.singleton;
-              if (aiService.isBackgroundMode) {
-                await aiService.processVoiceCommandBackground(transcription);
-              } else {
-                await aiService.processVoiceCommand(transcription);
-              }
-            } else {
-              debugPrint('[$side] Remote transcription was empty.');
+            List<int> completeVoiceData =
+                await voiceCollectorAI.getAllDataAndReset();
+            if (completeVoiceData.isEmpty) {
+              debugPrint('[$side] No voice data collected for remote Whisper');
+              return;
             }
-          } catch (e) {
-            debugPrint('[$side] Error during remote transcription: $e');
-            // Optionally send error message back to user/device
+            debugPrint(
+              '[$side] Voice data collected for remote: ${completeVoiceData.length} bytes',
+            );
+
+            final pcm = await LC3.decodeLC3(
+              Uint8List.fromList(completeVoiceData),
+            );
+            debugPrint(
+              '[$side] Voice data decoded for remote: ${pcm.length} bytes',
+            );
+
+            if (pcm.isEmpty) {
+              debugPrint(
+                '[$side] Decoded PCM data is empty, skipping transcription.',
+              );
+              return;
+            }
+
+            final startTime = DateTime.now();
+            try {
+              final transcription =
+                  await (await WhisperService.service()).transcribe(pcm);
+              final endTime = DateTime.now();
+
+              debugPrint('[$side] Remote Transcription: $transcription');
+              debugPrint(
+                '[$side] Remote Transcription took: ${endTime.difference(startTime).inSeconds} seconds',
+              );
+
+              if (transcription.isNotEmpty) {
+                final aiService = AIService.singleton;
+                if (aiService.isBackgroundMode) {
+                  await aiService.processVoiceCommandBackground(transcription);
+                } else {
+                  await aiService.processVoiceCommand(transcription);
+                }
+              } else {
+                debugPrint('[$side] Remote transcription was empty.');
+              }
+            } catch (e) {
+              debugPrint('[$side] Error during remote transcription: $e');
+            }
           }
         }
         break;
@@ -378,90 +340,17 @@ class BluetoothReciever {
   }
 
   void handleQuickNoteCommand(GlassSide side, List<int> data) {
-    try {
-      final notif = VoiceNoteNotification(Uint8List.fromList(data));
-      debugPrint('Voice note notification: ${notif.entries.length} entries');
-      for (VoiceNote entry in notif.entries) {
-        debugPrint(
-          'Voice note: index=${entry.index}, timestamp=${entry.timestamp}',
-        );
-      }
-      if (notif.entries.isNotEmpty) {
-        // fetch newest note
-        voiceCollectorNote.reset();
-        final entry = notif.entries.first;
-        final bt = BluetoothManager();
-        bt.rightGlass!.sendData(entry.buildFetchCommand(_syncId++));
-      }
-    } catch (e) {
-      debugPrint('Failed to parse voice note notification: $e');
-    }
+    // Right-side quick note events are used to toggle conversation recording
+    // with speaker diarization and summarization instead of the built-in
+    // quick notes feature.
+    debugPrint('[$side] Quick note event received, toggling conversation recording');
+    AIService.singleton.handleSideButtonPress();
   }
 
   void handleQuickNoteAudioData(GlassSide side, List<int> data) async {
-    if (data.length > 4 && data[4] != 0x02) {
-      final dataStr = data.map((e) => e.toRadixString(16)).join(' ');
-      debugPrint('[$side] not an audio data packet: $dataStr');
-      return;
-    }
-    /*  audio_response_packet_buf[0] = 0x1E;
-    audio_response_packet_buf[1] = audio_chunk_size + 10; // total packet length
-    audio_response_packet_buf[2] = 0; // possibly packet-length extended to uint16_t
-    audio_response_packet_buf[3] = audio_sync_id++;
-    audio_response_packet_buf[4] = 2; // unknown, always 2
-    *(uint16_t*)&audio_response_packet_buf[5] = total_number_of_packets_for_audio;
-    *(uint16_t*)&audio_response_packet_buf[7] = ++current_packet_number;
-    audio_response_packet_buf[9] = audio_index_in_flash + 1;
-    audio_response_packet_buf[10 .. n] = <audio-data>
-    */
-    if (data.length < 11) {
-      final dataStr = data.map((e) => e.toRadixString(16)).join(' ');
-      debugPrint('[$side] Invalid audio data packet: $dataStr');
-      return;
-    }
-
-    int seq = data[3];
-    int totalPackets = (data[5] << 8) | data[4];
-    int currentPacket = (data[7] << 8) | data[6];
-    int index = data[9] - 1;
-    List<int> voiceData = data.sublist(10);
-
-    debugPrint(
-      '[$side] Note Audio data packet: seq=$seq, total=$totalPackets, '
-      'current=$currentPacket, length=${voiceData.length}',
-    );
-    voiceCollectorNote.addChunk(seq, voiceData);
-
-    if (currentPacket + 2 == totalPackets) {
-      debugPrint('[$side] Last packet received');
-      final completeVoiceData = voiceCollectorNote.getAllData();
-
-      final pcm = await LC3.decodeLC3(Uint8List.fromList(completeVoiceData));
-
-      debugPrint('[$side] Voice data decoded: ${pcm.length} bytes');
-
-      voiceCollectorNote.reset();
-      final bt = BluetoothManager();
-      await bt.rightGlass!.sendData(
-        VoiceNote(index: index + 1).buildDeleteCommand(_syncId++),
-      );
-
-      final startTime = DateTime.now();
-      final transcription = await (await WhisperService.service()).transcribe(
-        pcm,
-      );
-      final endTime = DateTime.now();
-
-      debugPrint('[$side] Transcription: $transcription');
-      debugPrint(
-        '[$side] Transcription took: ${endTime.difference(startTime).inSeconds} seconds',
-      );
-      try {
-        rightVoiceCommands.parseCommand(transcription);
-      } catch (e) {
-        bt.sendText(e.toString());
-      }
-    }
+    // Quick note audio data is no longer fetched — the right-side touchpad
+    // now triggers conversation recording instead. Discard any stale packets.
+    debugPrint('[$side] Discarding quick note audio data (conversation mode active)');
   }
 
   /// Dispose of all resources to prevent memory leaks

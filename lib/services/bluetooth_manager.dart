@@ -110,8 +110,9 @@ class BluetoothManager {
 
     if (!connected) {
       _stopBatteryMonitoring();
-      // Stop the background service notification when glasses disconnect
-      _stopBackgroundService();
+      // Update the notification to show disconnected state, but keep the
+      // background service running so it can attempt reconnection.
+      _updateBackgroundServiceNotification();
     } else {
       // Start battery monitoring if not already running
       if (_batteryUpdateTimer == null) {
@@ -124,6 +125,23 @@ class BluetoothManager {
       if (_lastNotification != null) {
         sendNotification(_lastNotification!);
       }
+    }
+  }
+
+  /// Update the background service notification without stopping the service
+  void _updateBackgroundServiceNotification() async {
+    try {
+      final isRunning = await BluetoothBackgroundService.isRunning();
+      if (isRunning) {
+        await BluetoothBackgroundService.showConnectionNotification(
+          isConnected: false,
+          leftConnected: leftGlass?.isConnected ?? false,
+          rightConnected: rightGlass?.isConnected ?? false,
+        );
+      }
+    } catch (e) {
+      debugPrint(
+          'BluetoothManager: Failed to update background service notification: $e');
     }
   }
 
@@ -934,6 +952,8 @@ class BluetoothManager {
     }
 
     _notifyConnectionStatusChanged();
+    // Stop background service on explicit user-initiated disconnect
+    _stopBackgroundService();
   }
 
   Future<bool> _isGlassesDisplayEnabled() async {

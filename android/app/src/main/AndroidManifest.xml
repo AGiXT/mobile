@@ -27,10 +27,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Contacts permission for AI assistant to access and search contacts -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
-    <!-- SMS permissions for AI assistant to send text messages -->
+    <!-- SMS permission for AI assistant to send text messages -->
     <uses-permission android:name="android.permission.SEND_SMS" />
-    <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <!-- Phone call permissions for AI assistant to initiate calls -->
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />

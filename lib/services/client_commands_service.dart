@@ -363,9 +363,6 @@ class ClientCommandsService {
       final contactsGranted = await PermissionManager.isGroupGranted(
         AppPermission.contacts,
       );
-      final smsGranted = await PermissionManager.isGroupGranted(
-        AppPermission.sms,
-      );
       final locationGranted = await PermissionManager.isGroupGranted(
         AppPermission.location,
       );
@@ -383,7 +380,7 @@ class ClientCommandsService {
         'search_contacts': contactsGranted,
 
         // Communication tools
-        'send_sms': smsGranted,
+        'send_sms': true,
         'make_phone_call': phoneGranted,
         'mobile_send_email': true,
 
@@ -2204,9 +2201,6 @@ class ClientSideTools {
     final contactsGranted = await PermissionManager.isGroupGranted(
       AppPermission.contacts,
     );
-    final smsGranted = await PermissionManager.isGroupGranted(
-      AppPermission.sms,
-    );
     final locationGranted = await PermissionManager.isGroupGranted(
       AppPermission.location,
     );
@@ -2334,11 +2328,10 @@ Use this to find a specific contact before sending them a message or calling the
     }
 
     // ============================================
-    // SMS tool - requires SMS permission
+    // SMS tool - uses url_launcher (always available)
     // ============================================
 
-    if (smsGranted) {
-      tools.add({
+    tools.add({
         'type': 'function',
         'function': {
           'name': 'send_sms',
@@ -2363,7 +2356,6 @@ or a contact name (which will be resolved to their phone number).''',
           },
         },
       });
-    }
 
     // ============================================
     // Location tools - require location permission

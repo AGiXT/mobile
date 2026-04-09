@@ -30,6 +30,7 @@ class Glass {
   int _connectRetries = 0;
   static const int maxConnectRetries = 3;
   bool _externalHeartbeatManaged = false;
+  bool _isReconnecting = false;
 
   // Callback function for when side button is pressed
   SideButtonCallback? onSideButtonPress;
@@ -60,19 +61,15 @@ class Glass {
       ) {
         debugPrint('[$side Glass] Connection state: $state');
         onConnectionStateChanged?.call();
-        if (state == BluetoothConnectionState.disconnected &&
-            _connectRetries < maxConnectRetries) {
-          _connectRetries++;
-          debugPrint(
-            '[$side Glass] Auto-reconnect attempt $_connectRetries/$maxConnectRetries',
-          );
-          _connectWithRetry();
+        if (state == BluetoothConnectionState.disconnected && !_isReconnecting) {
+          _scheduleReconnect();
         }
       });
 
       // Initial connection attempt
       await _connectWithRetry();
       _connectRetries = 0; // Reset counter after successful connection
+      _isReconnecting = false;
     } catch (e) {
       debugPrint('[$side Glass] Connection error: $e');
       await disconnect();
@@ -85,19 +82,20 @@ class Glass {
       if (!device.isConnected) {
         // Retry the connection up to maxConnectRetries times
         bool connected = false;
-        while (!connected && _connectRetries < maxConnectRetries) {
+        int attempts = 0;
+        while (!connected && attempts < maxConnectRetries) {
           try {
+            attempts++;
             debugPrint(
-              '[$side Glass] Trying to connect (attempt ${_connectRetries + 1})',
+              '[$side Glass] Trying to connect (attempt $attempts/$maxConnectRetries)',
             );
             await device.connect(timeout: const Duration(seconds: 15));
             connected = true;
           } catch (e) {
-            _connectRetries++;
             debugPrint(
-              '[$side Glass] Connection attempt $_connectRetries failed: $e',
+              '[$side Glass] Connection attempt $attempts failed: $e',
             );
-            if (_connectRetries < maxConnectRetries) {
+            if (attempts < maxConnectRetries) {
               await Future.delayed(const Duration(seconds: 1));
             } else {
               throw Exception(
@@ -280,7 +278,51 @@ class Glass {
     });
   }
 
+  /// Schedule a persistent reconnection attempt with exponential backoff
+  void _scheduleReconnect() {
+    if (_isReconnecting) return;
+    _isReconnecting = true;
+    _connectRetries = 0;
+
+    Future<void> attemptReconnect() async {
+      while (_isReconnecting && _connectRetries < 50) {
+        _connectRetries++;
+        // Exponential backoff: 2s, 4s, 8s, 16s, capped at 30s
+        final delay = Duration(
+          seconds: (_connectRetries <= 1)
+              ? 2
+              : (2 << (_connectRetries - 1).clamp(0, 4)).clamp(2, 30),
+        );
+        debugPrint(
+          '[$side Glass] Auto-reconnect attempt $_connectRetries in ${delay.inSeconds}s',
+        );
+        await Future.delayed(delay);
+
+        if (!_isReconnecting) return;
+
+        try {
+          await _connectWithRetry();
+          // Success
+          _connectRetries = 0;
+          _isReconnecting = false;
+          debugPrint('[$side Glass] Auto-reconnect succeeded');
+          onConnectionStateChanged?.call();
+          return;
+        } catch (e) {
+          debugPrint('[$side Glass] Auto-reconnect attempt $_connectRetries failed: $e');
+        }
+      }
+      _isReconnecting = false;
+      debugPrint('[$side Glass] Auto-reconnect gave up after $_connectRetries attempts');
+    }
+
+    attemptReconnect();
+  }
+
   Future<void> disconnect() async {
+    // Stop any ongoing reconnection
+    _isReconnecting = false;
+
     // Cancel all subscriptions and timers first
     await notificationSubscription?.cancel();
     notificationSubscription = null;
