@@ -387,6 +387,13 @@ class AIService {
         return;
       }
 
+      // Detect error messages returned as transcription text
+      if (transcription.startsWith('Transcription failed:')) {
+        debugPrint('AIService: Transcription returned error: $transcription');
+        await _showErrorMessage(transcription);
+        return;
+      }
+
       debugPrint('AIService: Transcription: $transcription');
 
       // Send transcribed text to AGiXT chat with streaming TTS (like ESP32)

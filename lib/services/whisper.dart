@@ -145,7 +145,7 @@ class WhisperLocalService implements WhisperService {
 
   @override
   Future<String> transcribe(Uint8List voiceData) async {
-    // For pre-recorded audio (like from glasses), we need to use the remote API
+    // For pre-recorded audio (like from glasses or phone), we need to use the remote API
     // since native speech_to_text only works with live microphone input.
     // Fall back to remote transcription using the AGiXT endpoint.
     debugPrint(
@@ -159,8 +159,8 @@ class WhisperLocalService implements WhisperService {
       return result;
     } catch (e) {
       debugPrint('WhisperLocalService: Remote transcription failed: $e');
-      // If remote fails, return error message
-      return 'Transcription failed: Configure Whisper API in settings';
+      // Propagate a message with the actual error for better debugging
+      return 'Transcription failed: ${e.toString()}';
     }
   }
 
@@ -213,6 +213,18 @@ class WhisperRemoteService implements WhisperService {
     return prefs.getString('whisper_remote_model');
   }
 
+  /// Resolve the effective model/agent name for transcription requests.
+  /// AGiXT uses the `model` field as the agent name to route to the
+  /// configured provider (e.g. EZLocalAI). Falls back through:
+  /// custom model setting -> user's primary AGiXT agent -> 'XT'.
+  Future<String> getEffectiveModel() async {
+    final custom = await getModel();
+    if (custom != null && custom.isNotEmpty) return custom;
+    final agentName = await AuthService.getPrimaryAgentName();
+    if (agentName != null && agentName.isNotEmpty) return agentName;
+    return 'XT';
+  }
+
   Future<String?> getLanguage() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString('whisper_language');
@@ -240,6 +252,20 @@ class WhisperRemoteService implements WhisperService {
     OpenAI.apiKey = apiKey;
   }
 
+  /// Check if the given bytes already start with a RIFF/WAVE header.
+  static bool _hasWavHeader(Uint8List data) {
+    if (data.length < 12) return false;
+    // 'RIFF' at offset 0 and 'WAVE' at offset 8
+    return data[0] == 0x52 &&
+        data[1] == 0x49 &&
+        data[2] == 0x46 &&
+        data[3] == 0x46 &&
+        data[8] == 0x57 &&
+        data[9] == 0x41 &&
+        data[10] == 0x56 &&
+        data[11] == 0x45;
+  }
+
   @override
   Future<String> transcribe(Uint8List voiceData) async {
     debugPrint('Transcribing voice data: ${voiceData.length} bytes');
@@ -251,53 +277,62 @@ class WhisperRemoteService implements WhisperService {
     final String wavPath = '${documentDirectory.path}/${Uuid().v4()}.wav';
     debugPrint('Wav path: $wavPath');
 
-    // Add wav header
-    final int sampleRate = 16000;
-    final int numChannels = 1;
-    final int byteRate = sampleRate * numChannels * 2;
-    final int blockAlign = numChannels * 2;
-    final int bitsPerSample = 16;
-    final int dataSize = voiceData.length;
-    final int chunkSize = 36 + dataSize;
+    final File audioFile = File(wavPath);
 
-    final List<int> header = [
-      // RIFF header
-      ...ascii.encode('RIFF'),
-      chunkSize & 0xff,
-      (chunkSize >> 8) & 0xff,
-      (chunkSize >> 16) & 0xff,
-      (chunkSize >> 24) & 0xff,
-      // WAVE header
-      ...ascii.encode('WAVE'),
-      // fmt subchunk
-      ...ascii.encode('fmt '),
-      16, 0, 0, 0, // Subchunk1Size (16 for PCM)
-      1, 0, // AudioFormat (1 for PCM)
-      numChannels, 0, // NumChannels
-      sampleRate & 0xff,
-      (sampleRate >> 8) & 0xff,
-      (sampleRate >> 16) & 0xff,
-      (sampleRate >> 24) & 0xff,
-      byteRate & 0xff,
-      (byteRate >> 8) & 0xff,
-      (byteRate >> 16) & 0xff,
-      (byteRate >> 24) & 0xff,
-      blockAlign, 0,
-      bitsPerSample, 0,
-      // data subchunk
-      ...ascii.encode('data'),
-      dataSize & 0xff,
-      (dataSize >> 8) & 0xff,
-      (dataSize >> 16) & 0xff,
-      (dataSize >> 24) & 0xff,
-    ];
-    header.addAll(voiceData.toList());
+    // If the data already has a WAV header (e.g. recorded from phone mic),
+    // write it directly; otherwise wrap raw PCM in a new WAV envelope.
+    if (_hasWavHeader(voiceData)) {
+      debugPrint('Voice data already has WAV header, writing directly');
+      await audioFile.writeAsBytes(voiceData);
+    } else {
+      // Add wav header for raw PCM data
+      final int sampleRate = 16000;
+      final int numChannels = 1;
+      final int byteRate = sampleRate * numChannels * 2;
+      final int blockAlign = numChannels * 2;
+      final int bitsPerSample = 16;
+      final int dataSize = voiceData.length;
+      final int chunkSize = 36 + dataSize;
 
-    final audioFile = File(wavPath);
-    await audioFile.writeAsBytes(Uint8List.fromList(header));
+      final List<int> header = [
+        // RIFF header
+        ...ascii.encode('RIFF'),
+        chunkSize & 0xff,
+        (chunkSize >> 8) & 0xff,
+        (chunkSize >> 16) & 0xff,
+        (chunkSize >> 24) & 0xff,
+        // WAVE header
+        ...ascii.encode('WAVE'),
+        // fmt subchunk
+        ...ascii.encode('fmt '),
+        16, 0, 0, 0, // Subchunk1Size (16 for PCM)
+        1, 0, // AudioFormat (1 for PCM)
+        numChannels, 0, // NumChannels
+        sampleRate & 0xff,
+        (sampleRate >> 8) & 0xff,
+        (sampleRate >> 16) & 0xff,
+        (sampleRate >> 24) & 0xff,
+        byteRate & 0xff,
+        (byteRate >> 8) & 0xff,
+        (byteRate >> 16) & 0xff,
+        (byteRate >> 24) & 0xff,
+        blockAlign, 0,
+        bitsPerSample, 0,
+        // data subchunk
+        ...ascii.encode('data'),
+        dataSize & 0xff,
+        (dataSize >> 8) & 0xff,
+        (dataSize >> 16) & 0xff,
+        (dataSize >> 24) & 0xff,
+      ];
+      header.addAll(voiceData.toList());
 
-    // Model is optional - AGiXT will use its configured default model if not specified
-    final model = await getModel() ?? 'whisper-1';
+      await audioFile.writeAsBytes(Uint8List.fromList(header));
+    }
+
+    // Model is the AGiXT agent name - it routes to the configured provider (e.g. EZLocalAI)
+    final model = await getEffectiveModel();
+    debugPrint('Using transcription model/agent: $model');
 
     try {
       OpenAIAudioModel transcription =
@@ -325,11 +360,20 @@ class WhisperRemoteService implements WhisperService {
     }
   }
 
-  /// Build a WAV file from raw PCM data and return the file path
+  /// Build a WAV file from audio data and return the file path.
+  /// If the data already contains a WAV header it is written as-is;
+  /// otherwise raw PCM is wrapped in a standard WAV envelope.
   Future<String> _buildWavFile(Uint8List voiceData) async {
     final Directory documentDirectory =
         await getApplicationDocumentsDirectory();
     final String wavPath = '${documentDirectory.path}/${Uuid().v4()}.wav';
+
+    final audioFile = File(wavPath);
+
+    if (_hasWavHeader(voiceData)) {
+      await audioFile.writeAsBytes(voiceData);
+      return wavPath;
+    }
 
     final int sampleRate = 16000;
     final int numChannels = 1;
@@ -360,7 +404,6 @@ class WhisperRemoteService implements WhisperService {
     ];
     header.addAll(voiceData.toList());
 
-    final audioFile = File(wavPath);
     await audioFile.writeAsBytes(Uint8List.fromList(header));
     return wavPath;
   }
@@ -384,7 +427,7 @@ class WhisperRemoteService implements WhisperService {
         allowHttpOnLocalhost: true,
       );
       final apiKey = await getApiKey();
-      final model = await getModel() ?? 'whisper-1';
+      final model = await getEffectiveModel();
 
       // Use multipart request to pass enable_diarization param
       final uri = Uri.parse('$sanitizedUrl/v1/audio/transcriptions');
@@ -531,10 +574,7 @@ class WhisperRemoteService implements WhisperService {
     );
     final baseUri = Uri.parse(sanitizedUrl);
 
-    final model = await getModel();
-    if (model == null || model.isEmpty) {
-      throw Exception('No Whisper model configured');
-    }
+    final model = await getEffectiveModel();
 
     final socket = WebSocketChannel.connect(
       UrlSecurity.buildWebSocketUri(
