@@ -34,7 +34,7 @@ def appFlavor = System.getenv('APP_FLAVOR') ?: 'agixt'
 android {
     namespace = "dev.agixt.agixt"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    ndkVersion = "27.0.11902837"
 
     // Add signing configs for release builds
     signingConfigs {

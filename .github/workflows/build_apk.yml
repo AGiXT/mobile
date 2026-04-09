@@ -72,18 +72,6 @@ jobs:
       APP_URI: ${{ matrix.flavor.env.APP_URI }}
       APP_FLAVOR: ${{ matrix.flavor.name }}
     steps:
-      - name: Free disk space
-        run: |
-          echo "=== Disk before cleanup ==="
-          df -h / || true
-          # Remove pre-installed SDK components we don't need to free space for the build
-          rm -rf /opt/android-sdk-linux/ndk/27.0.11902837 2>/dev/null || true
-          rm -rf /opt/android-sdk-linux/platforms/android-31 2>/dev/null || true
-          rm -rf /opt/android-sdk-linux/platforms/android-33 2>/dev/null || true
-          rm -rf /opt/android-sdk-linux/build-tools/33.0.2 2>/dev/null || true
-          rm -rf /opt/android-sdk-linux/build-tools/34.0.0 2>/dev/null || true
-          echo "=== Disk after cleanup ==="
-          df -h / || true
       - name: Checkout code
         uses: actions/checkout@v4
         with:
