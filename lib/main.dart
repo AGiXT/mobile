@@ -43,6 +43,7 @@ const String APP_URI = String.fromEnvironment(
   defaultValue: 'https://agixt.com',
 );
 const String PRIVACY_POLICY_URL = 'https://agixt.com/privacy';
+const String TERMS_OF_SERVICE_URL = 'https://agixt.com/terms';
 
 void main() async {
   try {
@@ -274,6 +275,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
   StreamSubscription? _deepLinkSubscription;
   final _appLinks = AppLinks();
   static final Uri _privacyPolicyUri = Uri.parse(PRIVACY_POLICY_URL);
+  static final Uri _termsOfServiceUri = Uri.parse(TERMS_OF_SERVICE_URL);
 
   @override
   void initState() {
@@ -377,6 +379,37 @@ class _AGiXTAppState extends State<AGiXTApp> {
       const SnackBar(
         content: Text(
           'Unable to open the privacy policy. Please try again later.',
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openTermsOfService() async {
+    try {
+      final launched = await launchUrl(
+        _termsOfServiceUri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        _showTermsOfServiceError();
+      }
+    } catch (e) {
+      debugPrint('Error opening terms of service: $e');
+      _showTermsOfServiceError();
+    }
+  }
+
+  void _showTermsOfServiceError() {
+    final context = AGiXTApp.navigatorKey.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Unable to open the terms of service. Please try again later.',
         ),
       ),
     );
@@ -697,6 +730,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
           policyVersion: PrivacyConsentService.policyVersion,
           acceptedAt: _privacyAcceptedAt,
           onViewPolicy: _openPrivacyPolicy,
+          onViewTerms: _openTermsOfService,
           onAccept: _handlePrivacyAccepted,
         );
       }

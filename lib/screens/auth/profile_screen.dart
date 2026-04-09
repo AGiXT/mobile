@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
 import 'package:agixt/widgets/gravatar_image.dart';
 import 'package:agixt/widgets/current_agixt.dart';
@@ -598,9 +599,57 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ],
                     ),
                   ),
+
+                  // Legal section
+                  Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          child: Text(
+                            'Legal',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.description_outlined),
+                          title: const Text('Privacy Policy'),
+                          trailing: const Icon(Icons.open_in_new, size: 18),
+                          onTap: () => _openUrl('https://agixt.com/privacy'),
+                        ),
+                        const Divider(height: 1),
+                        ListTile(
+                          leading: const Icon(Icons.gavel_outlined),
+                          title: const Text('Terms of Service'),
+                          trailing: const Icon(Icons.open_in_new, size: 18),
+                          onTap: () => _openUrl('https://agixt.com/terms'),
+                        ),
+                        const Divider(height: 1),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
     );
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('Error opening URL: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to open link.')),
+        );
+      }
+    }
   }
 }

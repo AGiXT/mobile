@@ -5,12 +5,14 @@ class PrivacyConsentScreen extends StatefulWidget {
     super.key,
     required this.onAccept,
     required this.onViewPolicy,
+    required this.onViewTerms,
     required this.policyVersion,
     this.acceptedAt,
   });
 
   final Future<void> Function() onAccept;
   final VoidCallback onViewPolicy;
+  final VoidCallback onViewTerms;
   final String policyVersion;
   final DateTime? acceptedAt;
 
@@ -76,6 +78,11 @@ class _PrivacyConsentScreenState extends State<PrivacyConsentScreen> {
                         icon: const Icon(Icons.description_outlined),
                         label: const Text('Read the full Privacy Policy'),
                       ),
+                      TextButton.icon(
+                        onPressed: widget.onViewTerms,
+                        icon: const Icon(Icons.gavel_outlined),
+                        label: const Text('Read the Terms of Service'),
+                      ),
                       if (widget.acceptedAt != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 8.0),
@@ -95,7 +102,7 @@ class _PrivacyConsentScreenState extends State<PrivacyConsentScreen> {
                   _hasConfirmed = value ?? false;
                 }),
                 title: const Text(
-                  'I have read and agree to the AGiXT Privacy Policy.',
+                  'I have read and agree to the AGiXT Privacy Policy and Terms of Service.',
                 ),
               ),
               const SizedBox(height: 12),
