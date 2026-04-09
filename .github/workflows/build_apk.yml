@@ -33,6 +33,7 @@ jobs:
       image: joshxt/flutterbuilder:main
     needs: [tag]
     strategy:
+      fail-fast: false
       matrix:
         flavor:
           - name: agixt
