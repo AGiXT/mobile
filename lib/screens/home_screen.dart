@@ -110,6 +110,14 @@ class _HomePageState extends State<HomePage> {
       return;
     }
 
+    // If launched from assistant, start voice recording immediately
+    // (don't wait for WebView to load — recording can happen in parallel)
+    if (widget.startVoiceInput && !_hasTriggeredAssistantVoiceInput) {
+      _hasTriggeredAssistantVoiceInput = true;
+      debugPrint('HomeScreen: Assistant launch — starting voice input immediately');
+      aiService.startVoiceInput();
+    }
+
     // Clear cache if needed, then initialize WebView
     debugPrint('HomeScreen: Clearing WebView cache if needed');
     await _clearWebViewCacheIfNeeded();
@@ -294,18 +302,8 @@ class _HomePageState extends State<HomePage> {
             // Set up location injection for the webview
             await _setupLocationInjection();
 
-            // Trigger voice input if launched from assistant
-            if (widget.startVoiceInput && !_hasTriggeredAssistantVoiceInput) {
-              _hasTriggeredAssistantVoiceInput = true;
-              debugPrint(
-                  'Page loaded, triggering voice input from assistant launch');
-              // Small delay to ensure UI is ready
-              Future.delayed(const Duration(milliseconds: 500), () {
-                if (mounted) {
-                  aiService.startVoiceInput();
-                }
-              });
-            }
+            // Voice input is now started immediately in _initializeApp()
+            // so it doesn't wait for the webview to finish loading.
           },
           onNavigationRequest: (NavigationRequest request) {
             debugPrint(

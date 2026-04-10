@@ -155,7 +155,7 @@ void main() async {
     // Try to run the app with minimal initialization
     runApp(
       MaterialApp(
-        title: 'AGiXT',
+        title: APP_NAME,
         home: Scaffold(
           body: Center(
             child: Column(
@@ -695,7 +695,7 @@ class _AGiXTAppState extends State<AGiXTApp> {
     } catch (e) {
       debugPrint('Error building MaterialApp: $e');
       return MaterialApp(
-        title: 'AGiXT - Error',
+        title: '$APP_NAME - Error',
         home: Scaffold(
           body: Center(
             child: Column(
@@ -861,7 +861,7 @@ Future<void> initializeService() async {
 
       notificationChannelId:
           notificationChannelId, // this must match with notification channel you created above.
-      initialNotificationTitle: 'AGiXT',
+      initialNotificationTitle: APP_NAME,
       initialNotificationContent: 'Initializing',
       foregroundServiceNotificationId: notificationId,
 
@@ -944,12 +944,12 @@ Future<void> onStart(ServiceInstance service) async {
           if (await service.isForegroundService()) {
             await flutterLocalNotificationsPlugin.show(
               notificationId,
-              'AGiXT',
+              APP_NAME,
               'Active ${DateTime.now().toString().substring(11, 19)}',
               const NotificationDetails(
                 android: AndroidNotificationDetails(
                   notificationChannelId,
-                  'AGiXT Background Service',
+                  '$APP_NAME Background Service',
                   icon: 'agixt_logo',
                   ongoing: true,
                   autoCancel: false,
