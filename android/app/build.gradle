@@ -30,7 +30,8 @@ if (dappStoreKeystorePropertiesFile.exists()) {
 // This allows all flavor APKs to be installed side-by-side on the same device.
 // Defaults to 'agixt' for local development when the env var is not set.
 def appFlavor = System.getenv('APP_FLAVOR') ?: 'agixt'
-def appDisplayName = System.getenv('APP_NAME') ?: 'AGiXT'
+// Use DISPLAY_NAME instead of APP_NAME to avoid collision with gradlew's APP_NAME="Gradle"
+def appDisplayName = System.getenv('DISPLAY_NAME') ?: 'AGiXT'
 
 android {
     namespace = "dev.agixt.agixt"

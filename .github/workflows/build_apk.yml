@@ -36,36 +36,36 @@ jobs:
         flavor:
           - name: agixt
             env:
-              APP_NAME: AGiXT
+              DISPLAY_NAME: AGiXT
               AGIXT_SERVER: https://api.agixt.com
               APP_URI: https://agixt.com
           - name: nursext
             env:
-              APP_NAME: NurseXT
+              DISPLAY_NAME: NurseXT
               AGIXT_SERVER: https://api.nursext.com
               APP_URI: https://nursext.com
           - name: xtsystems
             env:
-              APP_NAME: XT Systems
+              DISPLAY_NAME: XT Systems
               AGIXT_SERVER: https://api.xt.systems
               APP_URI: https://xt.systems
           - name: boltremote
             env:
-              APP_NAME: BoltRemote
+              DISPLAY_NAME: BoltRemote
               AGIXT_SERVER: https://api.boltremote.com
               APP_URI: https://boltremote.com
           - name: ultraestimate
             env:
-              APP_NAME: UltraEstimate
+              DISPLAY_NAME: UltraEstimate
               AGIXT_SERVER: https://api.ultraestimate.com
               APP_URI: https://ultraestimate.com
           - name: joshxt
             env:
-              APP_NAME: AGiXT Dev
+              DISPLAY_NAME: AGiXT Dev
               AGIXT_SERVER: https://apijosh.devxt.com
               APP_URI: https://josh.devxt.com
     env:
-      APP_NAME: ${{ matrix.flavor.env.APP_NAME }}
+      DISPLAY_NAME: ${{ matrix.flavor.env.DISPLAY_NAME }}
       AGIXT_SERVER: ${{ matrix.flavor.env.AGIXT_SERVER }}
       APP_URI: ${{ matrix.flavor.env.APP_URI }}
       APP_FLAVOR: ${{ matrix.flavor.name }}
@@ -95,8 +95,8 @@ jobs:
           channel: stable
       - name: Setup Android NDK and CMake
         run: |
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager "ndk;27.0.11902837" "cmake;3.22.1"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;27.0.11902837" "cmake;3.22.1"
       - name: Setup Gradle cache
         uses: actions/cache@v3
         with:
@@ -113,7 +113,7 @@ jobs:
       - name: Build Android release
         run: |
           flutter build apk --release \
-            --dart-define=APP_NAME="${APP_NAME}" \
+            --dart-define=APP_NAME="${DISPLAY_NAME}" \
             --dart-define=AGIXT_SERVER="${AGIXT_SERVER}" \
             --dart-define=APP_URI="${APP_URI}"
       - name: Upload APK artifact
