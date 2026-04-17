@@ -29,8 +29,6 @@ jobs:
     name: Build APK (${{ matrix.flavor.name }})
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    container:
-      image: joshxt/flutterbuilder:main
     needs: [tag]
     strategy:
       fail-fast: false
@@ -72,11 +70,34 @@ jobs:
       APP_URI: ${{ matrix.flavor.env.APP_URI }}
       APP_FLAVOR: ${{ matrix.flavor.name }}
     steps:
+      - name: Free disk space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+          tool-cache: false
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Setup repositories cache
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '17'
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - name: Setup Android NDK and CMake
+        run: |
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "ndk;27.0.11902837" "cmake;3.22.1"
+      - name: Setup Gradle cache
         uses: actions/cache@v3
         with:
           path: |
@@ -85,10 +106,6 @@ jobs:
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
           restore-keys: |
             ${{ runner.os }}-gradle-
-      - name: Git Safe Directory
-        run: |
-          git config --global --add safe.directory /usr/local/flutter && \
-          git config --global --add safe.directory /app
       - name: Install dependencies
         run: flutter pub get
       - name: Run tests
