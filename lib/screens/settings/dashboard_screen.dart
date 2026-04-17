@@ -53,8 +53,8 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(_is24HourFormat
-                  ? 'Switched to 12-hour format on glasses'
-                  : 'Switched to 24-hour format on glasses'),
+                  ? 'Switched to 24-hour format on glasses'
+                  : 'Switched to 12-hour format on glasses'),
               duration: const Duration(seconds: 2),
               backgroundColor: Colors.green,
             ),
@@ -200,8 +200,8 @@ class DashboardSettingsPageState extends State<DashboardSettingsPage> {
             ),
             SwitchListTile(
               title: Text(_is24HourFormat
-                  ? '12-Hour Time Format'
-                  : '24-Hour Time Format'),
+                  ? '24-Hour Time Format'
+                  : '12-Hour Time Format'),
               subtitle: _isUpdatingTime
                   ? const Row(
                       children: [
