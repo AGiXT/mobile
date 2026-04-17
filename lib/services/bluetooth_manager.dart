@@ -916,16 +916,20 @@ class BluetoothManager {
       await sendNote(note);
     }
 
-    // Fill remaining note slots so the firmware's default "Hold right touchbar
-    // to add quicknote" text is replaced with our own hint.
+    // Fill one remaining note slot so the firmware's default "Hold right
+    // touchbar to add quicknote" text is replaced with our own hint.
     if (notes.length < 4) {
-      for (int i = notes.length; i < 4; i++) {
-        final note = Note(
-          noteNumber: i + 1,
-          name: 'AGiXT',
-          text: 'Hold right touchbar\nto start conversation\ntranscription',
-        );
-        await sendNote(note);
+      final hintNote = Note(
+        noteNumber: notes.length + 1,
+        name: 'AGiXT',
+        text: 'Touch right touchbar\nto start/stop conversation\ntranscription',
+      );
+      await sendNote(hintNote);
+
+      // Delete remaining note slots so stale notes don't show
+      for (int i = notes.length + 2; i <= 4; i++) {
+        final emptyNote = Note(noteNumber: i, name: 'Empty', text: '');
+        await sendCommandToGlasses(emptyNote.buildDeleteCommand());
       }
     }
 

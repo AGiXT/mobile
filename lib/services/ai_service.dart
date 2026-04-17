@@ -506,6 +506,9 @@ class AIService {
 
           case ChatStreamEventType.error:
             debugPrint('AIService: Stream error: ${event.error}');
+            if (event.error != null && responseBuffer.isEmpty) {
+              await _showErrorMessage(event.error!);
+            }
             break;
         }
       }
@@ -1166,6 +1169,10 @@ class AIService {
 
           case ChatStreamEventType.error:
             debugPrint('AIService: Stream error: ${event.error}');
+            // Show the actual error on glasses so user knows what went wrong
+            if (event.error != null && responseBuffer.isEmpty) {
+              await _showErrorMessage(event.error!);
+            }
             break;
         }
       }
@@ -1333,7 +1340,12 @@ class AIService {
             break;
 
           case ChatStreamEventType.done:
+            break;
           case ChatStreamEventType.error:
+            debugPrint('AIService: Stream error (direct): ${event.error}');
+            if (event.error != null && responseBuffer.isEmpty) {
+              await _showErrorMessage(event.error!);
+            }
             break;
         }
       }

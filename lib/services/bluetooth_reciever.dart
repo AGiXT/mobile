@@ -340,11 +340,11 @@ class BluetoothReciever {
   }
 
   void handleQuickNoteCommand(GlassSide side, List<int> data) {
-    // Right-side quick note events are used to toggle conversation recording
-    // with speaker diarization and summarization instead of the built-in
-    // quick notes feature.
-    debugPrint('[$side] Quick note event received, toggling conversation recording');
-    AIService.singleton.handleSideButtonPress();
+    // Quick note events from the glasses firmware are ignored because
+    // the right touchpad press is already handled by handleEvenAICommand
+    // (0xF5 subcmd 23/24). Processing both would cause a double-toggle,
+    // immediately starting and stopping the conversation recording.
+    debugPrint('[$side] Quick note event received, ignoring (handled by EvenAI command)');
   }
 
   void handleQuickNoteAudioData(GlassSide side, List<int> data) async {
