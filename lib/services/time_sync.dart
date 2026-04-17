@@ -107,9 +107,10 @@ class TimeSync {
         19, temperatureUnit); // C/F display flag: 0=Celsius, 1=Fahrenheit
 
     // Use user's time format preference
+    // Protocol: 0x00 = 24H, 0x01 = 12H
     final is24HourFormat =
         UiPerfs.singleton.timeFormat == TimeFormat.TWENTY_FOUR_HOUR;
-    buffer.setUint8(20, is24HourFormat ? 0x01 : 0x00); // 24H/12H format
+    buffer.setUint8(20, is24HourFormat ? 0x00 : 0x01); // 24H/12H format
 
     // Convert to List<int> for sendCommandToGlasses
     final packet = buffer.buffer.asUint8List().toList();

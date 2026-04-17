@@ -21,6 +21,7 @@ import 'package:agixt/utils/utils.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart'; // Add this import for MethodChannel
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:hive/hive.dart';
 import 'package:notification_listener_service/notification_event.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:agixt/models/agixt/auth/auth.dart';
@@ -798,15 +799,26 @@ class BluetoothManager {
       'Received notification: ${notification.toString()} from ${notification.packageName}',
     );
     if (isConnected) {
+      // Check if the app is in the user's notification whitelist
+      final packageName = notification.packageName ?? '';
+      final appBox = Hive.box('agixtNotificationApps');
+      final isWhitelisted = appBox.get(packageName, defaultValue: false) == true;
+      if (!isWhitelisted) {
+        debugPrint(
+          'Notification from $packageName not in whitelist, skipping',
+        );
+        return;
+      }
+
       NCSNotification ncsNotification = NCSNotification(
         msgId: (notification.id ?? 1) + DateTime.now().millisecondsSinceEpoch,
         action: 0,
         type: 0,
-        appIdentifier: notification.packageName ?? 'dev.agixt.agixt',
+        appIdentifier: packageName.isNotEmpty ? packageName : 'dev.agixt.agixt',
         title: notification.title ?? '',
         subtitle: '',
         message: notification.content ?? '',
-        displayName: await _getAppDisplayName(notification.packageName ?? ''),
+        displayName: await _getAppDisplayName(packageName.isNotEmpty ? packageName : ''),
       );
 
       sendNotification(ncsNotification);
@@ -904,12 +916,16 @@ class BluetoothManager {
       await sendNote(note);
     }
 
-    // remove other notes if there are less than 4
-    // so old notes are not shown
+    // Fill remaining note slots so the firmware's default "Hold right touchbar
+    // to add quicknote" text is replaced with our own hint.
     if (notes.length < 4) {
       for (int i = notes.length; i < 4; i++) {
-        final note = Note(noteNumber: i + 1, name: 'Empty', text: '');
-        await sendCommandToGlasses(note.buildDeleteCommand());
+        final note = Note(
+          noteNumber: i + 1,
+          name: 'AGiXT',
+          text: 'Hold right touchbar\nto start conversation\ntranscription',
+        );
+        await sendNote(note);
       }
     }
 

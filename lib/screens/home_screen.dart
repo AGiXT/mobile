@@ -1489,7 +1489,7 @@ class _GlassesShortcut extends StatelessWidget {
         shape: const CircleBorder(),
         visualDensity: VisualDensity.compact,
       ),
-      child: const Icon(Symbols.eyeglasses_rounded),
+      child: const Icon(Icons.visibility),
     );
   }
 }
