@@ -30,7 +30,7 @@ class G1Notification {
     ncsNotification.subtitle = Emoji.emojiToAscii(ncsNotification.subtitle);
     Uint8List jsonBytes = toBytes();
 
-    int maxChunkSize = 180 - 4; // Subtract 4 bytes for header
+    int maxChunkSize = 180 - 3; // Subtract 3 bytes for header
     List<Uint8List> chunks = [];
 
     for (int i = 0; i < jsonBytes.length; i += maxChunkSize) {
@@ -43,8 +43,7 @@ class G1Notification {
     int totalChunks = chunks.length;
     List<Uint8List> encodedChunks = [];
     for (int index = 0; index < chunks.length; index++) {
-      int notifyId = 1; // Set appropriate notification ID
-      List<int> header = [0x4B, notifyId, totalChunks, index];
+      List<int> header = [0x4B, totalChunks, index];
       Uint8List encodedChunk = Uint8List.fromList(header + chunks[index]);
       encodedChunks.add(encodedChunk);
     }

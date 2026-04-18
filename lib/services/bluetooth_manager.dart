@@ -801,13 +801,24 @@ class BluetoothManager {
     if (isConnected) {
       // Check if the app is in the user's notification whitelist
       final packageName = notification.packageName ?? '';
-      final appBox = Hive.box('agixtNotificationApps');
-      final isWhitelisted = appBox.get(packageName, defaultValue: false) == true;
-      if (!isWhitelisted) {
-        debugPrint(
-          'Notification from $packageName not in whitelist, skipping',
-        );
+      if (packageName.isEmpty) {
+        debugPrint('Notification has no package name, skipping');
         return;
+      }
+
+      try {
+        final appBox = Hive.box('agixtNotificationApps');
+        final isWhitelisted = appBox.get(packageName, defaultValue: false) == true;
+        if (!isWhitelisted) {
+          debugPrint(
+            'Notification from $packageName not in whitelist, skipping',
+          );
+          return;
+        }
+      } catch (e) {
+        // Box not opened yet — skip filtering and allow the notification through
+        // The glasses firmware has its own allowlist via G1Setup as a fallback
+        debugPrint('Could not check notification whitelist: $e, allowing notification');
       }
 
       NCSNotification ncsNotification = NCSNotification(

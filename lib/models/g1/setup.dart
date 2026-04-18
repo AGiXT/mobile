@@ -41,9 +41,9 @@ class G1Setup {
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = <String, dynamic>{};
     data['calendar_enable'] = calendarEnable;
-    data['call_enable'] = callEnable;
-    data['msg_enable'] = msgEnable;
-    data['ios_mail_enable'] = iosMailEnable;
+    data['Call_enable'] = callEnable;
+    data['Msg_enable'] = msgEnable;
+    data['Ios_mail_enable'] = iosMailEnable;
     data['app'] = app.toJson();
     return data;
   }
@@ -95,7 +95,7 @@ class App {
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> data = <String, dynamic>{};
     if (list != null) {
-      data['list'] = list!.map((v) => v.toJson()).toList();
+      data['List'] = list!.map((v) => v.toJson()).toList();
     }
     data['enable'] = enable;
     return data;
